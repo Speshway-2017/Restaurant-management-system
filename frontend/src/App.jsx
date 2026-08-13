@@ -14,10 +14,18 @@ import LoginPage from './pages/LoginPage';
 import GalleryPage from './pages/GalleryPage';
 import MenuPage from './pages/MenuPage';
 import OffersPage from './pages/OffersPage';
+import AdminLayout from './components/admin/AdminLayout';
 
 export default function App() {
-  const [activePage, setActivePage] = useState('home');
+  const [activePage, setActivePageState] = useState(() => {
+    return localStorage.getItem('flavora_active_page') || 'login';
+  });
   const [demoModalOpen, setDemoModalOpen] = useState(false);
+
+  const setActivePage = (newPage) => {
+    setActivePageState(newPage);
+    localStorage.setItem('flavora_active_page', newPage);
+  };
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -47,16 +55,18 @@ export default function App() {
         return <ContactUsPage onOpenDemoModal={() => setDemoModalOpen(true)} />;
       case 'login':
         return <LoginPage setActivePage={setActivePage} />;
+      case 'admin':
+        return <AdminLayout setActivePage={setActivePage} />;
       default:
         return <HomePage setActivePage={setActivePage} onOpenDemoModal={() => setDemoModalOpen(true)} />;
     }
   };
 
-  const isLoginPage = activePage === 'login';
+  const isFullStandalonePage = activePage === 'login' || activePage === 'admin';
 
   return (
     <div className="app-container">
-      {!isLoginPage && (
+      {!isFullStandalonePage && (
         <Navbar 
           activePage={activePage} 
           setActivePage={setActivePage} 
@@ -64,11 +74,11 @@ export default function App() {
         />
       )}
 
-      <main className="main-content" style={isLoginPage ? { minHeight: '100vh' } : {}}>
+      <main className="main-content" style={isFullStandalonePage ? { minHeight: '100vh' } : {}}>
         {renderCurrentPage()}
       </main>
 
-      {!isLoginPage && (
+      {!isFullStandalonePage && (
         <Footer 
           setActivePage={setActivePage} 
           onOpenDemoModal={() => setDemoModalOpen(true)} 

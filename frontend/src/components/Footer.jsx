@@ -83,7 +83,7 @@ export default function Footer({ setActivePage }) {
               </li>
               <li>
                 <MapPin size={16} className="contact-icon" />
-                <span>Hyderabad, Telangana, India</span>
+                <span>Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033</span>
               </li>
               <li>
                 <Clock size={16} className="contact-icon" />

@@ -1,7 +1,9 @@
-import React from 'react';
-import { LogIn } from 'lucide-react';
+import React, { useState } from 'react';
+import { LogIn, Menu, X } from 'lucide-react';
 
 export default function Navbar({ activePage, setActivePage }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const navItems = [
     { id: 'home', label: 'HOME' },
     { id: 'about', label: 'ABOUT US' },
@@ -15,6 +17,7 @@ export default function Navbar({ activePage, setActivePage }) {
 
   const handleNavClick = (pageId) => {
     setActivePage(pageId);
+    setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -36,8 +39,8 @@ export default function Navbar({ activePage, setActivePage }) {
             </div>
           </a>
 
-          {/* Navigation Links */}
-          <nav>
+          {/* Navigation Links (Desktop) */}
+          <nav className="desktop-nav">
             <ul className="nav-links">
               {navItems.map((item) => (
                 <li key={item.id}>
@@ -52,7 +55,7 @@ export default function Navbar({ activePage, setActivePage }) {
             </ul>
           </nav>
 
-          {/* Highlighted Login CTA Button */}
+          {/* Right Actions & Mobile Hamburger */}
           <div className="nav-actions">
             <button
               onClick={() => handleNavClick('login')}
@@ -62,8 +65,34 @@ export default function Navbar({ activePage, setActivePage }) {
               <LogIn size={16} />
               <span>LOGIN</span>
             </button>
+
+            <button
+              className="mobile-hamburger-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle navigation"
+            >
+              {mobileMenuOpen ? <X size={22} color="#FFFFFF" /> : <Menu size={22} color="#FFFFFF" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="mobile-nav-drawer">
+            <ul className="mobile-nav-list">
+              {navItems.map((item) => (
+                <li key={item.id}>
+                  <button
+                    onClick={() => handleNavClick(item.id)}
+                    className={`mobile-nav-link ${activePage === item.id ? 'active' : ''}`}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </header>
     </>
   );
