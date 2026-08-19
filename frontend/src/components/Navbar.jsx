@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { LogIn, Menu, X } from 'lucide-react';
+import MagneticButton from './MagneticButton';
 
 export default function Navbar({ activePage, setActivePage }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -57,14 +58,14 @@ export default function Navbar({ activePage, setActivePage }) {
 
           {/* Right Actions & Mobile Hamburger */}
           <div className="nav-actions">
-            <button
+            <MagneticButton
               onClick={() => handleNavClick('login')}
-              className="btn btn-book-now"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              variant="secondary"
+              style={{ padding: '0.45rem 1.1rem', fontSize: '0.82rem' }}
             >
-              <LogIn size={16} />
+              <LogIn size={15} />
               <span>LOGIN</span>
-            </button>
+            </MagneticButton>
 
             <button
               className="mobile-hamburger-btn"

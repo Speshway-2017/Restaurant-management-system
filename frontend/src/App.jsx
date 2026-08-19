@@ -15,6 +15,7 @@ import GalleryPage from './pages/GalleryPage';
 import MenuPage from './pages/MenuPage';
 import OffersPage from './pages/OffersPage';
 import AdminLayout from './components/admin/AdminLayout';
+import ManagerLayout from './components/manager/ManagerLayout';
 
 export default function App() {
   const [activePage, setActivePageState] = useState(() => {
@@ -30,6 +31,36 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [activePage]);
+
+  // Lock background scrolling across ALL containers whenever any modal popup is open
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const modalOpen = document.querySelector('.admin-modal-backdrop, .modal-backdrop, [role="dialog"]');
+      const containers = document.querySelectorAll('html, body, #root, main, .admin-content-viewport, .admin-dashboard-container, .admin-layout-main');
+      
+      if (modalOpen) {
+        containers.forEach(el => {
+          if (el) {
+            el.style.overflow = 'hidden';
+            el.style.touchAction = 'none';
+          }
+        });
+      } else {
+        containers.forEach(el => {
+          if (el) {
+            el.style.overflow = '';
+            el.style.touchAction = '';
+          }
+        });
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      document.body.style.overflow = '';
+    };
+  }, []);
 
   const renderCurrentPage = () => {
     switch (activePage) {
@@ -57,12 +88,14 @@ export default function App() {
         return <LoginPage setActivePage={setActivePage} />;
       case 'admin':
         return <AdminLayout setActivePage={setActivePage} />;
+      case 'manager':
+        return <ManagerLayout setActivePage={setActivePage} />;
       default:
         return <HomePage setActivePage={setActivePage} onOpenDemoModal={() => setDemoModalOpen(true)} />;
     }
   };
 
-  const isFullStandalonePage = activePage === 'login' || activePage === 'admin';
+  const isFullStandalonePage = activePage === 'login' || activePage === 'admin' || activePage === 'manager';
 
   return (
     <div className="app-container">

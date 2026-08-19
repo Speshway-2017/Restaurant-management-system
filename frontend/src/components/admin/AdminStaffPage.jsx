@@ -268,42 +268,25 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
 
       try {
         await api.createStaff(payload);
-        showToast(`New ${role} "${formData.name}" (${formattedEmpId}) registered!`);
-        fetchStaff();
+        showToast(`New ${role} "${formData.name}" (${formattedEmpId}) saved to Database!`);
+        await fetchStaff();
+        setIsAddModalOpen(false);
+        setEditingStaff(null);
+        setFormData({
+          name: '',
+          email: '',
+          password: '',
+          phone: '',
+          documentUrl: '',
+          branch: 'Jubilee Hills (Main Branch)',
+          role: isManagerMode ? 'Waiter' : 'Manager'
+        });
       } catch (err) {
-        console.warn('API create staff error:', err.message);
-        const localStaff = {
-          id: formattedEmpId,
-          name: payload.name,
-          email: payload.email,
-          role: role,
-          phone: payload.phone,
-          documentUrl: payload.documentUrl,
-          status: 'Active',
-          ordersHandled: 0,
-          rating: '5.0 ★',
-          checkInTime: '10:00 AM',
-          checkOutTime: '07:00 PM',
-          scheduledShift: '10:00 AM - 07:00 PM',
-          hoursLogged: '9h 00m',
-          attendanceStatus: 'On Time'
-        };
-        setStaffMembers([localStaff, ...staffMembers]);
-        showToast(`New ${role} "${formData.name}" added locally!`);
+        console.error('API create staff error:', err.message);
+        alert(`Failed to save staff member to Database: ${err.message}`);
+        return;
       }
     }
-
-    setIsAddModalOpen(false);
-    setEditingStaff(null);
-    setFormData({
-      name: '',
-      email: '',
-      password: '',
-      phone: '',
-      documentUrl: '',
-      branch: 'Jubilee Hills (Main Branch)',
-      role: isManagerMode ? 'Waiter' : 'Manager'
-    });
   };
 
   const handleToggleSuspendStaff = async (stfItem) => {

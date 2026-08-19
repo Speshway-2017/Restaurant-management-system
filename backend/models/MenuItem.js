@@ -10,7 +10,8 @@ const menuItemSchema = new mongoose.Schema({
   desc: { type: String, default: '' },
   img: { type: String, default: '/hero_dish_2.png' },
   isBestseller: { type: Boolean, default: false },
-  isAvailable: { type: Boolean, default: true }
+  isAvailable: { type: Boolean, default: true },
+  bookmarked: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('MenuItem', menuItemSchema);
