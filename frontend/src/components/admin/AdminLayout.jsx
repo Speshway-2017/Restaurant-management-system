@@ -3,8 +3,9 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Table2, CalendarDays,
   Users, Clock, Boxes, Ticket, BarChart3, Receipt, Settings, ShieldCheck,
   Building2, FileText, Search, Bell, ChevronDown, LogOut, Menu, X, ArrowLeft,
-  CheckCircle2, Plus, Sparkles, Filter, RefreshCw, User
+  CheckCircle2, Plus, Sparkles, Filter, RefreshCw, User, ChevronRight
 } from 'lucide-react';
+import PowerOffSlide from '../PowerOffSlide';
 
 // Import Admin Sub-pages
 import AdminDashboardHome from './AdminDashboardHome';
@@ -23,16 +24,28 @@ import AdminProfilePage from './AdminProfilePage';
 export default function AdminLayout({ setActivePage }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('Jubilee Hills (Main Branch)');
   const [unreadNotifications, setUnreadNotifications] = useState(4);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  const branches = [
+    'Jubilee Hills (Main Branch)',
+    'Banjara Hills Branch',
+    'Gachibowli Branch',
+    'Hitech City Branch'
+  ];
+
+  const handleNextBranch = () => {
+    const currentIndex = branches.indexOf(selectedBranch);
+    const nextIndex = (currentIndex + 1) % branches.length;
+    setSelectedBranch(branches[nextIndex]);
+  };
+
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'menu-mgmt', label: 'Menu Management', icon: UtensilsCrossed },
-    { id: 'tables', label: 'Tables & Floor Plan', icon: Table2, badge: '18/24' },
-    { id: 'staff-accounts', label: 'Accounts & Roles', icon: Users },
-    { id: 'staff-shifts', label: 'Shifts & Attendance', icon: Clock },
+    { id: 'staff-accounts', label: 'Staff Management', icon: Users },
     { id: 'coupons', label: 'Loyalty & Coupons', icon: Ticket },
     { id: 'analytics', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'payments', label: 'Payments & Settlements', icon: Receipt },
@@ -43,8 +56,8 @@ export default function AdminLayout({ setActivePage }) {
     switch (tab) {
       case 'dashboard': return 'Dashboard Overview';
       case 'menu-mgmt': return 'Menu Management';
-      case 'tables': return 'Tables & Floor Plan';
-      case 'staff-accounts': return 'Accounts & Roles';
+      case 'tables': return 'Table Management';
+      case 'staff-accounts': return 'Staff Management';
       case 'staff-shifts': return 'Shifts & Attendance';
       case 'coupons': return 'Loyalty & Coupons';
       case 'analytics': return 'Reports & Analytics';
@@ -98,7 +111,10 @@ export default function AdminLayout({ setActivePage }) {
     <div className="admin-app-wrapper">
 
       {/* ================= SIDEBAR NAVIGATION ================= */}
-      <aside className={`admin-sidebar ${mobileSidebarOpen ? 'is-open is-mobile-open' : ''}`}>
+      <aside 
+        className={`admin-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''} ${mobileSidebarOpen ? 'is-open is-mobile-open' : ''}`}
+        onWheel={(e) => e.preventDefault()}
+      >
 
         {/* Sidebar Brand Header */}
         <div className="admin-sidebar-header">
@@ -136,6 +152,7 @@ export default function AdminLayout({ setActivePage }) {
                 <li key={item.id}>
                   <button
                     className={`admin-nav-btn ${isActive ? 'is-active' : ''}`}
+                    title={sidebarCollapsed ? item.label : ''}
                     onClick={() => {
                       setActiveTab(item.id);
                       setMobileSidebarOpen(false);
@@ -174,17 +191,24 @@ export default function AdminLayout({ setActivePage }) {
       )}
 
       {/* ================= MAIN CONTENT AREA ================= */}
-      <div className="admin-main-wrapper">
+      <div className={`admin-main-wrapper ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
 
         {/* Top Header Bar */}
         <header className="admin-top-header">
           <div className="admin-header-left">
             <button
               className="admin-hamburger-btn"
-              onClick={() => setMobileSidebarOpen(true)}
-              aria-label="Open navigation menu"
+              onClick={() => {
+                if (window.innerWidth < 992) {
+                  setMobileSidebarOpen(!mobileSidebarOpen);
+                } else {
+                  setSidebarCollapsed(!sidebarCollapsed);
+                }
+              }}
+              aria-label="Toggle navigation menu"
+              title={sidebarCollapsed ? "Expand Sidebar" : "Fold Sidebar"}
             >
-              <Menu size={22} color="#1E4636" />
+              <Menu size={20} color="#1E4636" />
             </button>
 
             <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E4636', fontFamily: 'var(--font-heading)' }}>
@@ -193,6 +217,46 @@ export default function AdminLayout({ setActivePage }) {
           </div>
 
           <div className="admin-header-right">
+            {/* Branch Badge Selector with Next Branch Button */}
+            <div className="admin-branch-selector" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Building2 size={16} color="#1E4636" />
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="admin-branch-dropdown"
+                aria-label="Select branch"
+              >
+                {branches.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+
+              {/* Next Branch Navigation Button */}
+              <button
+                type="button"
+                className="admin-next-branch-btn"
+                onClick={handleNextBranch}
+                aria-label="Next branch"
+                title="Switch to Next Branch"
+                style={{
+                  background: '#1E4636',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '0.35rem 0.65rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 700
+                }}
+              >
+                <span>Next</span>
+                <ChevronRight size={14} color="#F2C14E" />
+              </button>
+            </div>
+
             {/* Notifications Bell */}
             <div className="admin-header-icon-btn-wrapper">
               <button className="admin-header-icon-btn" aria-label="Notifications">
@@ -252,13 +316,17 @@ export default function AdminLayout({ setActivePage }) {
 
                     <div className="admin-dropdown-divider" />
 
-                    <button
-                      className="admin-dropdown-item is-logout"
-                      onClick={() => { setUserMenuOpen(false); setActivePage('login'); }}
-                    >
-                      <LogOut size={15} color="#C0392B" />
-                      <span>Logout</span>
-                    </button>
+                    <div style={{ padding: '0.5rem 0.75rem' }}>
+                      <PowerOffSlide
+                        duration={1500}
+                        label="Logout"
+                        onPowerOff={() => {
+                          setUserMenuOpen(false);
+                          localStorage.removeItem('flavora_auth_token');
+                          setActivePage('login');
+                        }}
+                      />
+                    </div>
                   </div>
                 </>
               )}

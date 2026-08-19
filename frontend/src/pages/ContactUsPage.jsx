@@ -182,14 +182,15 @@ export default function ContactUsPage({ onOpenDemoModal }) {
                   </div>
 
                   <div>
-                    <label className="contact-field-label">PHONE NUMBER *</label>
+                    <label className="contact-field-label">PHONE NUMBER (10 DIGITS) *</label>
                     <input 
                       type="tel" 
                       required 
-                      placeholder="Enter your phone number" 
+                      placeholder="e.g. 9876543210" 
+                      maxLength={10}
                       className="contact-ref-input"
                       value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})}
                     />
                   </div>
                 </div>

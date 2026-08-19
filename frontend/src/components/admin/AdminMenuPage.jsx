@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  UtensilsCrossed, Plus, Search, Edit3, MoreVertical, 
+  UtensilsCrossed, Plus, Search, Edit3, MoreVertical, ChevronDown,
   Bookmark, Star, Clock, Flame, CheckCircle2, Trash2,
-  ArrowLeft, Save, Camera, Sparkles, Image as ImageIcon, UploadCloud
+  ArrowLeft, Save, Camera, Sparkles, Image as ImageIcon, UploadCloud, Link2
 } from 'lucide-react';
 import { api } from '../../services/api';
 
@@ -13,9 +13,10 @@ export default function AdminMenuPage() {
   const [editingDish, setEditingDish] = useState(null);
   const [activeMoreMenuId, setActiveMoreMenuId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+  const [imageTab, setImageTab] = useState('upload'); // 'upload', 'link', or 'preset'
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
+  const fetchMenu = () => {
     api.getMenuItems()
       .then((data) => {
         if (data && data.length > 0) {
@@ -24,8 +25,10 @@ export default function AdminMenuPage() {
             name: item.name,
             category: item.category || 'Main Course',
             price: item.price,
+            isVeg: item.isVeg !== undefined ? item.isVeg : true,
             available: item.isAvailable !== undefined ? item.isAvailable : item.available,
             bestseller: item.isBestseller !== undefined ? item.isBestseller : item.bestseller,
+            bookmarked: item.bookmarked || false,
             desc: item.desc || '',
             prepTime: item.prepTime || '15–20 mins',
             spice: item.spiceLevel || item.spice || 'Medium',
@@ -33,21 +36,26 @@ export default function AdminMenuPage() {
           })));
         }
       })
-      .catch(() => {
-        console.log('Using local menu items fallback');
+      .catch((err) => {
+        console.log('Using local menu items fallback:', err.message);
       });
+  };
+
+  useEffect(() => {
+    fetchMenu();
   }, []);
 
   const [dishFormData, setDishFormData] = useState({
     name: '',
     category: 'Main Course',
     price: '',
+    isVeg: true,
     prepTime: '15–20 mins',
     spice: 'Medium',
     available: true,
     bestseller: false,
     desc: '',
-    img: '/hero_dish_2.png'
+    img: ''
   });
 
   const [menuItems, setMenuItems] = useState([
@@ -56,6 +64,7 @@ export default function AdminMenuPage() {
       name: 'Chicken Biryani',
       category: 'Main Course',
       price: 320,
+      isVeg: false,
       available: true,
       bestseller: true,
       bookmarked: true,
@@ -69,6 +78,7 @@ export default function AdminMenuPage() {
       name: 'Amritsari Paneer Tikka',
       category: 'Starters',
       price: 290,
+      isVeg: true,
       available: true,
       bestseller: true,
       bookmarked: false,
@@ -82,6 +92,7 @@ export default function AdminMenuPage() {
       name: 'Classic Butter Chicken',
       category: 'Main Course',
       price: 440,
+      isVeg: false,
       available: true,
       bestseller: false,
       bookmarked: true,
@@ -95,6 +106,7 @@ export default function AdminMenuPage() {
       name: 'Hyderabadi Veg Biryani',
       category: 'Main Course',
       price: 280,
+      isVeg: true,
       available: false,
       bestseller: false,
       bookmarked: false,
@@ -108,6 +120,7 @@ export default function AdminMenuPage() {
       name: 'Ghee Roast Masala Dosa',
       category: 'South Indian',
       price: 180,
+      isVeg: true,
       available: true,
       bestseller: true,
       bookmarked: false,
@@ -121,6 +134,7 @@ export default function AdminMenuPage() {
       name: 'Dal Makhani Shahi',
       category: 'Main Course',
       price: 260,
+      isVeg: true,
       available: true,
       bestseller: false,
       bookmarked: false,
@@ -134,6 +148,7 @@ export default function AdminMenuPage() {
       name: 'Saffron Gulab Jamun',
       category: 'Desserts',
       price: 160,
+      isVeg: true,
       available: true,
       bestseller: false,
       bookmarked: false,
@@ -147,6 +162,7 @@ export default function AdminMenuPage() {
       name: 'Special Mango Lassi',
       category: 'Beverages',
       price: 120,
+      isVeg: true,
       available: true,
       bestseller: true,
       bookmarked: false,
@@ -163,23 +179,40 @@ export default function AdminMenuPage() {
   };
 
   const toggleAvailability = (id) => {
-    setMenuItems(menuItems.map(item => item.id === id ? { ...item, available: !item.available } : item));
+    const item = menuItems.find(i => i.id === id);
+    if (!item) return;
+    const newStatus = !item.available;
+    setMenuItems(menuItems.map(i => i.id === id ? { ...i, available: newStatus } : i));
     showToast('Kitchen availability updated');
+
+    api.updateMenuItem(id, { isAvailable: newStatus }).catch(() => {});
   };
 
   const toggleBookmark = (id) => {
-    setMenuItems(menuItems.map(item => item.id === id ? { ...item, bookmarked: !item.bookmarked } : item));
+    const item = menuItems.find(i => i.id === id);
+    if (!item) return;
+    const newStatus = !item.bookmarked;
+    setMenuItems(menuItems.map(i => i.id === id ? { ...i, bookmarked: newStatus } : i));
+    
+    api.updateMenuItem(id, { bookmarked: newStatus }).catch(() => {});
   };
 
   const toggleBestseller = (id) => {
-    setMenuItems(menuItems.map(item => item.id === id ? { ...item, bestseller: !item.bestseller } : item));
+    const item = menuItems.find(i => i.id === id);
+    if (!item) return;
+    const newStatus = !item.bestseller;
+    setMenuItems(menuItems.map(i => i.id === id ? { ...i, bestseller: newStatus } : i));
     showToast('Bestseller status updated');
+
+    api.updateMenuItem(id, { isBestseller: newStatus }).catch(() => {});
   };
 
   const handleDeleteDish = (id) => {
     if (window.confirm('Are you sure you want to delete this dish from the menu?')) {
       setMenuItems(menuItems.filter(item => item.id !== id));
       showToast('Dish deleted successfully');
+
+      api.deleteMenuItem(id).catch(() => {});
     }
   };
 
@@ -189,12 +222,13 @@ export default function AdminMenuPage() {
       name: '',
       category: 'Main Course',
       price: '',
+      isVeg: true,
       prepTime: '15–20 mins',
       spice: 'Medium',
       available: true,
       bestseller: false,
       desc: '',
-      img: '/hero_dish_2.png'
+      img: ''
     });
     setViewMode('form');
   };
@@ -205,6 +239,7 @@ export default function AdminMenuPage() {
       name: item.name,
       category: item.category,
       price: item.price,
+      isVeg: item.isVeg !== undefined ? item.isVeg : true,
       prepTime: item.prepTime,
       spice: item.spice,
       available: item.available,
@@ -212,26 +247,104 @@ export default function AdminMenuPage() {
       desc: item.desc,
       img: item.img
     });
+    if (item.img && (item.img.startsWith('http://') || item.img.startsWith('https://'))) {
+      setImageTab('link');
+    } else {
+      setImageTab('upload');
+    }
     setViewMode('form');
   };
+
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const handleImageFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         if (event.target?.result) {
-          setDishFormData({ ...dishFormData, img: event.target.result });
-          showToast('New dish photo uploaded successfully');
+          const localDataUrl = event.target.result;
+          setDishFormData(prev => ({ ...prev, img: localDataUrl }));
+          setIsUploadingImage(true);
+          showToast('Uploading photo to Cloudinary...');
+
+          try {
+            const res = await api.uploadImage(localDataUrl, 'dishes');
+            if (res && res.url) {
+              setDishFormData(prev => ({ ...prev, img: res.url }));
+              showToast('Photo uploaded to Cloudinary CDN!');
+            }
+          } catch (err) {
+            console.warn('Cloudinary upload fallback to Data URL:', err.message);
+          } finally {
+            setIsUploadingImage(false);
+          }
         }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSaveDishForm = (e) => {
+  const handleLinkAutoUpload = async (url) => {
+    if (!url || !url.trim()) return;
+    const cleanUrl = url.trim();
+    if (cleanUrl.includes('res.cloudinary.com') || cleanUrl.startsWith('/')) return;
+    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+      try {
+        setIsUploadingImage(true);
+        showToast('Directly storing image link in Cloudinary...');
+        const res = await api.uploadImage(cleanUrl, 'dishes');
+        if (res && res.url) {
+          setDishFormData(prev => ({ ...prev, img: res.url }));
+          showToast('Image link stored on Cloudinary CDN!');
+        }
+      } catch (err) {
+        console.warn('Auto Cloudinary upload from link failed:', err.message);
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+  };
+
+  const handleSaveDishForm = async (e) => {
     e.preventDefault();
     if (!dishFormData.name || !dishFormData.price) return;
+
+    let finalImg = dishFormData.img || '/hero_dish_2.png';
+
+    // Ensure all uploaded images or pasted image links are stored in Cloudinary
+    if (finalImg && !finalImg.includes('res.cloudinary.com')) {
+      if (finalImg.startsWith('http://') || finalImg.startsWith('https://') || finalImg.startsWith('data:image/')) {
+        try {
+          setIsUploadingImage(true);
+          showToast('Storing image on Cloudinary...');
+          const cloudRes = await api.uploadImage(finalImg, 'dishes');
+          if (cloudRes && cloudRes.url) {
+            finalImg = cloudRes.url;
+            setDishFormData(prev => ({ ...prev, img: cloudRes.url }));
+            showToast('Image stored on Cloudinary CDN!');
+          }
+        } catch (err) {
+          console.warn('Cloudinary upload on save fallback:', err.message);
+        } finally {
+          setIsUploadingImage(false);
+        }
+      }
+    }
+
+    const payload = {
+      name: dishFormData.name,
+      category: dishFormData.category,
+      price: Number(dishFormData.price),
+      isVeg: dishFormData.isVeg,
+      spiceLevel: dishFormData.spice || 'Medium',
+      prepTime: dishFormData.prepTime || '15–20 mins',
+      desc: dishFormData.desc || 'Special dish prepared with fresh ingredients.',
+      img: finalImg,
+      isBestseller: dishFormData.bestseller,
+      isAvailable: dishFormData.available,
+      bookmarked: false
+    };
 
     if (editingDish) {
       setMenuItems(menuItems.map(item => item.id === editingDish.id ? {
@@ -239,30 +352,39 @@ export default function AdminMenuPage() {
         name: dishFormData.name,
         category: dishFormData.category,
         price: Number(dishFormData.price),
+        isVeg: dishFormData.isVeg,
         prepTime: dishFormData.prepTime || '15–20 mins',
         spice: dishFormData.spice || 'Medium',
         available: dishFormData.available,
         bestseller: dishFormData.bestseller,
-        desc: dishFormData.desc || 'Special Indian dish cooked to perfection.',
+        desc: dishFormData.desc || 'Special dish prepared with fresh ingredients.',
         img: dishFormData.img || item.img
       } : item));
       showToast(`Updated "${dishFormData.name}" successfully!`);
+
+      try {
+        await api.updateMenuItem(editingDish.id, payload);
+        fetchMenu();
+      } catch (err) {
+        console.warn('API update menu item failed:', err.message);
+      }
     } else {
-      const newDish = {
-        id: Date.now(),
-        name: dishFormData.name,
-        category: dishFormData.category,
-        price: Number(dishFormData.price),
-        available: dishFormData.available,
-        bestseller: dishFormData.bestseller,
-        bookmarked: false,
-        desc: dishFormData.desc || 'Freshly prepared delicious item with authentic Indian spices.',
-        prepTime: dishFormData.prepTime || '15–20 mins',
-        spice: dishFormData.spice || 'Medium',
-        img: dishFormData.img || '/hero_dish_2.png'
-      };
-      setMenuItems([newDish, ...menuItems]);
-      showToast(`Added "${dishFormData.name}" to menu!`);
+      try {
+        const created = await api.createMenuItem(payload);
+        showToast(`Added "${dishFormData.name}" to menu!`);
+        fetchMenu();
+      } catch (err) {
+        console.warn('API create menu item failed:', err.message);
+        const newDish = {
+          id: Date.now(),
+          ...payload,
+          available: payload.isAvailable,
+          bestseller: payload.isBestseller,
+          spice: payload.spiceLevel
+        };
+        setMenuItems([newDish, ...menuItems]);
+        showToast(`Added "${dishFormData.name}" to menu (local)!`);
+      }
     }
 
     setViewMode('list');
@@ -270,7 +392,10 @@ export default function AdminMenuPage() {
   };
 
   const filteredItems = menuItems.filter(item => {
-    const matchesCat = selectedCat === 'All' || item.category === selectedCat;
+    const itemCat = (item.category || '').toLowerCase();
+    const matchesCat = selectedCat === 'All' || 
+                       item.category === selectedCat || 
+                       (selectedCat === 'Main Course' && (item.category === 'Biryani' || item.category === 'Curries' || itemCat.includes('biryani') || itemCat.includes('curry')));
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
     return matchesCat && matchesSearch;
   });
@@ -321,10 +446,10 @@ export default function AdminMenuPage() {
             </button>
           </div>
 
-          {/* Search Bar First, Then Category Pills */}
+          {/* Search Bar First, Then Category Dropdown */}
           <div className="admin-card mb-4" style={{ padding: '0.75rem 1.25rem', marginBottom: '1.5rem' }}>
-            <div className="admin-filter-bar-flex">
-              <div className="admin-header-search-box" style={{ width: '260px', flexShrink: 0 }}>
+            <div className="admin-filter-bar-flex" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <div className="admin-header-search-box" style={{ width: '280px', flexShrink: 0 }}>
                 <Search size={16} className="admin-search-icon" />
                 <input
                   type="text"
@@ -335,16 +460,39 @@ export default function AdminMenuPage() {
                 />
               </div>
 
-              <div className="admin-pill-selector">
-                {['All', 'Starters', 'Main Course', 'South Indian', 'Desserts', 'Beverages'].map((cat) => (
-                  <button
-                    key={cat}
-                    className={`admin-pill-btn ${selectedCat === cat ? 'is-active' : ''}`}
-                    onClick={() => setSelectedCat(cat)}
-                  >
-                    {cat}
-                  </button>
-                ))}
+              {/* Dish Specializations Dropdown (Defaulting to All Dishes) */}
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <select
+                  value={selectedCat}
+                  onChange={(e) => setSelectedCat(e.target.value)}
+                  style={{
+                    height: '42px',
+                    padding: '0 2.5rem 0 1.1rem',
+                    borderRadius: '10px',
+                    border: '1.5px solid #1E4636',
+                    backgroundColor: '#1E4636',
+                    color: '#FFFFFF',
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    outline: 'none',
+                    appearance: 'none',
+                    fontFamily: 'inherit',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 4px 12px rgba(30, 70, 54, 0.2)'
+                  }}
+                >
+                  <option value="All" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>All Dishes</option>
+                  <option value="Starters" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>Starters</option>
+                  <option value="Main Course" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>Main Course</option>
+                  <option value="Curries" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>Curries</option>
+                  <option value="Biryani" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>Biryani</option>
+                  <option value="Breads" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>Breads</option>
+                  <option value="South Indian" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>South Indian</option>
+                  <option value="Desserts" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>Desserts</option>
+                  <option value="Beverages" style={{ backgroundColor: '#FFFFFF', color: '#1A202C' }}>Beverages</option>
+                </select>
+                <ChevronDown size={16} color="#FFFFFF" style={{ position: 'absolute', right: '12px', pointerEvents: 'none' }} />
               </div>
             </div>
           </div>
@@ -532,7 +680,7 @@ export default function AdminMenuPage() {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }} className="mb-3">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }} className="mb-3">
                   <div className="admin-form-group">
                     <label className="form-label">Category *</label>
                     <select
@@ -542,9 +690,24 @@ export default function AdminMenuPage() {
                     >
                       <option value="Starters">Starters</option>
                       <option value="Main Course">Main Course</option>
+                      <option value="Curries">Curries</option>
+                      <option value="Biryani">Biryani</option>
+                      <option value="Breads">Breads</option>
                       <option value="South Indian">South Indian</option>
                       <option value="Desserts">Desserts</option>
                       <option value="Beverages">Beverages</option>
+                    </select>
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="form-label">Dietary Type *</label>
+                    <select
+                      className="form-control"
+                      value={dishFormData.isVeg ? 'veg' : 'nonveg'}
+                      onChange={(e) => setDishFormData({ ...dishFormData, isVeg: e.target.value === 'veg' })}
+                    >
+                      <option value="veg">🟢 Veg</option>
+                      <option value="nonveg">🔴 Non-Veg</option>
                     </select>
                   </div>
 
@@ -599,56 +762,94 @@ export default function AdminMenuPage() {
                   />
                 </div>
 
-                {/* Upload Photo Section inside Left Column */}
+                {/* Dish Image Selection with Tabs (Upload File to Cloudinary / Paste Image Link / Preset Gallery) */}
                 <div className="admin-form-group mb-4" style={{ background: '#FFFBF4', padding: '1.25rem', borderRadius: '12px', border: '1px solid #E5DBC8' }}>
-                  <label className="form-label" style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                    📸 Upload Photo of a Dish
+                  <label className="form-label" style={{ fontSize: '0.9rem', marginBottom: '0.75rem', fontWeight: 700 }}>
+                    📸 Dish Image Selection
                   </label>
 
-                  {/* Hidden File Input */}
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    onChange={handleImageFileUpload}
-                    style={{ display: 'none' }}
-                  />
+                  {/* Tab Selector Buttons */}
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', backgroundColor: '#FFFFFF', padding: '0.35rem', borderRadius: '10px', border: '1px solid #E5DBC8' }}>
+                    <button
+                      type="button"
+                      className={`admin-pill-btn ${imageTab === 'upload' ? 'is-active' : ''}`}
+                      onClick={() => setImageTab('upload')}
+                      style={{ flex: 1, padding: '0.45rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                    >
+                      <UploadCloud size={14} />
+                      <span>Upload File (Cloudinary)</span>
+                    </button>
 
-                  {/* Dropzone Box */}
-                  <div 
-                    className="admin-image-upload-dropzone mb-3"
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{ background: '#FFFFFF' }}
-                  >
-                    <div className="admin-upload-icon-circle">
-                      <UploadCloud size={22} />
-                    </div>
-                    <div>
-                      <p className="admin-upload-text-title">Upload High-Res Food Photo</p>
-                      <p className="admin-upload-text-sub">Click to browse files or drag & drop (PNG, JPG, WEBP)</p>
-                    </div>
+                    <button
+                      type="button"
+                      className={`admin-pill-btn ${imageTab === 'link' ? 'is-active' : ''}`}
+                      onClick={() => setImageTab('link')}
+                      style={{ flex: 1, padding: '0.45rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                    >
+                      <Link2 size={14} />
+                      <span>Image Link / URL</span>
+                    </button>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <div style={{ flex: 1 }}>
-                      <label className="form-label" style={{ fontSize: '0.76rem', color: '#5C5C5C', marginBottom: '0.25rem' }}>
-                        Or choose from preset food gallery:
+                  {/* TAB 1: UPLOAD FILE TO CLOUDINARY */}
+                  {imageTab === 'upload' && (
+                    <div>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        onChange={handleImageFileUpload}
+                        style={{ display: 'none' }}
+                      />
+                      <div 
+                        className="admin-image-upload-dropzone mb-2"
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{ background: '#FFFFFF', cursor: 'pointer' }}
+                      >
+                        <div className="admin-upload-icon-circle">
+                          <UploadCloud size={22} />
+                        </div>
+                        <div>
+                          <p className="admin-upload-text-title">Upload High-Res Food Photo to Cloudinary</p>
+                          <p className="admin-upload-text-sub">Click to browse files or drag & drop (PNG, JPG, WEBP)</p>
+                        </div>
+                      </div>
+                      {isUploadingImage && (
+                        <div style={{ fontSize: '0.8rem', color: '#E07A3C', fontWeight: 600 }}>
+                          ⏳ Uploading image to Cloudinary CDN...
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB 2: PASTE DIRECT IMAGE URL / LINK */}
+                  {imageTab === 'link' && (
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.78rem', color: '#5C5C5C', marginBottom: '0.35rem', fontWeight: 600 }}>
+                        Paste Image Link (HTTP / HTTPS URL) *
                       </label>
-                      <select
+                      <input
+                        type="url"
                         className="form-control"
+                        placeholder="https://images.unsplash.com/photo-..."
                         value={dishFormData.img}
                         onChange={(e) => setDishFormData({ ...dishFormData, img: e.target.value })}
-                      >
-                        <option value="/hero_dish_2.png">Biryani Platter Photo</option>
-                        <option value="/hero_dish_1.png">Tikka Starter Photo</option>
-                        <option value="/carousel_3.png">Butter Chicken Curry Photo</option>
-                        <option value="/carousel_2.png">Veg Biryani Photo</option>
-                        <option value="/carousel_1.png">Masala Dosa Photo</option>
-                        <option value="/tandoor_oven.png">Tandoori Naan Photo</option>
-                        <option value="/chef_plating.png">Dessert Plating Photo</option>
-                      </select>
+                        onBlur={(e) => handleLinkAutoUpload(e.target.value)}
+                        style={{ background: '#FFFFFF', width: '100%' }}
+                        required={imageTab === 'link'}
+                      />
+                      <div style={{ fontSize: '0.74rem', color: '#64748B', marginTop: '0.35rem' }}>
+                        💡 Any web image link (Unsplash, Imgur, CDN, etc.) is directly stored in your Cloudinary storage automatically.
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Selected Image Preview Link */}
+                  {dishFormData.img && (
+                    <div style={{ fontSize: '0.76rem', color: '#1E4636', marginTop: '0.75rem', fontWeight: 600, wordBreak: 'break-all' }}>
+                      🖼️ Image Source: <span style={{ color: '#E07A3C' }}>{dishFormData.img.length > 60 ? dishFormData.img.substring(0, 60) + '...' : dishFormData.img}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', gap: '1rem', paddingTop: '0.5rem' }}>
