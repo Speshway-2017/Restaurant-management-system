@@ -18,4 +18,22 @@ const createCoupon = async (req, res) => {
   }
 };
 
-module.exports = { getCoupons, createCoupon };
+const updateCoupon = async (req, res) => {
+  try {
+    const updated = await Coupon.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+const deleteCoupon = async (req, res) => {
+  try {
+    await Coupon.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Coupon deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { getCoupons, createCoupon, updateCoupon, deleteCoupon };

@@ -1,4 +1,5 @@
 const Table = require('../models/Table');
+const QRCode = require('qrcode');
 
 const getTables = async (req, res) => {
   try {
@@ -19,4 +20,31 @@ const updateTableStatus = async (req, res) => {
   }
 };
 
-module.exports = { getTables, updateTableStatus };
+// Backend QR Code Generator using 'qrcode' package
+const generateTableQr = async (req, res) => {
+  try {
+    const tableNum = req.body?.tableNum || req.params?.tableNum || 'T-01';
+    const targetUrl = req.body?.targetUrl || `http://localhost:5173/menu?table=${tableNum}`;
+    
+    // Generate base64 Data URL for table QR code
+    const qrDataUrl = await QRCode.toDataURL(targetUrl, {
+      color: {
+        dark: '#0F2A1D',
+        light: '#FFFFFF'
+      },
+      width: 320,
+      margin: 2
+    });
+
+    res.json({
+      success: true,
+      tableNum,
+      targetUrl,
+      qrDataUrl
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { getTables, updateTableStatus, generateTableQr };
