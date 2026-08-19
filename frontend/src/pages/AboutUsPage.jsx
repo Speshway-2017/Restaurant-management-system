@@ -3,6 +3,7 @@ import {
   Building, Calendar, Rocket, Award, ShieldCheck, 
   CheckCircle2, ArrowRight, Utensils, Flame, Sparkles, MapPin, Layers, Heart
 } from 'lucide-react';
+import MagneticButton from '../components/MagneticButton';
 
 export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
   const evolutionTimeline = [
@@ -69,7 +70,7 @@ export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
       </section>
 
       {/* 2. FOUNDING STORY & MISSION */}
-      <section style={{ backgroundColor: '#FAF3E6', padding: '5.5rem 1.5rem' }}>
+      <section style={{ backgroundColor: '#FFFFFF', padding: '5.5rem 1.5rem' }}>
         <div className="section" style={{ padding: 0 }}>
           <div className="grid-2" style={{ alignItems: 'center' }}>
             
@@ -204,7 +205,7 @@ export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
       </section>
 
       {/* 4. THREE CORE PILLARS */}
-      <section style={{ backgroundColor: '#FAF3E6', padding: '5.5rem 1.5rem', borderTop: '1px solid var(--color-neutral-200)' }}>
+      <section style={{ backgroundColor: '#FFFFFF', padding: '5.5rem 1.5rem', borderTop: '1px solid var(--color-neutral-200)' }}>
         <div className="section" style={{ padding: 0 }}>
           <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
             <h2 className="text-h1" style={{ fontSize: '2.5rem', color: 'var(--color-primary-dark)', marginBottom: '0.75rem' }}>
@@ -346,6 +347,32 @@ export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. MAGNETIC CTA ACTIONS SECTION */}
+      <section style={{ backgroundColor: '#FFFFFF', padding: '4.5rem 1.5rem', textAlign: 'center', borderTop: '1px solid var(--color-neutral-200)' }}>
+        <div style={{ maxWidth: '650px', margin: '0 auto' }}>
+          <h2 className="text-h1" style={{ color: 'var(--color-primary-dark)', marginBottom: '0.75rem' }}>
+            Experience Flavora RestoOS
+          </h2>
+          <p className="text-body" style={{ color: 'var(--color-neutral-700)', marginBottom: '2rem' }}>
+            Transform your dining experience or partner with our pan-India technology network.
+          </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+            <MagneticButton variant="default" onClick={() => setActivePage('menu')}>
+              Get Started
+            </MagneticButton>
+
+            <MagneticButton variant="outline" onClick={() => setActivePage('features')}>
+              Learn More
+            </MagneticButton>
+
+            <MagneticButton variant="secondary" onClick={() => setActivePage('contact')}>
+              Contact Us
+            </MagneticButton>
           </div>
         </div>
       </section>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Camera, Image as ImageIcon, Sparkles, Utensils, Flame, UserCheck } from 'lucide-react';
+import InfiniteSlider from '../components/InfiniteSlider';
 
 export default function GalleryPage({ onOpenDemoModal }) {
   const [activeCategory, setActiveCategory] = useState('all');
@@ -40,8 +41,48 @@ export default function GalleryPage({ onOpenDemoModal }) {
         </div>
       </section>
 
+      {/* SmoothUI Infinite Marquee Carousel Banner */}
+      <section style={{ backgroundColor: '#FFFFFF', padding: '2rem 1rem', borderBottom: '1px solid var(--color-neutral-200)' }}>
+        <InfiniteSlider gap={16} speed={30} speedOnHover={0}>
+          {galleryItems.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                width: '240px',
+                height: '140px',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                position: 'relative',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
+              }}
+            >
+              <img
+                src={item.src}
+                alt={item.title}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'linear-gradient(to top, rgba(20, 47, 36, 0.82) 0%, transparent 60%)',
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  padding: '0.75rem',
+                  color: '#FFFFFF',
+                  fontSize: '0.82rem',
+                  fontWeight: 700
+                }}
+              >
+                {item.title}
+              </div>
+            </div>
+          ))}
+        </InfiniteSlider>
+      </section>
+
       {/* Gallery Grid */}
-      <section style={{ backgroundColor: '#FAF3E6', padding: '3.5rem 1.5rem 5rem 1.5rem' }}>
+      <section style={{ backgroundColor: '#FFFFFF', padding: '3.5rem 1.5rem 5rem 1.5rem' }}>
         <div className="section" style={{ padding: 0 }}>
           <div className="grid-3">
             {filteredItems.map(item => (

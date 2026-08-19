@@ -17,7 +17,18 @@ const request = async (endpoint, options = {}) => {
       headers
     });
 
-    const data = await response.json();
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(response.status === 404 ? `Endpoint ${endpoint} returned 404 Not Found. Please restart your backend server (npm start) so newly mounted routes take effect.` : `Server error (${response.status})`);
+      }
+      data = { message: text };
+    }
+
     if (!response.ok) {
       throw new Error(data.message || 'API Request Failed');
     }
@@ -64,6 +75,7 @@ export const api = {
   // Staff API
   getStaff: () => request('/staff'),
   createStaff: (data) => request('/staff', { method: 'POST', body: JSON.stringify(data) }),
+  updateStaff: (id, data) => request(`/staff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStaff: (id) => request(`/staff/${id}`, { method: 'DELETE' }),
 
   // Inventory API
@@ -73,8 +85,22 @@ export const api = {
   // Coupons API
   getCoupons: () => request('/coupons'),
   createCoupon: (data) => request('/coupons', { method: 'POST', body: JSON.stringify(data) }),
+  updateCoupon: (id, data) => request(`/coupons/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCoupon: (id) => request(`/coupons/${id}`, { method: 'DELETE' }),
 
   // Settings API
   getSettings: () => request('/settings'),
-  updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) })
+  updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Upload API (Cloudinary)
+  uploadImage: (fileDataUrl, folder = 'flavora_resto') => request('/upload', {
+    method: 'POST',
+    body: JSON.stringify({ file: fileDataUrl, folder })
+  }),
+
+  // Table QR API (node qrcode backend generator)
+  generateTableQr: (tableNum, targetUrl) => request('/tables/generate-qr', {
+    method: 'POST',
+    body: JSON.stringify({ tableNum, targetUrl })
+  })
 };

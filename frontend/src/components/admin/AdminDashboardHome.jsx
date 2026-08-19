@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import {
   TrendingUp, TrendingDown, ShoppingBag, DollarSign, Users, Table2, Clock,
   CheckCircle2, AlertCircle, ChefHat, Eye, ArrowUpRight, Plus, Utensils,
-  Calendar, Download, RefreshCw, ChevronRight, Filter, Sparkles, AlertTriangle
+  Calendar, Download, RefreshCw, ChevronRight, Filter, Sparkles, AlertTriangle,
+  Building2
 } from 'lucide-react';
 
 export default function AdminDashboardHome({ setActiveTab }) {
@@ -32,16 +33,6 @@ export default function AdminDashboardHome({ setActiveTab }) {
       accentBg: "rgba(242, 193, 78, 0.12)"
     },
     {
-      id: 'pending',
-      label: "Pending Orders",
-      value: "5",
-      change: "Requires Action",
-      trend: "alert",
-      subtext: "Avg kitchen time: 14m",
-      badgeColor: "#C0392B",
-      accentBg: "rgba(192, 57, 43, 0.08)"
-    },
-    {
       id: 'aov',
       label: "Avg Order Value (AOV)",
       value: "₹595",
@@ -50,6 +41,16 @@ export default function AdminDashboardHome({ setActiveTab }) {
       subtext: "Highest: Table 04 (₹2,840)",
       badgeColor: "#3F8F5B",
       accentBg: "rgba(63, 143, 91, 0.08)"
+    },
+    {
+      id: 'restaurants',
+      label: "Total Restaurants",
+      value: "1",
+      change: "Active",
+      trend: "up",
+      subtext: "Jubilee Hills (Main Branch)",
+      badgeColor: "#8E44AD",
+      accentBg: "rgba(142, 68, 173, 0.08)"
     },
     {
       id: 'sales',
@@ -152,8 +153,8 @@ export default function AdminDashboardHome({ setActiveTab }) {
                 {kpi.id === 'sales' && <DollarSign size={16} />}
                 {kpi.id === 'orders' && <ShoppingBag size={16} />}
                 {kpi.id === 'tables' && <Table2 size={16} />}
-                {kpi.id === 'pending' && <AlertCircle size={16} />}
                 {kpi.id === 'aov' && <TrendingUp size={16} />}
+                {kpi.id === 'restaurants' && <Building2 size={16} />}
               </div>
             </div>
 
@@ -260,170 +261,9 @@ export default function AdminDashboardHome({ setActiveTab }) {
 
       </div>
 
-      {/* ================= 3. LIVE KITCHEN QUEUE & FLOOR PLAN SNAPSHOT ================= */}
-      <div className="admin-grid-12">
 
-        {/* Live Kitchen Queue (7 Cols) */}
-        <div className="admin-card col-span-7">
-          <div className="admin-card-header">
-            <div className="admin-card-title-with-icon">
-              <ChefHat size={20} color="#1E4636" />
-              <div>
-                <h2 className="admin-card-title">Live Kitchen Queue</h2>
-                <p className="admin-card-subtitle">Active kitchen order tickets</p>
-              </div>
-            </div>
 
-            <button 
-              className="admin-link-btn"
-              onClick={() => setActiveTab('orders')}
-            >
-              <span>View Kitchen KDS</span>
-              <ChevronRight size={14} />
-            </button>
-          </div>
 
-          <div className="admin-live-orders-grid">
-            {liveKitchenOrders.map((ord) => (
-              <div key={ord.id} className="admin-live-order-ticket">
-                <div className="ticket-header">
-                  <div className="ticket-id-tag">
-                    <span className="ticket-table">{ord.table}</span>
-                    <span className="ticket-id">{ord.id}</span>
-                  </div>
-                  <span 
-                    className="ticket-status-pill"
-                    style={{ backgroundColor: `${ord.statusColor}18`, color: ord.statusColor, border: `1px solid ${ord.statusColor}40` }}
-                  >
-                    {ord.status}
-                  </span>
-                </div>
-
-                <div className="ticket-items">{ord.items}</div>
-
-                <div className="ticket-footer">
-                  <span className="ticket-time">
-                    <Clock size={13} />
-                    {ord.time}
-                  </span>
-                  <span className="ticket-amount">{ord.amount}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Floor Plan Snapshot (5 Cols) */}
-        <div className="admin-card col-span-5">
-          <div className="admin-card-header">
-            <div className="admin-card-title-with-icon">
-              <Table2 size={20} color="#1E4636" />
-              <div>
-                <h2 className="admin-card-title">Tables & Floor Plan</h2>
-                <p className="admin-card-subtitle">Table occupancy status</p>
-              </div>
-            </div>
-
-            <button 
-              className="admin-link-btn"
-              onClick={() => setActiveTab('tables')}
-            >
-              <span>Floor Map</span>
-              <ChevronRight size={14} />
-            </button>
-          </div>
-
-          {/* Quick Status Legend Bar */}
-          <div className="admin-table-legend-bar">
-            <span className="legend-chip is-occupied">18 Occupied</span>
-            <span className="legend-chip is-available">6 Available</span>
-            <span className="legend-chip is-reserved">2 Reserved</span>
-            <span className="legend-chip is-cleaning">1 Cleaning</span>
-          </div>
-
-          {/* Mini Table Grid */}
-          <div className="admin-mini-table-grid">
-            {tableSnapshot.map((tbl) => (
-              <div 
-                key={tbl.num} 
-                className={`admin-table-mini-card is-${tbl.status}`}
-              >
-                <div className="tbl-num">{tbl.num}</div>
-                <div className="tbl-cap">{tbl.cap} Seats</div>
-                <div className="tbl-status-tag">{tbl.status}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
-
-      {/* ================= 4. RECENT ORDERS DATA TABLE ================= */}
-      <div className="admin-card">
-        <div className="admin-card-header">
-          <div>
-            <h2 className="admin-card-title">Recent Restaurant Orders</h2>
-            <p className="admin-card-subtitle">Real-time order logs and payment status</p>
-          </div>
-
-          <button 
-            className="btn btn-outline"
-            onClick={() => setActiveTab('orders')}
-          >
-            <span>View All Orders</span>
-            <ChevronRight size={15} />
-          </button>
-        </div>
-
-        <div className="admin-table-wrapper">
-          <table className="admin-data-table">
-            <thead>
-              <tr>
-                <th>Order ID</th>
-                <th>Table</th>
-                <th>Customer</th>
-                <th>Items Count</th>
-                <th>Total Amount</th>
-                <th>Payment</th>
-                <th>Status</th>
-                <th>Time</th>
-                <th text-align="right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentOrders.map((ord) => (
-                <tr key={ord.id}>
-                  <td className="font-semibold" style={{ color: '#1E4636' }}>{ord.id}</td>
-                  <td>{ord.table}</td>
-                  <td>{ord.customer}</td>
-                  <td>{ord.items} Items</td>
-                  <td className="font-semibold">{ord.total}</td>
-                  <td>
-                    <span className={`payment-chip ${ord.payment.includes('Paid') ? 'is-paid' : 'is-pending'}`}>
-                      {ord.payment}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`status-badge-unified is-${ord.status.toLowerCase()}`}>
-                      {ord.status}
-                    </span>
-                  </td>
-                  <td style={{ color: '#5C5C5C', fontSize: '0.82rem' }}>{ord.time}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button 
-                      className="admin-icon-action-btn"
-                      onClick={() => setSelectedOrderModal(ord)}
-                      title="View Details"
-                    >
-                      <Eye size={15} color="#1E4636" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       {/* ================= 5. MENU PERFORMANCE & QUICK ACTIONS ================= */}
       <div className="admin-grid-12">
@@ -436,11 +276,26 @@ export default function AdminDashboardHome({ setActiveTab }) {
               <p className="admin-card-subtitle">Highest volume and revenue generators</p>
             </div>
             <button 
-              className="admin-link-btn"
               onClick={() => setActiveTab('menu-mgmt')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.45rem 0.9rem',
+                borderRadius: '8px',
+                backgroundColor: '#1E4636',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 3px 10px rgba(30, 70, 54, 0.2)',
+                transition: 'all 0.2s ease'
+              }}
+              title="Open Menu Manager"
             >
               <span>Menu Manager</span>
-              <ChevronRight size={14} />
+              <ChevronRight size={15} color="#F2C14E" />
             </button>
           </div>
 
@@ -471,25 +326,77 @@ export default function AdminDashboardHome({ setActiveTab }) {
             </div>
           </div>
 
-          {/* Quick Action Buttons */}
-          <div className="admin-quick-actions-grid">
-            <button className="quick-action-btn" onClick={() => setActiveTab('menu-mgmt')}>
-              <Plus size={16} color="#1E4636" />
+          {/* Quick Action Buttons (3 Column Colorful Grid) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <button 
+              onClick={() => setActiveTab('menu-mgmt')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                padding: '0.7rem 0.5rem',
+                borderRadius: '10px',
+                backgroundColor: '#E2F1E8',
+                border: '1.5px solid #A3D4B5',
+                color: '#1E4636',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 6px rgba(30, 70, 54, 0.08)'
+              }}
+              title="Navigate to Menu Manager"
+            >
+              <Plus size={15} color="#1E4636" />
               <span>Add Menu Item</span>
             </button>
 
-            <button className="quick-action-btn" onClick={() => setActiveTab('tables')}>
-              <Plus size={16} color="#1E4636" />
-              <span>Add Table</span>
-            </button>
-
-            <button className="quick-action-btn" onClick={() => setActiveTab('staff-accounts')}>
-              <Plus size={16} color="#1E4636" />
+            <button 
+              onClick={() => setActiveTab('staff-accounts')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                padding: '0.7rem 0.5rem',
+                borderRadius: '10px',
+                backgroundColor: '#E8EAF6',
+                border: '1.5px solid #C5CAE9',
+                color: '#283593',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 6px rgba(40, 53, 147, 0.08)'
+              }}
+              title="Add Manager Account"
+            >
+              <Plus size={15} color="#283593" />
               <span>Add Staff</span>
             </button>
 
-            <button className="quick-action-btn" onClick={() => setActiveTab('coupons')}>
-              <Plus size={16} color="#E07A3C" />
+            <button 
+              onClick={() => setActiveTab('coupons')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                padding: '0.7rem 0.5rem',
+                borderRadius: '10px',
+                backgroundColor: '#FFF3E0',
+                border: '1.5px solid #FFE0B2',
+                color: '#E07A3C',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 6px rgba(224, 122, 60, 0.08)'
+              }}
+              title="Create Promo Coupon"
+            >
+              <Plus size={15} color="#E07A3C" />
               <span>Create Coupon</span>
             </button>
           </div>
