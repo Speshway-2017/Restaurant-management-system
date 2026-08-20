@@ -7,7 +7,15 @@ export default function BlogsPage({ setActivePage }) {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
-  const featuredStory = {
+  const savedBlogs = (() => {
+    try {
+      const s = localStorage.getItem('flavora_blogs');
+      if (s) return JSON.parse(s).filter(b => b.status !== 'Draft');
+    } catch(e) {}
+    return null;
+  })();
+
+  const featuredStory = (savedBlogs && savedBlogs[0]) || {
     id: 1,
     title: 'The Secret of Traditional Dum Biryani',
     category: 'HERITAGE',
@@ -30,7 +38,7 @@ export default function BlogsPage({ setActivePage }) {
     `
   };
 
-  const recentInsights = [
+  const recentInsights = savedBlogs ? savedBlogs.slice(1) : [
     {
       id: 2,
       title: 'Sourcing Seasonal Ingredients in India',

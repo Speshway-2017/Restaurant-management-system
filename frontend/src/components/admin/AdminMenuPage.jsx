@@ -182,8 +182,13 @@ export default function AdminMenuPage() {
     const item = menuItems.find(i => i.id === id);
     if (!item) return;
     const newStatus = !item.available;
-    setMenuItems(menuItems.map(i => i.id === id ? { ...i, available: newStatus } : i));
-    showToast('Kitchen availability updated');
+    const updated = menuItems.map(i => i.id === id ? { ...i, available: newStatus, isAvailable: newStatus } : i);
+    setMenuItems(updated);
+    try {
+      localStorage.setItem('flavora_dishes', JSON.stringify(updated));
+      window.dispatchEvent(new Event('flavora_dishes_updated'));
+    } catch (e) {}
+    showToast(newStatus ? 'Dish marked as active' : 'Dish marked as inactive');
 
     api.updateMenuItem(id, { isAvailable: newStatus }).catch(() => {});
   };
@@ -201,7 +206,12 @@ export default function AdminMenuPage() {
     const item = menuItems.find(i => i.id === id);
     if (!item) return;
     const newStatus = !item.bestseller;
-    setMenuItems(menuItems.map(i => i.id === id ? { ...i, bestseller: newStatus } : i));
+    const updated = menuItems.map(i => i.id === id ? { ...i, bestseller: newStatus, isBestseller: newStatus } : i);
+    setMenuItems(updated);
+    try {
+      localStorage.setItem('flavora_dishes', JSON.stringify(updated));
+      window.dispatchEvent(new Event('flavora_dishes_updated'));
+    } catch (e) {}
     showToast('Bestseller status updated');
 
     api.updateMenuItem(id, { isBestseller: newStatus }).catch(() => {});
@@ -209,7 +219,12 @@ export default function AdminMenuPage() {
 
   const handleDeleteDish = (id) => {
     if (window.confirm('Are you sure you want to delete this dish from the menu?')) {
-      setMenuItems(menuItems.filter(item => item.id !== id));
+      const updated = menuItems.filter(item => item.id !== id);
+      setMenuItems(updated);
+      try {
+        localStorage.setItem('flavora_dishes', JSON.stringify(updated));
+        window.dispatchEvent(new Event('flavora_dishes_updated'));
+      } catch (e) {}
       showToast('Dish deleted successfully');
 
       api.deleteMenuItem(id).catch(() => {});
@@ -312,23 +327,21 @@ export default function AdminMenuPage() {
 
     let finalImg = dishFormData.img || '/hero_dish_2.png';
 
-    // Ensure all uploaded images or pasted image links are stored in Cloudinary
-    if (finalImg && !finalImg.includes('res.cloudinary.com')) {
-      if (finalImg.startsWith('http://') || finalImg.startsWith('https://') || finalImg.startsWith('data:image/')) {
-        try {
-          setIsUploadingImage(true);
-          showToast('Storing image on Cloudinary...');
-          const cloudRes = await api.uploadImage(finalImg, 'dishes');
-          if (cloudRes && cloudRes.url) {
-            finalImg = cloudRes.url;
-            setDishFormData(prev => ({ ...prev, img: cloudRes.url }));
-            showToast('Image stored on Cloudinary CDN!');
-          }
-        } catch (err) {
-          console.warn('Cloudinary upload on save fallback:', err.message);
-        } finally {
-          setIsUploadingImage(false);
+    // Only upload if the image is still a raw data URL and NOT already uploaded to Cloudinary
+    if (finalImg && finalImg.startsWith('data:image/') && !finalImg.includes('res.cloudinary.com')) {
+      try {
+        setIsUploadingImage(true);
+        showToast('Storing photo on Cloudinary...');
+        const cloudRes = await api.uploadImage(finalImg, 'dishes');
+        if (cloudRes && cloudRes.url) {
+          finalImg = cloudRes.url;
+          setDishFormData(prev => ({ ...prev, img: cloudRes.url }));
+          showToast('Photo stored on Cloudinary CDN!');
         }
+      } catch (err) {
+        console.warn('Cloudinary upload on save fallback:', err.message);
+      } finally {
+        setIsUploadingImage(false);
       }
     }
 
@@ -346,8 +359,9 @@ export default function AdminMenuPage() {
       bookmarked: false
     };
 
+    let updatedList;
     if (editingDish) {
-      setMenuItems(menuItems.map(item => item.id === editingDish.id ? {
+      updatedList = menuItems.map(item => item.id === editingDish.id ? {
         ...item,
         name: dishFormData.name,
         category: dishFormData.category,
@@ -356,10 +370,13 @@ export default function AdminMenuPage() {
         prepTime: dishFormData.prepTime || '15–20 mins',
         spice: dishFormData.spice || 'Medium',
         available: dishFormData.available,
+        isAvailable: dishFormData.available,
         bestseller: dishFormData.bestseller,
+        isBestseller: dishFormData.bestseller,
         desc: dishFormData.desc || 'Special dish prepared with fresh ingredients.',
         img: dishFormData.img || item.img
-      } : item));
+      } : item);
+      setMenuItems(updatedList);
       showToast(`Updated "${dishFormData.name}" successfully!`);
 
       try {
@@ -369,23 +386,31 @@ export default function AdminMenuPage() {
         console.warn('API update menu item failed:', err.message);
       }
     } else {
+      const newDish = {
+        id: Date.now(),
+        ...payload,
+        available: payload.isAvailable,
+        isAvailable: payload.isAvailable,
+        bestseller: payload.isBestseller,
+        isBestseller: payload.isBestseller,
+        spice: payload.spiceLevel
+      };
+      updatedList = [newDish, ...menuItems];
+      setMenuItems(updatedList);
+      showToast(`Added "${dishFormData.name}" to menu!`);
+
       try {
-        const created = await api.createMenuItem(payload);
-        showToast(`Added "${dishFormData.name}" to menu!`);
+        await api.createMenuItem(payload);
         fetchMenu();
       } catch (err) {
         console.warn('API create menu item failed:', err.message);
-        const newDish = {
-          id: Date.now(),
-          ...payload,
-          available: payload.isAvailable,
-          bestseller: payload.isBestseller,
-          spice: payload.spiceLevel
-        };
-        setMenuItems([newDish, ...menuItems]);
-        showToast(`Added "${dishFormData.name}" to menu (local)!`);
       }
     }
+
+    try {
+      localStorage.setItem('flavora_dishes', JSON.stringify(updatedList));
+      window.dispatchEvent(new Event('flavora_dishes_updated'));
+    } catch (e) {}
 
     setViewMode('list');
     setEditingDish(null);
@@ -399,6 +424,13 @@ export default function AdminMenuPage() {
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
     return matchesCat && matchesSearch;
   });
+
+  const categoryOrder = ['Starters', 'Main Course', 'Curries', 'Biryani', 'Breads', 'South Indian', 'Desserts', 'Beverages'];
+  const presentCats = Array.from(new Set(filteredItems.map(i => i.category)));
+  const sortedCategories = [
+    ...categoryOrder.filter(cat => presentCats.includes(cat)),
+    ...presentCats.filter(cat => !categoryOrder.includes(cat))
+  ];
 
   return (
     <div className="admin-subpage-container">
@@ -497,137 +529,291 @@ export default function AdminMenuPage() {
             </div>
           </div>
 
-          {/* Menu Cards Grid */}
-          <div className="admin-menu-cards-grid">
-            {filteredItems.map((item) => (
-              <div key={item.id} className="admin-menu-card-v2">
-                
-                {/* Top Food Photo & Badges */}
-                <div className="admin-menu-card-img-wrapper">
-                  <img src={item.img} alt={item.name} className="admin-menu-card-img" />
-                  
-                  {item.bestseller && (
-                    <div className="admin-menu-bestseller-badge">
-                      <Star size={12} fill="#F2C14E" color="#F2C14E" />
-                      <span>Bestseller</span>
-                    </div>
-                  )}
+          {/* Menu Cards Grid / Category Sections */}
+          {selectedCat === 'All' ? (
+            sortedCategories.map((cat) => {
+              const catDishes = filteredItems.filter(i => i.category === cat);
+              if (catDishes.length === 0) return null;
+              return (
+                <div key={cat} style={{ marginBottom: '2.5rem' }}>
+                  {/* Category Header Bar */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.65rem',
+                    padding: '0.85rem 1.25rem',
+                    background: '#FAF6EE',
+                    borderRadius: '12px',
+                    border: '1.5px solid #EAE3D2',
+                    marginBottom: '1.25rem'
+                  }}>
+                    <UtensilsCrossed size={18} color="#1E4636" />
+                    <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1E4636', margin: 0 }}>
+                      {cat}
+                    </h2>
+                  </div>
 
-                  <button 
-                    className="admin-menu-bookmark-btn" 
-                    onClick={() => toggleBookmark(item.id)}
-                    title="Bookmark Dish"
-                  >
-                    <Bookmark 
-                      size={15} 
-                      color="#1E4636" 
-                      fill={item.bookmarked ? '#1E4636' : 'none'} 
-                    />
-                  </button>
+                  <div className="admin-menu-cards-grid">
+                    {catDishes.map((item) => (
+                      <div key={item.id} className="admin-menu-card-v2">
+                        {/* Top Food Photo & Badges */}
+                        <div className="admin-menu-card-img-wrapper">
+                          <img src={item.img} alt={item.name} className="admin-menu-card-img" />
+                          
+                          {item.bestseller && (
+                            <div className="admin-menu-bestseller-badge">
+                              <Star size={12} fill="#F2C14E" color="#F2C14E" />
+                              <span>Bestseller</span>
+                            </div>
+                          )}
+
+                          <button 
+                            className="admin-menu-bookmark-btn" 
+                            onClick={() => toggleBookmark(item.id)}
+                            title="Bookmark Dish"
+                          >
+                            <Bookmark 
+                              size={15} 
+                              color="#1E4636" 
+                              fill={item.bookmarked ? '#1E4636' : 'none'} 
+                            />
+                          </button>
+                        </div>
+
+                        {/* Card Content Body */}
+                        <div className="admin-menu-card-body">
+                          {/* Dish Name & Status Pill */}
+                          <div className="admin-menu-card-title-row">
+                            <h3 className="admin-menu-card-name">{item.name}</h3>
+                            <button
+                              className={`admin-menu-status-pill ${item.available ? 'is-active' : 'is-inactive'}`}
+                              onClick={() => toggleAvailability(item.id)}
+                              title="Toggle Kitchen Stock Status"
+                            >
+                              <span className="status-dot"></span>
+                              <span>{item.available ? 'Active' : 'Inactive'}</span>
+                            </button>
+                          </div>
+
+                          {/* Description */}
+                          <p className="admin-menu-card-desc">{item.desc}</p>
+
+                          {/* Meta Attributes */}
+                          <div className="admin-menu-card-meta-bar">
+                            <span className="meta-item">
+                              <UtensilsCrossed size={13} color="#E07A3C" />
+                              <span>{item.category}</span>
+                            </span>
+                            <span className="meta-divider">|</span>
+                            <span className="meta-item">
+                              <Clock size={13} color="#E07A3C" />
+                              <span>{item.prepTime}</span>
+                            </span>
+                            <span className="meta-divider">|</span>
+                            <span className="meta-item">
+                              <Flame size={13} color="#E07A3C" />
+                              <span>{item.spice}</span>
+                            </span>
+                          </div>
+
+                          <div className="admin-menu-card-footer-divider" />
+
+                          {/* Footer Price & Action Buttons */}
+                          <div className="admin-menu-card-footer">
+                            <div className="admin-menu-card-price-group">
+                              <div className="admin-menu-card-price">₹{item.price}</div>
+                              <div className="admin-menu-card-tax">Inclusive of all taxes</div>
+                            </div>
+
+                            <div className="admin-menu-card-actions">
+                              {/* EDIT BUTTON -> OPENS EDIT PAGE */}
+                              <button 
+                                className="admin-menu-edit-btn" 
+                                onClick={() => handleOpenEditPage(item)}
+                                title="Edit Dish Information"
+                              >
+                                <Edit3 size={13} />
+                                <span>Edit</span>
+                              </button>
+
+                              {/* THREE DOTS MORE OPTIONS BUTTON */}
+                              <div style={{ position: 'relative' }}>
+                                <button 
+                                  className="admin-menu-more-btn" 
+                                  title="More options"
+                                  onClick={() => setActiveMoreMenuId(activeMoreMenuId === item.id ? null : item.id)}
+                                >
+                                  <MoreVertical size={15} />
+                                </button>
+
+                                {activeMoreMenuId === item.id && (
+                                  <>
+                                    <div 
+                                      style={{ position: 'fixed', inset: 0, zIndex: 99 }} 
+                                      onClick={() => setActiveMoreMenuId(null)} 
+                                    />
+                                    <div className="admin-card-more-dropdown">
+                                      <button className="dropdown-opt" onClick={() => { toggleAvailability(item.id); setActiveMoreMenuId(null); }}>
+                                        <CheckCircle2 size={13} color={item.available ? '#C0392B' : '#2E7D32'} />
+                                        <span>Mark as {item.available ? 'Inactive' : 'Active'}</span>
+                                      </button>
+
+                                      <button className="dropdown-opt" onClick={() => { toggleBestseller(item.id); setActiveMoreMenuId(null); }}>
+                                        <Star size={13} color="#F2C14E" fill={item.bestseller ? '#F2C14E' : 'none'} />
+                                        <span>{item.bestseller ? 'Remove Bestseller' : 'Mark Bestseller'}</span>
+                                      </button>
+
+                                      <div style={{ height: '1px', background: '#F0E8DA', margin: '0.2rem 0' }} />
+
+                                      <button className="dropdown-opt is-delete" onClick={() => { handleDeleteDish(item.id); setActiveMoreMenuId(null); }}>
+                                        <Trash2 size={13} color="#C0392B" />
+                                        <span>Delete Dish</span>
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-
-                {/* Card Content Body */}
-                <div className="admin-menu-card-body">
+              );
+            })
+          ) : (
+            <div className="admin-menu-cards-grid">
+              {filteredItems.map((item) => (
+                <div key={item.id} className="admin-menu-card-v2">
                   
-                  {/* Dish Name & Status Pill */}
-                  <div className="admin-menu-card-title-row">
-                    <h3 className="admin-menu-card-name">{item.name}</h3>
-                    <button
-                      className={`admin-menu-status-pill ${item.available ? 'is-active' : 'is-inactive'}`}
-                      onClick={() => toggleAvailability(item.id)}
-                      title="Toggle Kitchen Stock Status"
+                  {/* Top Food Photo & Badges */}
+                  <div className="admin-menu-card-img-wrapper">
+                    <img src={item.img} alt={item.name} className="admin-menu-card-img" />
+                    
+                    {item.bestseller && (
+                      <div className="admin-menu-bestseller-badge">
+                        <Star size={12} fill="#F2C14E" color="#F2C14E" />
+                        <span>Bestseller</span>
+                      </div>
+                    )}
+
+                    <button 
+                      className="admin-menu-bookmark-btn" 
+                      onClick={() => toggleBookmark(item.id)}
+                      title="Bookmark Dish"
                     >
-                      <span className="status-dot"></span>
-                      <span>{item.available ? 'Active' : 'Inactive'}</span>
+                      <Bookmark 
+                        size={15} 
+                        color="#1E4636" 
+                        fill={item.bookmarked ? '#1E4636' : 'none'} 
+                      />
                     </button>
                   </div>
 
-                  {/* Description */}
-                  <p className="admin-menu-card-desc">{item.desc}</p>
-
-                  {/* Meta Attributes */}
-                  <div className="admin-menu-card-meta-bar">
-                    <span className="meta-item">
-                      <UtensilsCrossed size={13} color="#E07A3C" />
-                      <span>{item.category}</span>
-                    </span>
-                    <span className="meta-divider">|</span>
-                    <span className="meta-item">
-                      <Clock size={13} color="#E07A3C" />
-                      <span>{item.prepTime}</span>
-                    </span>
-                    <span className="meta-divider">|</span>
-                    <span className="meta-item">
-                      <Flame size={13} color="#E07A3C" />
-                      <span>{item.spice}</span>
-                    </span>
-                  </div>
-
-                  <div className="admin-menu-card-footer-divider" />
-
-                  {/* Footer Price & Action Buttons */}
-                  <div className="admin-menu-card-footer">
-                    <div className="admin-menu-card-price-group">
-                      <div className="admin-menu-card-price">₹{item.price}</div>
-                      <div className="admin-menu-card-tax">Inclusive of all taxes</div>
+                  {/* Card Content Body */}
+                  <div className="admin-menu-card-body">
+                    
+                    {/* Dish Name & Status Pill */}
+                    <div className="admin-menu-card-title-row">
+                      <h3 className="admin-menu-card-name">{item.name}</h3>
+                      <button
+                        className={`admin-menu-status-pill ${item.available ? 'is-active' : 'is-inactive'}`}
+                        onClick={() => toggleAvailability(item.id)}
+                        title="Toggle Kitchen Stock Status"
+                      >
+                        <span className="status-dot"></span>
+                        <span>{item.available ? 'Active' : 'Inactive'}</span>
+                      </button>
                     </div>
 
-                    <div className="admin-menu-card-actions">
-                      {/* EDIT BUTTON -> OPENS EDIT PAGE */}
-                      <button 
-                        className="admin-menu-edit-btn" 
-                        onClick={() => handleOpenEditPage(item)}
-                        title="Edit Dish Information"
-                      >
-                        <Edit3 size={13} />
-                        <span>Edit</span>
-                      </button>
+                    {/* Description */}
+                    <p className="admin-menu-card-desc">{item.desc}</p>
 
-                      {/* THREE DOTS MORE OPTIONS BUTTON */}
-                      <div style={{ position: 'relative' }}>
+                    {/* Meta Attributes */}
+                    <div className="admin-menu-card-meta-bar">
+                      <span className="meta-item">
+                        <UtensilsCrossed size={13} color="#E07A3C" />
+                        <span>{item.category}</span>
+                      </span>
+                      <span className="meta-divider">|</span>
+                      <span className="meta-item">
+                        <Clock size={13} color="#E07A3C" />
+                        <span>{item.prepTime}</span>
+                      </span>
+                      <span className="meta-divider">|</span>
+                      <span className="meta-item">
+                        <Flame size={13} color="#E07A3C" />
+                        <span>{item.spice}</span>
+                      </span>
+                    </div>
+
+                    <div className="admin-menu-card-footer-divider" />
+
+                    {/* Footer Price & Action Buttons */}
+                    <div className="admin-menu-card-footer">
+                      <div className="admin-menu-card-price-group">
+                        <div className="admin-menu-card-price">₹{item.price}</div>
+                        <div className="admin-menu-card-tax">Inclusive of all taxes</div>
+                      </div>
+
+                      <div className="admin-menu-card-actions">
+                        {/* EDIT BUTTON -> OPENS EDIT PAGE */}
                         <button 
-                          className="admin-menu-more-btn" 
-                          title="More options"
-                          onClick={() => setActiveMoreMenuId(activeMoreMenuId === item.id ? null : item.id)}
+                          className="admin-menu-edit-btn" 
+                          onClick={() => handleOpenEditPage(item)}
+                          title="Edit Dish Information"
                         >
-                          <MoreVertical size={15} />
+                          <Edit3 size={13} />
+                          <span>Edit</span>
                         </button>
 
-                        {activeMoreMenuId === item.id && (
-                          <>
-                            <div 
-                              style={{ position: 'fixed', inset: 0, zIndex: 99 }} 
-                              onClick={() => setActiveMoreMenuId(null)} 
-                            />
-                            <div className="admin-card-more-dropdown">
-                              <button className="dropdown-opt" onClick={() => { toggleAvailability(item.id); setActiveMoreMenuId(null); }}>
-                                <CheckCircle2 size={13} color={item.available ? '#C0392B' : '#2E7D32'} />
-                                <span>Mark as {item.available ? 'Inactive' : 'Active'}</span>
-                              </button>
+                        {/* THREE DOTS MORE OPTIONS BUTTON */}
+                        <div style={{ position: 'relative' }}>
+                          <button 
+                            className="admin-menu-more-btn" 
+                            title="More options"
+                            onClick={() => setActiveMoreMenuId(activeMoreMenuId === item.id ? null : item.id)}
+                          >
+                            <MoreVertical size={15} />
+                          </button>
 
-                              <button className="dropdown-opt" onClick={() => { toggleBestseller(item.id); setActiveMoreMenuId(null); }}>
-                                <Star size={13} color="#F2C14E" fill={item.bestseller ? '#F2C14E' : 'none'} />
-                                <span>{item.bestseller ? 'Remove Bestseller' : 'Mark Bestseller'}</span>
-                              </button>
+                          {activeMoreMenuId === item.id && (
+                            <>
+                              <div 
+                                style={{ position: 'fixed', inset: 0, zIndex: 99 }} 
+                                onClick={() => setActiveMoreMenuId(null)} 
+                              />
+                              <div className="admin-card-more-dropdown">
+                                <button className="dropdown-opt" onClick={() => { toggleAvailability(item.id); setActiveMoreMenuId(null); }}>
+                                  <CheckCircle2 size={13} color={item.available ? '#C0392B' : '#2E7D32'} />
+                                  <span>Mark as {item.available ? 'Inactive' : 'Active'}</span>
+                                </button>
 
-                              <div style={{ height: '1px', background: '#F0E8DA', margin: '0.2rem 0' }} />
+                                <button className="dropdown-opt" onClick={() => { toggleBestseller(item.id); setActiveMoreMenuId(null); }}>
+                                  <Star size={13} color="#F2C14E" fill={item.bestseller ? '#F2C14E' : 'none'} />
+                                  <span>{item.bestseller ? 'Remove Bestseller' : 'Mark Bestseller'}</span>
+                                </button>
 
-                              <button className="dropdown-opt is-delete" onClick={() => { handleDeleteDish(item.id); setActiveMoreMenuId(null); }}>
-                                <Trash2 size={13} color="#C0392B" />
-                                <span>Delete Dish</span>
-                              </button>
-                            </div>
-                          </>
-                        )}
+                                <div style={{ height: '1px', background: '#F0E8DA', margin: '0.2rem 0' }} />
+
+                                <button className="dropdown-opt is-delete" onClick={() => { handleDeleteDish(item.id); setActiveMoreMenuId(null); }}>
+                                  <Trash2 size={13} color="#C0392B" />
+                                  <span>Delete Dish</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
+
                   </div>
 
                 </div>
-
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 

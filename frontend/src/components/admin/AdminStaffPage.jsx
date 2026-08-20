@@ -325,7 +325,14 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
     }
   };
 
-  const filteredStaff = staffMembers.filter(stf => {
+  const visibleStaff = staffMembers.filter(stf => {
+    const isOperationalRole = ['waiter', 'receptionist', 'chef', 'head chef'].includes((stf.role || '').toLowerCase());
+    if (!isManagerMode && isOperationalRole) return false;
+    if (isManagerMode && !isOperationalRole) return false;
+    return true;
+  });
+
+  const filteredStaff = visibleStaff.filter(stf => {
     const matchesSearch = stf.name.toLowerCase().includes(search.toLowerCase()) || 
                           stf.role.toLowerCase().includes(search.toLowerCase()) ||
                           (stf.email && stf.email.toLowerCase().includes(search.toLowerCase()));
@@ -437,7 +444,7 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
               className={`admin-pill-btn ${activeTab === 'all' ? 'is-active' : ''}`}
               onClick={() => setActiveTab('all')}
             >
-              All Staff ({staffMembers.length})
+              All Staff ({visibleStaff.length})
             </button>
 
             {isManagerMode && (
@@ -446,19 +453,19 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
                   className={`admin-pill-btn ${activeTab === 'waiter' ? 'is-active' : ''}`}
                   onClick={() => setActiveTab('waiter')}
                 >
-                  Waiters ({staffMembers.filter(s => s.role === 'Waiter').length})
+                  Waiters ({visibleStaff.filter(s => s.role === 'Waiter').length})
                 </button>
                 <button
                   className={`admin-pill-btn ${activeTab === 'receptionist' ? 'is-active' : ''}`}
                   onClick={() => setActiveTab('receptionist')}
                 >
-                  Receptionists ({staffMembers.filter(s => s.role === 'Receptionist').length})
+                  Receptionists ({visibleStaff.filter(s => s.role === 'Receptionist').length})
                 </button>
                 <button
                   className={`admin-pill-btn ${activeTab === 'chef' ? 'is-active' : ''}`}
                   onClick={() => setActiveTab('chef')}
                 >
-                  Chefs ({staffMembers.filter(s => s.role === 'Chef').length})
+                  Chefs ({visibleStaff.filter(s => s.role === 'Chef').length})
                 </button>
               </>
             )}
@@ -505,11 +512,6 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
                       <td className="font-mono text-sm" style={{ fontWeight: 700, color: '#1E4636' }}>{stf.id}</td>
                       <td>
                         <div style={{ fontWeight: 700, color: '#0F2A1D' }}>{stf.name}</div>
-                        {stf.documentUrl && (
-                          <a href={stf.documentUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', color: '#FF8A00', fontWeight: 600 }}>
-                            📄 Proof Verified
-                          </a>
-                        )}
                       </td>
                       <td>
                         <div>{stf.email || '—'}</div>
@@ -621,34 +623,6 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
           padding: '0.35rem 0',
           animation: 'fadeIn 0.15s ease-in-out'
         }}>
-          {/* Edit Option */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              const target = menuPosition.staff;
-              setActiveActionMenuId(null);
-              setMenuPosition(null);
-              if (target) handleOpenEditModal(target);
-            }}
-            style={{
-              width: '100%',
-              padding: '0.55rem 0.95rem',
-              background: 'none',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.55rem',
-              fontSize: '0.84rem',
-              fontWeight: 600,
-              color: '#1E4636',
-              cursor: 'pointer',
-              textAlign: 'left'
-            }}
-          >
-            <ShieldCheck size={14} color="#1E4636" />
-            <span>Edit Details</span>
-          </button>
-
           {/* Suspend / Reactivate Option */}
           <button
             onClick={(e) => {

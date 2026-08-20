@@ -5,7 +5,15 @@ import InfiniteSlider from '../components/InfiniteSlider';
 export default function GalleryPage({ onOpenDemoModal }) {
   const [activeCategory, setActiveCategory] = useState('all');
 
-  const galleryItems = [
+  const savedGallery = (() => {
+    try {
+      const s = localStorage.getItem('flavora_gallery');
+      if (s) return JSON.parse(s);
+    } catch(e) {}
+    return null;
+  })();
+
+  const galleryItems = savedGallery || [
     { id: 1, category: 'ambience', src: '/carousel_1.png', title: 'Luxury Dining Hall', desc: 'Warm ambient lighting & royal seating setup' },
     { id: 2, category: 'dishes', src: '/carousel_2.png', title: 'Gourmet Indian Feast', desc: 'Authentic curry spread with butter naan' },
     { id: 3, category: 'kitchen', src: '/carousel_3.png', title: 'Kitchen Pass Station', desc: 'Chefs plating fresh tandoori appetizers' },

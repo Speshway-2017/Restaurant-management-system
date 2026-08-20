@@ -42,27 +42,68 @@ export default function MenuPage({ onOpenDemoModal }) {
   }, []);
 
   useEffect(() => {
-    api.getMenuItems()
-      .then((data) => {
-        if (data && data.length > 0) {
-          setMenuItems(data.map(item => ({
-            id: item._id || item.id,
-            name: item.name,
-            category: item.category || 'Main Course',
-            price: item.price,
-            isVeg: item.isVeg !== undefined ? item.isVeg : true,
-            available: item.isAvailable !== undefined ? item.isAvailable : item.available,
-            bestseller: item.isBestseller !== undefined ? item.isBestseller : item.bestseller,
-            desc: item.desc || '',
-            prepTime: item.prepTime || '15 mins',
-            spice: item.spiceLevel || item.spice || 'Medium',
-            img: item.img || '/hero_dish_2.png'
-          })));
-        }
-      })
-      .catch((err) => {
-        console.log('Using local fallback menu on MenuPage:', err.message);
-      });
+    const loadMenu = () => {
+      const savedLocal = localStorage.getItem('flavora_dishes');
+      let localDishesMap = {};
+      if (savedLocal) {
+        try {
+          const parsed = JSON.parse(savedLocal);
+          if (parsed && parsed.length > 0) {
+            parsed.forEach(item => {
+              const nameKey = (item.name || '').toLowerCase().trim();
+              localDishesMap[nameKey] = item;
+            });
+            setMenuItems(parsed.map(item => ({
+              id: item._id || item.id,
+              name: item.name,
+              category: item.category || 'Main Course',
+              price: item.price,
+              isVeg: item.isVeg !== undefined ? item.isVeg : true,
+              available: item.available !== undefined ? item.available : (item.isAvailable !== undefined ? item.isAvailable : true),
+              bestseller: item.bestseller !== undefined ? item.bestseller : (item.isBestseller !== undefined ? item.isBestseller : false),
+              desc: item.desc || '',
+              prepTime: item.prepTime || '15 mins',
+              spice: item.spiceLevel || item.spice || 'Medium',
+              img: item.img || '/hero_dish_2.png'
+            })));
+          }
+        } catch (e) {}
+      }
+
+      // Fetch from API database and merge local availability status
+      api.getMenuItems()
+        .then((data) => {
+          if (data && data.length > 0) {
+            setMenuItems(data.map(item => {
+              const nameKey = (item.name || '').toLowerCase().trim();
+              const localOverride = localDishesMap[nameKey];
+              const isAvail = localOverride ? (localOverride.available !== undefined ? localOverride.available : localOverride.isAvailable) : (item.isAvailable !== undefined ? item.isAvailable : true);
+              const isBest = localOverride ? (localOverride.bestseller !== undefined ? localOverride.bestseller : localOverride.isBestseller) : (item.isBestseller !== undefined ? item.isBestseller : item.bestseller);
+
+              return {
+                id: item._id || item.id,
+                name: item.name,
+                category: item.category || 'Main Course',
+                price: item.price,
+                isVeg: item.isVeg !== undefined ? item.isVeg : true,
+                available: isAvail !== false,
+                bestseller: isBest,
+                desc: item.desc || '',
+                prepTime: item.prepTime || '15 mins',
+                spice: item.spiceLevel || item.spice || 'Medium',
+                img: item.img || '/hero_dish_2.png'
+              };
+            }));
+          }
+        })
+        .catch((err) => {
+          console.log('Using local fallback menu on MenuPage:', err.message);
+        });
+    };
+
+    loadMenu();
+    window.addEventListener('flavora_dishes_updated', loadMenu);
+    return () => window.removeEventListener('flavora_dishes_updated', loadMenu);
   }, []);
 
   const handleAddToCart = (id) => {
@@ -111,7 +152,6 @@ export default function MenuPage({ onOpenDemoModal }) {
   };
 
   const filteredItems = menuItems.filter(item => {
-    if (item.available === false) return false;
     const matchesCategory = matchCategory(item.category, selectedCategory);
     const matchesVeg = vegOnly ? item.isVeg : true;
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -272,20 +312,27 @@ export default function MenuPage({ onOpenDemoModal }) {
             </div>
 
             {/* Veg Toggle Switch */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', backgroundColor: '#FFFFFF', padding: '0.4rem 1rem', borderRadius: 'var(--radius-full)', border: '1px solid var(--color-neutral-300)' }}>
-              <span className="veg-dot"></span>
-              <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--color-neutral-800)' }}>Veg Only</span>
+            <div 
+              onClick={() => setVegOnly(!vegOnly)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem', backgroundColor: 'transparent', padding: '0.4rem 0.6rem', cursor: 'pointer', userSelect: 'none' }}
+            >
+              <span className="veg-dot" style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid #166534', borderRadius: '3px', position: 'relative' }}>
+                <span style={{ position: 'absolute', inset: '2.5px', backgroundColor: '#166534', borderRadius: '50%' }}></span>
+              </span>
+              <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#1E4636' }}>Veg Only</span>
               <button 
-                onClick={() => setVegOnly(!vegOnly)}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setVegOnly(!vegOnly); }}
                 style={{
-                  width: '42px',
+                  width: '44px',
                   height: '24px',
-                  borderRadius: '12px',
-                  backgroundColor: vegOnly ? 'var(--color-success)' : 'var(--color-neutral-300)',
-                  border: 'none',
+                  borderRadius: '14px',
+                  border: '1.5px solid #000000',
+                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
+                  backgroundColor: vegOnly ? '#166534' : '#E2E8F0',
                   cursor: 'pointer',
                   position: 'relative',
-                  transition: 'background-color 0.2s ease',
+                  transition: 'all 0.2s ease',
                   marginLeft: '0.25rem'
                 }}
               >
@@ -294,9 +341,10 @@ export default function MenuPage({ onOpenDemoModal }) {
                   height: '18px',
                   borderRadius: '50%',
                   backgroundColor: '#FFFFFF',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                   position: 'absolute',
-                  top: '3px',
-                  left: vegOnly ? '21px' : '3px',
+                  top: '1.5px',
+                  left: vegOnly ? '21px' : '2px',
                   transition: 'left 0.2s ease'
                 }} />
               </button>
@@ -315,6 +363,68 @@ export default function MenuPage({ onOpenDemoModal }) {
               <h3 className="text-h2" style={{ color: 'var(--color-neutral-800)', marginBottom: '0.5rem' }}>No dishes found</h3>
               <p className="text-body" style={{ color: 'var(--color-neutral-600)' }}>Try adjusting your search query or category filter.</p>
             </div>
+          ) : selectedCategory === 'all' ? (
+            (() => {
+              const categoryOrder = ['Starters', 'Main Course', 'Curries', 'Biryani', 'Breads', 'South Indian', 'Desserts', 'Beverages'];
+              const presentCats = Array.from(new Set(filteredItems.map(i => i.category)));
+              const sortedCats = [
+                ...categoryOrder.filter(cat => presentCats.includes(cat)),
+                ...presentCats.filter(cat => !categoryOrder.includes(cat))
+              ];
+
+              return sortedCats.map(cat => {
+                const catDishes = filteredItems.filter(i => i.category === cat);
+                if (catDishes.length === 0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom: '3rem' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.65rem',
+                      padding: '0.85rem 1.25rem',
+                      background: '#FAF6EE',
+                      borderRadius: '12px',
+                      border: '1.5px solid #EAE3D2',
+                      marginBottom: '1.5rem'
+                    }}>
+                      <Utensils size={18} color="#0F2A1D" />
+                      <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F2A1D', margin: 0, textTransform: 'capitalize' }}>
+                        {cat}
+                      </h2>
+                    </div>
+
+                    <div className="grid-3">
+                      {catDishes.map(item => {
+                        const qty = cart[item.id] || 0;
+                        return (
+                          <ProductCard
+                            key={item.id}
+                            id={item.id}
+                            title={item.name}
+                            image={item.img}
+                            price={item.price}
+                            originalPrice={item.originalPrice || Math.round(item.price * 1.25)}
+                            badge={item.bestseller ? 'Bestseller' : item.isVeg ? 'Veg Special' : 'Chef Special'}
+                            rating={item.rating || 4.8}
+                            isVeg={item.isVeg}
+                            available={item.available}
+                            isAvailable={item.available}
+                            bestseller={item.bestseller}
+                            isBestseller={item.bestseller}
+                            desc={item.desc}
+                            category={item.category}
+                            quantity={qty}
+                            onAddToCart={(id) => handleAddToCart(id)}
+                            onDecreaseQty={(id) => handleDecreaseQty(id)}
+                            onDeleteItem={(id) => handleDeleteItem(id)}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              });
+            })()
           ) : (
             <div className="grid-3">
               {filteredItems.map(item => {
@@ -327,9 +437,13 @@ export default function MenuPage({ onOpenDemoModal }) {
                     image={item.img}
                     price={item.price}
                     originalPrice={item.originalPrice || Math.round(item.price * 1.25)}
-                    badge={item.bestseller ? 'Bestseller' : item.isVeg ? 'Veg Special' : 'Chef Special'}
+                    badge={item.bestseller ? 'Bestseller' : item.isVeg ? 'Veg Special' : 'Chef Choice'}
                     rating={item.rating || 4.8}
                     isVeg={item.isVeg}
+                    available={item.available}
+                    isAvailable={item.available}
+                    bestseller={item.bestseller}
+                    isBestseller={item.bestseller}
                     desc={item.desc}
                     category={item.category}
                     quantity={qty}

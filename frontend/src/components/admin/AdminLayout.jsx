@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Table2, CalendarDays,
   Users, Clock, Boxes, Ticket, BarChart3, Receipt, Settings, ShieldCheck,
   Building2, FileText, Search, Bell, ChevronDown, LogOut, Menu, X, ArrowLeft,
-  CheckCircle2, Plus, Sparkles, Filter, RefreshCw, User, ChevronRight
+  CheckCircle2, Plus, Sparkles, Filter, RefreshCw, User, ChevronRight, Camera
 } from 'lucide-react';
 import PowerOffSlide from '../PowerOffSlide';
 
@@ -20,6 +20,8 @@ import AdminAnalyticsPage from './AdminAnalyticsPage';
 import AdminPaymentsPage from './AdminPaymentsPage';
 import AdminSettingsPage from './AdminSettingsPage';
 import AdminProfilePage from './AdminProfilePage';
+import AdminBlogsPage from './AdminBlogsPage';
+import AdminGalleryPage from './AdminGalleryPage';
 
 export default function AdminLayout({ setActivePage }) {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -28,6 +30,141 @@ export default function AdminLayout({ setActivePage }) {
   const [selectedBranch, setSelectedBranch] = useState('Jubilee Hills (Main Branch)');
   const [unreadNotifications, setUnreadNotifications] = useState(4);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notifMenuOpen, setNotifMenuOpen] = useState(false);
+  const contentViewportRef = useRef(null);
+  const profileMenuRef = useRef(null);
+  const notifMenuRef = useRef(null);
+
+  const [notifications, setNotifications] = useState([
+    {
+      id: 1,
+      sender: 'Manager Rajesh (Jubilee Hills)',
+      title: 'New Staff Member Created',
+      message: 'Manager Rajesh added a new Waiter (Raju Kumar) to Jubilee Hills branch staff roster.',
+      time: '10 mins ago',
+      unread: true,
+      tab: 'staff-accounts',
+      icon: Users,
+      iconBg: '#E3F2FD',
+      iconColor: '#1565C0'
+    },
+    {
+      id: 2,
+      sender: 'Inventory Alert System',
+      title: 'Raw Material Low Stock Warning',
+      message: 'Fresh Paneer (Cottage Cheese) reached low stock threshold (4 kg remaining, min 10 kg).',
+      time: '25 mins ago',
+      unread: true,
+      tab: 'inventory',
+      icon: Boxes,
+      iconBg: '#FEF2F2',
+      iconColor: '#DC2626'
+    },
+    {
+      id: 3,
+      sender: 'Manager Srikanth (Banjara Hills)',
+      title: 'Settlement Payout Request',
+      message: 'Manager Srikanth requested daily sales settlement payout of ₹1.24 L for Banjara Hills.',
+      time: '1 hour ago',
+      unread: true,
+      tab: 'payments',
+      icon: Receipt,
+      iconBg: '#FEF9C3',
+      iconColor: '#854D0E'
+    },
+    {
+      id: 4,
+      sender: 'Chef Srikanth (Kitchen KDS)',
+      title: 'Kitchen Dish Stock Update',
+      message: 'Chef Srikanth toggled "Special Butter Chicken" stock status to Inactive.',
+      time: '2 hours ago',
+      unread: true,
+      tab: 'menu-mgmt',
+      icon: UtensilsCrossed,
+      iconBg: '#FAF6EE',
+      iconColor: '#1E4636'
+    },
+    {
+      id: 5,
+      sender: 'Receptionist Priya',
+      title: 'Walk-in Table Assigned',
+      message: 'Seated party of 4 at Table 12 (Jubilee Hills Main Dining Floor).',
+      time: '3 hours ago',
+      unread: false,
+      tab: 'dashboard',
+      icon: CheckCircle2,
+      iconBg: '#F0FDF4',
+      iconColor: '#166534'
+    }
+  ]);
+
+  const unreadCount = notifications.filter(n => n.unread).length;
+
+  const handleMarkAllRead = () => {
+    setNotifications(notifications.map(n => ({ ...n, unread: false })));
+  };
+
+  const handleNotifClick = (notif) => {
+    setNotifications(notifications.map(n => n.id === notif.id ? { ...n, unread: false } : n));
+    if (notif.tab) {
+      setActiveTab(notif.tab);
+    }
+    setNotifMenuOpen(false);
+  };
+
+  // Click outside listener to automatically close profile and notification dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+      if (notifMenuRef.current && !notifMenuRef.current.contains(event.target)) {
+        setNotifMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  const [adminProfile, setAdminProfile] = useState(() => {
+    const saved = localStorage.getItem('flavora_profile_admin');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return { name: 'Chef Srikanth', role: 'Restaurant Owner & Admin', email: 'admin@restaurant.com' };
+  });
+
+  useEffect(() => {
+    const updateProfile = () => {
+      const saved = localStorage.getItem('flavora_profile_admin');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.name) setAdminProfile(parsed);
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('flavora_profile_updated', updateProfile);
+    return () => window.removeEventListener('flavora_profile_updated', updateProfile);
+  }, []);
+
+  const getInitials = (nameStr) => {
+    if (!nameStr) return 'SK';
+    const parts = nameStr.trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return nameStr.slice(0, 2).toUpperCase();
+  };
+
+  useEffect(() => {
+    if (contentViewportRef.current) {
+      contentViewportRef.current.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, [activeTab]);
 
   const branches = [
     'Jubilee Hills (Main Branch)',
@@ -45,6 +182,7 @@ export default function AdminLayout({ setActivePage }) {
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'menu-mgmt', label: 'Menu Management', icon: UtensilsCrossed },
+    { id: 'inventory', label: 'Inventory Management', icon: Boxes },
     { id: 'staff-accounts', label: 'Staff Management', icon: Users },
     { id: 'coupons', label: 'Loyalty & Coupons', icon: Ticket },
     { id: 'analytics', label: 'Reports & Analytics', icon: BarChart3 },
@@ -56,6 +194,9 @@ export default function AdminLayout({ setActivePage }) {
     switch (tab) {
       case 'dashboard': return 'Dashboard Overview';
       case 'menu-mgmt': return 'Menu Management';
+      case 'inventory': return 'Inventory Management';
+      case 'blogs': return 'Blog Management';
+      case 'gallery': return 'Gallery Management';
       case 'tables': return 'Table Management';
       case 'staff-accounts': return 'Staff Management';
       case 'staff-shifts': return 'Shifts & Attendance';
@@ -80,6 +221,10 @@ export default function AdminLayout({ setActivePage }) {
         return <AdminOrdersPage />;
       case 'menu-mgmt':
         return <AdminMenuPage />;
+      case 'blogs':
+        return <AdminBlogsPage />;
+      case 'gallery':
+        return <AdminGalleryPage />;
       case 'tables':
         return <AdminTablesPage />;
       case 'reservations':
@@ -92,11 +237,11 @@ export default function AdminLayout({ setActivePage }) {
       case 'coupons':
         return <AdminCouponsPage />;
       case 'analytics':
-        return <AdminAnalyticsPage />;
+        return <AdminAnalyticsPage setActiveTab={setActiveTab} />;
       case 'payments':
         return <AdminPaymentsPage />;
       case 'profile':
-        return <AdminProfilePage />;
+        return <AdminProfilePage setActivePage={setActivePage} />;
       case 'settings':
       case 'settings-profile':
       case 'settings-gst':
@@ -125,7 +270,7 @@ export default function AdminLayout({ setActivePage }) {
               className="admin-brand-logo-img"
             />
             <div className="admin-brand-text">
-              <div className="admin-brand-title">
+              <div className="admin-brand-title" style={{ display: 'flex', gap: '0.3rem' }}>
                 <span className="brand-favora">Flavora</span>
                 <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>Kitchen</span>
               </div>
@@ -156,7 +301,10 @@ export default function AdminLayout({ setActivePage }) {
                     onClick={() => {
                       setActiveTab(item.id);
                       setMobileSidebarOpen(false);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      if (contentViewportRef.current) {
+                        contentViewportRef.current.scrollTop = 0;
+                      }
+                      window.scrollTo(0, 0);
                     }}
                   >
                     <Icon size={18} className="admin-nav-icon" />
@@ -217,7 +365,7 @@ export default function AdminLayout({ setActivePage }) {
           </div>
 
           <div className="admin-header-right">
-            {/* Branch Badge Selector with Next Branch Button */}
+            {/* Branch Badge Selector */}
             <div className="admin-branch-selector" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Building2 size={16} color="#1E4636" />
               <select
@@ -230,54 +378,77 @@ export default function AdminLayout({ setActivePage }) {
                   <option key={b} value={b}>{b}</option>
                 ))}
               </select>
-
-              {/* Next Branch Navigation Button */}
-              <button
-                type="button"
-                className="admin-next-branch-btn"
-                onClick={handleNextBranch}
-                aria-label="Next branch"
-                title="Switch to Next Branch"
-                style={{
-                  background: '#1E4636',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '0.35rem 0.65rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  fontSize: '0.78rem',
-                  fontWeight: 700
-                }}
-              >
-                <span>Next</span>
-                <ChevronRight size={14} color="#F2C14E" />
-              </button>
             </div>
 
             {/* Notifications Bell */}
-            <div className="admin-header-icon-btn-wrapper">
-              <button className="admin-header-icon-btn" aria-label="Notifications">
+            <div className="admin-header-icon-btn-wrapper" ref={notifMenuRef} style={{ position: 'relative' }}>
+              <button 
+                className="admin-header-icon-btn" 
+                aria-label="Notifications"
+                onClick={() => setNotifMenuOpen(!notifMenuOpen)}
+              >
                 <Bell size={19} color="#1E4636" />
-                {unreadNotifications > 0 && (
-                  <span className="admin-notif-dot">{unreadNotifications}</span>
+                {unreadCount > 0 && (
+                  <span className="admin-notif-dot">{unreadCount}</span>
                 )}
               </button>
+
+              {notifMenuOpen && (
+                <div className="admin-notif-dropdown">
+                  <div className="admin-notif-header">
+                    <h3 className="admin-notif-title">
+                      <Bell size={16} color="#1E4636" />
+                      <span>Manager & System Alerts ({unreadCount})</span>
+                    </h3>
+                    {unreadCount > 0 && (
+                      <button className="admin-notif-mark-btn" onClick={handleMarkAllRead}>
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="admin-notif-list">
+                    {notifications.map((notif) => {
+                      const Icon = notif.icon;
+                      return (
+                        <button
+                          key={notif.id}
+                          className={`admin-notif-item ${notif.unread ? 'is-unread' : ''}`}
+                          onClick={() => handleNotifClick(notif)}
+                        >
+                          <div className="admin-notif-icon-badge" style={{ background: notif.iconBg }}>
+                            <Icon size={16} color={notif.iconColor} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 800, fontSize: '0.84rem', color: '#1E4636' }}>
+                              {notif.title}
+                            </div>
+                            <div className="admin-notif-text">
+                              {notif.message}
+                            </div>
+                            <div className="admin-notif-time">
+                              {notif.sender} • {notif.time}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Admin User Profile Dropdown */}
-            <div className="admin-user-profile-wrapper" style={{ position: 'relative' }}>
+            <div className="admin-user-profile-wrapper" ref={profileMenuRef} style={{ position: 'relative' }}>
               <div
                 className="admin-user-profile-box"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 style={{ cursor: 'pointer' }}
               >
-                <div className="admin-user-avatar">SK</div>
+                <div className="admin-user-avatar">{getInitials(adminProfile.name)}</div>
                 <div className="admin-user-details">
-                  <div className="admin-user-name">Chef Srikanth</div>
-                  <div className="admin-user-role">Resto Manager</div>
+                  <div className="admin-user-name">{adminProfile.name || 'Chef Srikanth'}</div>
+                  <div className="admin-user-role">{adminProfile.role || 'Restaurant Owner & Admin'}</div>
                 </div>
                 <ChevronDown
                   size={15}
@@ -295,7 +466,8 @@ export default function AdminLayout({ setActivePage }) {
                   />
                   <div className="admin-profile-dropdown-menu">
                     <div className="admin-dropdown-user-info">
-                      <div className="user-info-name">Chef Srikanth</div>
+                      <div className="user-info-name">{adminProfile.name || 'Chef Srikanth'}</div>
+                      <div className="user-info-email" style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>{adminProfile.email || 'admin@restaurant.com'}</div>
                     </div>
 
                     <button
@@ -336,7 +508,7 @@ export default function AdminLayout({ setActivePage }) {
         </header>
 
         {/* Dynamic Sub-page View */}
-        <main className="admin-content-viewport">
+        <main className="admin-content-viewport" ref={contentViewportRef}>
           {renderActiveView()}
         </main>
 

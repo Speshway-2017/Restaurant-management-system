@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { Settings, ShieldCheck, Building2, FileText, Save, CheckCircle2, Search, Bell, Utensils, QrCode, Lock, Clock } from 'lucide-react';
+import { Settings, ShieldCheck, Building2, FileText, Save, CheckCircle2, Search, Bell, Utensils, QrCode, Lock, Clock, Camera } from 'lucide-react';
 import { api } from '../../services/api';
+import AdminBlogsPage from './AdminBlogsPage';
+import AdminGalleryPage from './AdminGalleryPage';
 
 export default function AdminSettingsPage({ subTab = 'settings-profile', isManagerMode = false }) {
   const [activeTab, setActiveTab] = useState('profile'); // 'profile', 'kds', 'tax', 'branches'
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
   const [settingsData, setSettingsData] = useState({
     restaurantName: 'Flavora Kitchen',
@@ -30,12 +33,39 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
       .catch(() => {})
       .finally(() => {
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setToastMessage('Saved successfully');
+        setTimeout(() => {
+          setSaveSuccess(false);
+          setToastMessage(null);
+        }, 3000);
       });
   };
 
   return (
     <div className="admin-subpage-container">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          backgroundColor: '#F0FDF4',
+          color: '#166534',
+          border: '1.5px solid #BBF7D0',
+          padding: '0.85rem 1.35rem',
+          borderRadius: '12px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.65rem',
+          fontSize: '0.92rem',
+          fontWeight: 800
+        }}>
+          <CheckCircle2 size={20} color="#166534" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
       {/* Page Header */}
       <div className="admin-dashboard-header" style={{ marginBottom: '1.25rem' }}>
         <div>
@@ -54,7 +84,7 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
       </div>
 
       {/* Navigation Filter Bar */}
-      <div className="admin-card mb-4" style={{ padding: '0.75rem 1.25rem' }}>
+      <div className="admin-card" style={{ padding: '0.9rem 1.25rem', marginBottom: '1.75rem' }}>
         <div className="admin-filter-bar-flex" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div className="admin-header-search-box" style={{ width: '220px', flexShrink: 0 }}>
             <Search size={16} className="admin-search-icon" />
@@ -72,13 +102,15 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
             <button className={`admin-pill-btn ${activeTab === 'kds' ? 'is-active' : ''}`} onClick={() => setActiveTab('kds')}>
               Kitchen & KDS Alerts
             </button>
-            <button className={`admin-pill-btn ${activeTab === 'tax' ? 'is-active' : ''}`} onClick={() => setActiveTab('tax')}>
-              Tax & QR Billing
-            </button>
             {!isManagerMode && (
-              <button className={`admin-pill-btn ${activeTab === 'branches' ? 'is-active' : ''}`} onClick={() => setActiveTab('branches')}>
-                Branch Locations
-              </button>
+              <>
+                <button className={`admin-pill-btn ${activeTab === 'blogs' ? 'is-active' : ''}`} onClick={() => setActiveTab('blogs')}>
+                  Blog Management
+                </button>
+                <button className={`admin-pill-btn ${activeTab === 'gallery' ? 'is-active' : ''}`} onClick={() => setActiveTab('gallery')}>
+                  Gallery Management
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -176,12 +208,62 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
                 required 
               />
             </div>
+
+            {/* TAXATION & TABLE QR BILLING SECTION */}
+            <div style={{ gridColumn: 'span 2', marginTop: '0.75rem', paddingTop: '1rem', borderTop: '1.5px dashed #EAE3D2' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1E4636', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <QrCode size={18} color="#1E4636" />
+                <span>Taxation & Digital QR Bill Receipt Configuration</span>
+              </h3>
+            </div>
+
+            <div className="admin-form-group">
+              <label className="form-label">GSTIN (GST Identification Number) *</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                value={settingsData.gstin} 
+                onChange={(e) => setSettingsData({ ...settingsData, gstin: e.target.value })}
+                required 
+              />
+            </div>
+
+            <div className="admin-form-group">
+              <label className="form-label">FSSAI License Number *</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                value={settingsData.fssai} 
+                onChange={(e) => setSettingsData({ ...settingsData, fssai: e.target.value })}
+                required 
+              />
+            </div>
+
+            <div className="admin-form-group">
+              <label className="form-label">Default GST Tax Rate (%)</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                value={settingsData.gstRate} 
+                onChange={(e) => setSettingsData({ ...settingsData, gstRate: e.target.value })}
+              />
+            </div>
+
+            <div className="admin-form-group">
+              <label className="form-label">Digital Invoice Footnote Text</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                value={settingsData.invoiceFootnote} 
+                onChange={(e) => setSettingsData({ ...settingsData, invoiceFootnote: e.target.value })}
+              />
+            </div>
           </div>
 
-          <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid #F0E8DA', textAlign: 'right' }}>
+          <div style={{ marginTop: '1.25rem', paddingTop: '0.85rem', borderTop: '1px solid #F0E8DA', textAlign: 'right' }}>
             <button type="submit" className="btn btn-primary" style={{ padding: '0.6rem 1.5rem', backgroundColor: '#1E4636', color: '#FFFFFF' }}>
               <Save size={16} />
-              <span>Save Branch Profile</span>
+              <span>Save Restaurant Profile & Tax Info</span>
             </button>
           </div>
         </form>
@@ -261,115 +343,11 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
         </form>
       )}
 
-      {/* TAB 3: TAX & QR BILLING */}
-      {activeTab === 'tax' && (
-        <form onSubmit={handleSave} className="admin-card" style={{ padding: '1.35rem 1.5rem' }}>
-          <div className="admin-card-header mb-3" style={{ borderBottom: '1px solid #F0E8DA', paddingBottom: '0.65rem' }}>
-            <h2 className="admin-card-title" style={{ fontSize: '1.15rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <QrCode size={18} color="#1E4636" />
-              <span>Taxation & Table QR Billing Configuration</span>
-            </h2>
-          </div>
+      {/* TAB 5: BLOG MANAGEMENT */}
+      {activeTab === 'blogs' && <AdminBlogsPage isEmbedded={true} />}
 
-          <div className="grid-2" style={{ gap: '1.1rem' }}>
-            <div className="admin-form-group">
-              <label className="form-label">GSTIN (GST Identification Number) *</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                value={settingsData.gstin} 
-                onChange={(e) => setSettingsData({ ...settingsData, gstin: e.target.value })}
-                required 
-              />
-            </div>
-
-            <div className="admin-form-group">
-              <label className="form-label">FSSAI License Number *</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                value={settingsData.fssai} 
-                onChange={(e) => setSettingsData({ ...settingsData, fssai: e.target.value })}
-                required 
-              />
-            </div>
-
-            <div className="admin-form-group">
-              <label className="form-label">Default GST Tax Rate (%)</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                value={settingsData.gstRate} 
-                onChange={(e) => setSettingsData({ ...settingsData, gstRate: e.target.value })}
-              />
-            </div>
-
-            <div className="admin-form-group">
-              <label className="form-label">Digital Invoice Footnote Text</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                value={settingsData.invoiceFootnote} 
-                onChange={(e) => setSettingsData({ ...settingsData, invoiceFootnote: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid #F0E8DA', textAlign: 'right' }}>
-            <button type="submit" className="btn btn-primary" style={{ padding: '0.6rem 1.5rem', backgroundColor: '#1E4636', color: '#FFFFFF' }}>
-              <Save size={16} />
-              <span>Save Tax & Billing Info</span>
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* TAB 4: BRANCH LOCATIONS (ADMIN ONLY) */}
-      {activeTab === 'branches' && !isManagerMode && (
-        <div className="admin-card" style={{ padding: '1.75rem' }}>
-          <div className="admin-card-header mb-4" style={{ borderBottom: '1px solid #F0E8DA', paddingBottom: '0.75rem' }}>
-            <h2 className="admin-card-title" style={{ fontSize: '1.2rem', margin: 0 }}>
-              Active Restaurant Branches
-            </h2>
-          </div>
-          <div className="admin-table-wrapper">
-            <table className="admin-data-table">
-              <thead>
-                <tr>
-                  <th>Branch ID</th>
-                  <th>Location / Name</th>
-                  <th>City</th>
-                  <th>Manager</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="font-semibold" style={{ color: '#1E4636' }}>BR-01</td>
-                  <td className="font-semibold">Jubilee Hills (Main Branch)</td>
-                  <td>Hyderabad</td>
-                  <td>Chef Srikanth</td>
-                  <td><span className="status-badge-unified is-ready">Active</span></td>
-                </tr>
-                <tr>
-                  <td className="font-semibold" style={{ color: '#1E4636' }}>BR-02</td>
-                  <td className="font-semibold">Banjara Hills Branch</td>
-                  <td>Hyderabad</td>
-                  <td>Rajesh Kumar</td>
-                  <td><span className="status-badge-unified is-ready">Active</span></td>
-                </tr>
-                <tr>
-                  <td className="font-semibold" style={{ color: '#1E4636' }}>BR-03</td>
-                  <td className="font-semibold">Gachibowli Branch</td>
-                  <td>Hyderabad</td>
-                  <td>Pooja Nair</td>
-                  <td><span className="status-badge-unified is-ready">Active</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* TAB 6: GALLERY MANAGEMENT */}
+      {activeTab === 'gallery' && <AdminGalleryPage isEmbedded={true} />}
 
     </div>
   );

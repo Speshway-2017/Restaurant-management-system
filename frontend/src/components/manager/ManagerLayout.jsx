@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, UtensilsCrossed, Users, Ticket, BarChart3, Receipt,
   Settings, Bell, ChevronDown, LogOut, Menu, X, ArrowLeft, Building2, UserCheck,
@@ -21,6 +21,30 @@ export default function ManagerLayout({ setActivePage }) {
   const [activeTab, setActiveTab] = useState('manager-dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const contentViewportRef = useRef(null);
+  const profileMenuRef = useRef(null);
+
+  // Click outside listener to automatically close user profile dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (contentViewportRef.current) {
+      contentViewportRef.current.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, [activeTab]);
   const branches = [
     'Jubilee Hills (Main Branch)',
     'Banjara Hills Branch',
@@ -67,7 +91,7 @@ export default function ManagerLayout({ setActivePage }) {
       case 'manager-settings':
         return <AdminSettingsPage isManagerMode={true} />;
       case 'manager-profile':
-        return <AdminProfilePage />;
+        return <AdminProfilePage setActivePage={setActivePage} />;
       default:
         return <ManagerDashboardHome setActiveTab={setActiveTab} />;
     }
@@ -91,7 +115,7 @@ export default function ManagerLayout({ setActivePage }) {
               className="admin-brand-logo-img"
             />
             <div className="admin-brand-text">
-              <div className="admin-brand-title">
+              <div className="admin-brand-title" style={{ display: 'flex', gap: '0.3rem' }}>
                 <span className="brand-favora">Flavora</span>
                 <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>Kitchen</span>
               </div>
@@ -122,7 +146,10 @@ export default function ManagerLayout({ setActivePage }) {
                     onClick={() => {
                       setActiveTab(item.id);
                       setMobileSidebarOpen(false);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      if (contentViewportRef.current) {
+                        contentViewportRef.current.scrollTop = 0;
+                      }
+                      window.scrollTo(0, 0);
                     }}
                   >
                     <Icon size={18} className="admin-nav-icon" />
@@ -178,46 +205,6 @@ export default function ManagerLayout({ setActivePage }) {
           </div>
 
           <div className="admin-header-right">
-            {/* Branch Badge Selector with Next Branch Button */}
-            <div className="admin-branch-selector" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Building2 size={15} color="#1E4636" />
-              <select
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className="admin-branch-dropdown"
-                aria-label="Select branch"
-              >
-                {branches.map((b) => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-
-              {/* Next Branch Button */}
-              <button
-                type="button"
-                className="admin-next-branch-btn"
-                onClick={handleNextBranch}
-                aria-label="Next branch"
-                title="Switch to Next Branch"
-                style={{
-                  background: '#1E4636',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '0.35rem 0.65rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  fontSize: '0.78rem',
-                  fontWeight: 700
-                }}
-              >
-                <span>Next</span>
-                <ChevronRight size={14} color="#F2C14E" />
-              </button>
-            </div>
-
             {/* Notifications Bell */}
             <div className="admin-header-icon-btn-wrapper">
               <button 
@@ -233,7 +220,7 @@ export default function ManagerLayout({ setActivePage }) {
             </div>
 
             {/* Manager User Profile Card */}
-            <div className="admin-user-profile-wrapper" style={{ position: 'relative' }}>
+            <div className="admin-user-profile-wrapper" ref={profileMenuRef} style={{ position: 'relative' }}>
               <div
                 className="admin-user-profile-box"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -293,7 +280,7 @@ export default function ManagerLayout({ setActivePage }) {
         </header>
 
         {/* Viewport Content View */}
-        <div className="admin-content-viewport">
+        <div className="admin-content-viewport" ref={contentViewportRef}>
           {renderActiveView()}
         </div>
 

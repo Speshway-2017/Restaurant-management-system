@@ -14,6 +14,7 @@ import Cta2 from '../components/Cta2';
 export default function HomePage({ setActivePage, onOpenDemoModal }) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [vegOnly, setVegOnly] = useState(false);
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, isHovered: false });
 
   // Default menu highlights
@@ -27,30 +28,69 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
   ]);
 
   useEffect(() => {
-    api.getMenuItems()
-      .then((data) => {
-        if (data && data.length > 0) {
-          const formatted = data
-            .filter(item => item.isAvailable !== false)
-            .map(item => ({
+    const loadHighlights = () => {
+      const savedLocal = localStorage.getItem('flavora_dishes');
+      let localDishesMap = {};
+      if (savedLocal) {
+        try {
+          const parsed = JSON.parse(savedLocal);
+          if (parsed && parsed.length > 0) {
+            parsed.forEach(item => {
+              const nameKey = (item.name || '').toLowerCase().trim();
+              localDishesMap[nameKey] = item;
+            });
+            setMenuHighlights(parsed.map(item => ({
               id: item._id || item.id,
               name: item.name,
               category: item.category || 'Main Course',
               price: item.price,
-              origPrice: `₹${Math.round(item.price * 1.25)}`,
+              origPrice: item.origPrice || `₹${Math.round(item.price * 1.25)}`,
               isVeg: item.isVeg !== undefined ? item.isVeg : true,
+              available: item.available !== undefined ? item.available : (item.isAvailable !== undefined ? item.isAvailable : true),
               desc: item.desc || '',
               img: item.img || '/hero_dish_2.png',
-              bestseller: item.isBestseller
-            }));
-          if (formatted.length > 0) {
-            setMenuHighlights(formatted);
+              bestseller: item.bestseller !== undefined ? item.bestseller : (item.isBestseller !== undefined ? item.isBestseller : false)
+            })));
           }
-        }
-      })
-      .catch((err) => {
-        console.log('HomePage API fallback active:', err.message);
-      });
+        } catch (e) {}
+      }
+
+      // Fetch from API database and merge local availability status
+      api.getMenuItems()
+        .then((data) => {
+          if (data && data.length > 0) {
+            const formatted = data.map(item => {
+              const nameKey = (item.name || '').toLowerCase().trim();
+              const localOverride = localDishesMap[nameKey];
+              const isAvail = localOverride ? (localOverride.available !== undefined ? localOverride.available : localOverride.isAvailable) : (item.isAvailable !== undefined ? item.isAvailable : true);
+              const isBest = localOverride ? (localOverride.bestseller !== undefined ? localOverride.bestseller : localOverride.isBestseller) : (item.isBestseller !== undefined ? item.isBestseller : item.bestseller);
+
+              return {
+                id: item._id || item.id,
+                name: item.name,
+                category: item.category || 'Main Course',
+                price: item.price,
+                origPrice: `₹${Math.round(item.price * 1.25)}`,
+                isVeg: item.isVeg !== undefined ? item.isVeg : true,
+                available: isAvail !== false,
+                desc: item.desc || '',
+                img: item.img || '/hero_dish_2.png',
+                bestseller: isBest
+              };
+            });
+            if (formatted.length > 0) {
+              setMenuHighlights(formatted);
+            }
+          }
+        })
+        .catch((err) => {
+          console.log('HomePage API fallback active:', err.message);
+        });
+    };
+
+    loadHighlights();
+    window.addEventListener('flavora_dishes_updated', loadHighlights);
+    return () => window.removeEventListener('flavora_dishes_updated', loadHighlights);
   }, []);
 
   const heroSlides = [
@@ -148,21 +188,22 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
     setTilt({ rotateX: 0, rotateY: 0, isHovered: false });
   };
 
-  const filteredMenuItems = activeCategory === 'all'
-    ? menuHighlights
-    : menuHighlights.filter(item => {
-        const cat = (item.category || '').toLowerCase();
-        const sel = activeCategory.toLowerCase();
-        if (sel === 'starters') return cat.includes('starter');
-        if (sel === 'main-course' || sel === 'mains') return cat.includes('main') || cat.includes('curry') || cat.includes('biryani');
-        if (sel === 'curries') return cat.includes('curry') || cat.includes('curries');
-        if (sel === 'biryani') return cat.includes('biryani');
-        if (sel === 'breads') return cat.includes('bread') || cat.includes('roti') || cat.includes('naan');
-        if (sel === 'south-indian') return cat.includes('south');
-        if (sel === 'desserts') return cat.includes('dessert') || cat.includes('sweet');
-        if (sel === 'beverages') return cat.includes('beverage') || cat.includes('drink') || cat.includes('lassi');
-        return cat === sel;
-      });
+  const filteredMenuItems = menuHighlights.filter(item => {
+    if (vegOnly && !item.isVeg) return false;
+    if (activeCategory === 'all') return true;
+
+    const cat = (item.category || '').toLowerCase();
+    const sel = activeCategory.toLowerCase();
+    if (sel === 'starters') return cat.includes('starter');
+    if (sel === 'main-course' || sel === 'mains') return cat.includes('main') || cat.includes('curry') || cat.includes('biryani');
+    if (sel === 'curries') return cat.includes('curry') || cat.includes('curries');
+    if (sel === 'biryani') return cat.includes('biryani');
+    if (sel === 'breads') return cat.includes('bread') || cat.includes('roti') || cat.includes('naan');
+    if (sel === 'south-indian') return cat.includes('south');
+    if (sel === 'desserts') return cat.includes('dessert') || cat.includes('sweet');
+    if (sel === 'beverages') return cat.includes('beverage') || cat.includes('drink') || cat.includes('lassi');
+    return cat === sel;
+  });
 
   return (
     <div className="homepage-wrapper" style={{ backgroundColor: '#FFFDF8', color: '#1A202C' }}>
@@ -474,40 +515,86 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
             </h2>
           </div>
 
-          {/* Category Filter Pills */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', overflowX: 'auto', marginBottom: '3rem', paddingBottom: '0.5rem' }}>
-            {[
-              { id: 'all', label: 'All Dishes' },
-              { id: 'starters', label: 'Starters' },
-              { id: 'main-course', label: 'Main Course' },
-              { id: 'curries', label: 'Curries' },
-              { id: 'biryani', label: 'Biryani' },
-              { id: 'breads', label: 'Breads' },
-              { id: 'south-indian', label: 'South Indian' },
-              { id: 'desserts', label: 'Desserts' },
-              { id: 'beverages', label: 'Beverages' }
-            ].map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
+          {/* Category Filter Pills & Veg Only Toggle */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '3rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {[
+                { id: 'all', label: 'All Dishes' },
+                { id: 'starters', label: 'Starters' },
+                { id: 'main-course', label: 'Main Course' },
+                { id: 'curries', label: 'Curries' },
+                { id: 'biryani', label: 'Biryani' },
+                { id: 'breads', label: 'Breads' },
+                { id: 'south-indian', label: 'South Indian' },
+                { id: 'desserts', label: 'Desserts' },
+                { id: 'beverages', label: 'Beverages' }
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  style={{
+                    padding: '0.65rem 1.4rem',
+                    borderRadius: '9999px',
+                    border: '1.5px solid',
+                    borderColor: activeCategory === cat.id ? '#0F2A1D' : 'rgba(15, 42, 29, 0.15)',
+                    backgroundColor: activeCategory === cat.id ? '#0F2A1D' : '#FFFFFF',
+                    color: activeCategory === cat.id ? '#FFFFFF' : '#0F2A1D',
+                    fontWeight: 700,
+                    fontSize: '0.86rem',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: activeCategory === cat.id ? '0 4px 14px rgba(15, 42, 29, 0.2)' : 'none'
+                  }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Veg Only Toggle Switch */}
+            <div 
+              onClick={() => setVegOnly(!vegOnly)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.65rem',
+                backgroundColor: 'transparent',
+                padding: '0.4rem 0.6rem',
+                cursor: 'pointer',
+                userSelect: 'none'
+              }}
+            >
+              <span style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid #166534', borderRadius: '3px', position: 'relative' }}>
+                <span style={{ position: 'absolute', inset: '2.5px', backgroundColor: '#166534', borderRadius: '50%' }}></span>
+              </span>
+              <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#1E4636' }}>Veg Only</span>
+              <div 
                 style={{
-                  padding: '0.65rem 1.4rem',
-                  borderRadius: '9999px',
-                  border: '1.5px solid',
-                  borderColor: activeCategory === cat.id ? '#0F2A1D' : 'rgba(15, 42, 29, 0.15)',
-                  backgroundColor: activeCategory === cat.id ? '#0F2A1D' : '#FFFFFF',
-                  color: activeCategory === cat.id ? '#FFFFFF' : '#0F2A1D',
-                  fontWeight: 700,
-                  fontSize: '0.86rem',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: activeCategory === cat.id ? '0 4px 14px rgba(15, 42, 29, 0.2)' : 'none'
+                  width: '44px',
+                  height: '24px',
+                  borderRadius: '14px',
+                  border: '1.5px solid #000000',
+                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
+                  backgroundColor: vegOnly ? '#166534' : '#E2E8F0',
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  marginLeft: '0.25rem'
                 }}
               >
-                {cat.label}
-              </button>
-            ))}
+                <div style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  position: 'absolute',
+                  top: '1.5px',
+                  left: vegOnly ? '21px' : '2px',
+                  transition: 'left 0.2s ease'
+                }} />
+              </div>
+            </div>
           </div>
 
           {/* Grid of SmoothUI Product Cards (NO RATING BADGES ON IMAGES) */}
@@ -522,6 +609,10 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
                 originalPrice={item.origPrice}
                 badge={item.bestseller ? 'Bestseller' : item.isVeg ? 'Veg Special' : 'Chef Choice'}
                 isVeg={item.isVeg}
+                available={item.available}
+                isAvailable={item.available}
+                bestseller={item.bestseller}
+                isBestseller={item.bestseller}
                 desc={item.desc}
                 category={item.category}
                 onAddToCart={() => setActivePage('menu')}
