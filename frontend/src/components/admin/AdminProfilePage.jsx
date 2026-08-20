@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
-import { User, Mail, Phone, ShieldCheck, Key, Save, CheckCircle2, Building2, Clock, Camera } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Mail, Phone, ShieldCheck, Key, Save, CheckCircle2, Building2, Clock, Camera, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
-export default function AdminProfilePage() {
-  const [profile, setProfile] = useState({
-    name: 'Chef Srikanth',
-    email: 'admin@restaurant.com',
-    phone: '+91 98765 12345',
-    role: 'Resto Manager',
-    branch: 'Jubilee Hills (Main Branch)',
-    empId: 'FLV-EMP-101',
-    joinedDate: '15 Jan 2022'
+export default function AdminProfilePage({ setActivePage }) {
+  const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem('flavora_profile_admin');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return {
+      name: 'Chef Srikanth',
+      email: 'admin@restaurant.com',
+      phone: '9876512345',
+      role: 'Restaurant Owner & Admin',
+      branch: 'Jubilee Hills (Main Branch)',
+      empId: 'RMSA-01',
+      joinedDate: '15 Jan 2022'
+    };
   });
 
   const [passwords, setPasswords] = useState({
@@ -18,12 +24,72 @@ export default function AdminProfilePage() {
     confirmPass: ''
   });
 
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastType, setToastType] = useState('success');
+
+  const showToast = (msg, type = 'success') => {
+    setToastMsg(msg);
+    setToastType(type);
+    setTimeout(() => setToastMsg(''), 4000);
+  };
 
   const handleProfileSave = (e) => {
     e.preventDefault();
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    if (!profile.name || !profile.email) {
+      showToast('Please fill in all required fields.', 'error');
+      return;
+    }
+    const cleanPhone = (profile.phone || '').replace(/\D/g, '');
+    if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
+      showToast('Mobile phone number must be exactly 10 digits.', 'error');
+      return;
+    }
+
+    // Persist changes to local storage & broadcast event
+    localStorage.setItem('flavora_profile_admin', JSON.stringify(profile));
+    window.dispatchEvent(new Event('flavora_profile_updated'));
+    showToast('Profile details saved successfully!');
+  };
+
+  const handlePasswordUpdate = (e) => {
+    e.preventDefault();
+    if (!passwords.current) {
+      showToast('Please enter your current password.', 'error');
+      return;
+    }
+    if (!passwords.newPass || passwords.newPass.length < 6) {
+      showToast('New password must be at least 6 characters long.', 'error');
+      return;
+    }
+    if (passwords.newPass !== passwords.confirmPass) {
+      showToast('New password and confirm password do not match!', 'error');
+      return;
+    }
+
+    setPasswords({ current: '', newPass: '', confirmPass: '' });
+    showToast('Password updated! Redirecting to login...', 'success');
+
+    // Force re-login for security
+    setTimeout(() => {
+      alert('🔒 Password updated successfully! For security reasons, please login again with your new password.');
+      localStorage.removeItem('flavora_auth_token');
+      if (setActivePage) {
+        setActivePage('login');
+      } else {
+        window.location.reload();
+      }
+    }, 600);
+  };
+
+  const getInitials = (nameStr) => {
+    if (!nameStr) return 'SK';
+    const parts = nameStr.trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return nameStr.slice(0, 2).toUpperCase();
   };
 
   return (
@@ -42,15 +108,24 @@ export default function AdminProfilePage() {
         </div>
       </div>
 
-      {saveSuccess && (
-        <div className="admin-card mb-3" style={{ background: '#F0FDF4', borderColor: '#BBF7D0', padding: '0.85rem 1.25rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <CheckCircle2 size={18} color="#166534" />
-          <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>Profile details updated successfully!</span>
+      {toastMsg && (
+        <div className="admin-card mb-3" style={{ 
+          background: toastType === 'error' ? '#FEF2F2' : '#F0FDF4', 
+          borderColor: toastType === 'error' ? '#FCA5A5' : '#BBF7D0', 
+          padding: '0.85rem 1.25rem', 
+          color: toastType === 'error' ? '#991B1B' : '#166534', 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '0.5rem',
+          borderRadius: '10px'
+        }}>
+          {toastType === 'error' ? <AlertCircle size={18} color="#991B1B" /> : <CheckCircle2 size={18} color="#166534" />}
+          <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{toastMsg}</span>
         </div>
       )}
 
       {/* Profile Overview Card */}
-      <div className="admin-card mb-4" style={{ padding: '1.5rem' }}>
+      <div className="admin-card" style={{ padding: '1.75rem', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
             <div style={{
@@ -66,9 +141,9 @@ export default function AdminProfilePage() {
               justifyContent: 'center',
               border: '3px solid #E5DBC8'
             }}>
-              SK
+              {getInitials(profile.name)}
             </div>
-            <button title="Change Avatar" style={{
+            <button type="button" title="Change Avatar" style={{
               position: 'absolute',
               bottom: 0,
               right: 0,
@@ -107,18 +182,18 @@ export default function AdminProfilePage() {
       </div>
 
       {/* Account Details Form */}
-      <div className="admin-grid-12" style={{ gap: '1.5rem' }}>
+      <div className="admin-grid-12" style={{ gap: '1.75rem' }}>
         
         {/* Personal Details */}
-        <div className="admin-card col-span-7">
+        <div className="admin-card col-span-7" style={{ padding: '1.5rem' }}>
           <div className="admin-card-header mb-4">
-            <h2 className="admin-card-title">Personal Information</h2>
+            <h2 className="admin-card-title" style={{ fontSize: '1.15rem', fontWeight: 800 }}>Personal Information</h2>
           </div>
 
           <form onSubmit={handleProfileSave}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
               <div>
-                <label className="form-label">Full Name</label>
+                <label className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem' }}>Full Name *</label>
                 <input
                   type="text"
                   value={profile.name}
@@ -129,20 +204,20 @@ export default function AdminProfilePage() {
               </div>
 
               <div>
-                <label className="form-label">Employee ID</label>
+                <label className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem' }}>Employee ID</label>
                 <input
                   type="text"
                   value={profile.empId}
                   disabled
                   className="form-control"
-                  style={{ background: '#FAF6EE', color: '#9A9A9A' }}
+                  style={{ background: '#FAF6EE', color: '#64748B', fontWeight: 700 }}
                 />
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.5rem' }}>
               <div>
-                <label className="form-label">Email Address</label>
+                <label className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem' }}>Email Address *</label>
                 <input
                   type="email"
                   value={profile.email}
@@ -153,67 +228,156 @@ export default function AdminProfilePage() {
               </div>
 
               <div>
-                <label className="form-label">Phone Number</label>
+                <label className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem' }}>Phone Number (10 Digits)</label>
                 <input
                   type="text"
                   value={profile.phone}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                  maxLength={10}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setProfile({ ...profile, phone: digits });
+                  }}
                   className="form-control"
-                  required
+                  placeholder="e.g. 9876512345"
                 />
+                <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '0.25rem', fontWeight: 600 }}>
+                  {profile.phone ? `${profile.phone.length}/10 digits entered` : 'Optional'}
+                </div>
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" style={{ padding: '0.7rem 1.6rem', fontWeight: 800 }}>
               <Save size={16} />
-              <span>Save Profile Changes</span>
+              <span>SAVE PROFILE CHANGES</span>
             </button>
           </form>
         </div>
 
         {/* Change Password */}
-        <div className="admin-card col-span-5">
+        <div className="admin-card col-span-5" style={{ padding: '1.5rem' }}>
           <div className="admin-card-header mb-4">
-            <h2 className="admin-card-title">Security & Password</h2>
+            <h2 className="admin-card-title" style={{ fontSize: '1.15rem', fontWeight: 800 }}>Security & Password</h2>
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); setSaveSuccess(true); setTimeout(() => setSaveSuccess(false), 3000); }}>
-            <div className="mb-3">
-              <label className="form-label">Current Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={passwords.current}
-                onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
-                className="form-control"
-              />
+          <form onSubmit={handlePasswordUpdate}>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem', display: 'block' }}>Current Password *</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showCurrentPass ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={passwords.current}
+                  onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
+                  className="form-control"
+                  style={{ paddingRight: '2.5rem' }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPass(!showCurrentPass)}
+                  aria-label={showCurrentPass ? "Hide password" : "Show password"}
+                  style={{
+                    position: 'absolute',
+                    right: '0.75rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748B',
+                    cursor: 'pointer',
+                    padding: '0.2rem',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  {showCurrentPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
-            <div className="mb-3">
-              <label className="form-label">New Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={passwords.newPass}
-                onChange={(e) => setPasswords({ ...passwords, newPass: e.target.value })}
-                className="form-control"
-              />
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem', display: 'block' }}>New Password *</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showNewPass ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={passwords.newPass}
+                  onChange={(e) => setPasswords({ ...passwords, newPass: e.target.value })}
+                  className="form-control"
+                  style={{ paddingRight: '2.5rem' }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPass(!showNewPass)}
+                  aria-label={showNewPass ? "Hide password" : "Show password"}
+                  style={{
+                    position: 'absolute',
+                    right: '0.75rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748B',
+                    cursor: 'pointer',
+                    padding: '0.2rem',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  {showNewPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
-            <div className="mb-4">
-              <label className="form-label">Confirm New Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={passwords.confirmPass}
-                onChange={(e) => setPasswords({ ...passwords, confirmPass: e.target.value })}
-                className="form-control"
-              />
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem', display: 'block' }}>Confirm New Password *</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showConfirmPass ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={passwords.confirmPass}
+                  onChange={(e) => setPasswords({ ...passwords, confirmPass: e.target.value })}
+                  className="form-control"
+                  style={{ paddingRight: '2.5rem' }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPass(!showConfirmPass)}
+                  aria-label={showConfirmPass ? "Hide password" : "Show password"}
+                  style={{
+                    position: 'absolute',
+                    right: '0.75rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748B',
+                    cursor: 'pointer',
+                    padding: '0.2rem',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  {showConfirmPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
-            <button type="submit" className="btn btn-outline" style={{ width: '100%', justifyContent: 'center' }}>
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              style={{ 
+                width: '100%', 
+                justifyContent: 'center', 
+                padding: '0.7rem', 
+                fontWeight: 800,
+                letterSpacing: '0.04em'
+              }}
+            >
               <Key size={16} />
-              <span>Update Password</span>
+              <span>UPDATE PASSWORD</span>
             </button>
           </form>
         </div>

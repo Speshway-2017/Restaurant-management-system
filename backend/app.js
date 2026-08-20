@@ -33,6 +33,8 @@ app.use('/api/staff', require('./routes/staffRoutes'));
 app.use('/api/inventory', require('./routes/inventoryRoutes'));
 app.use('/api/coupons', require('./routes/couponRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
+app.use('/api/reports', require('./routes/reportRoutes'));
+app.use('/api/admin/payments', require('./routes/paymentRoutes'));
 
 // Global Error Handler
 app.use(errorHandler);

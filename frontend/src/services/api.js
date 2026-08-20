@@ -102,5 +102,30 @@ export const api = {
   generateTableQr: (tableNum, targetUrl) => request('/tables/generate-qr', {
     method: 'POST',
     body: JSON.stringify({ tableNum, targetUrl })
+  }),
+
+  // Reports & Analytics API
+  getReportAnalytics: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/reports/analytics${query ? `?${query}` : ''}`);
+  },
+  getReportBranches: () => request('/reports/branches'),
+
+  // Payments & Settlements API
+  getPaymentsSummary: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/admin/payments/summary${query ? `?${query}` : ''}`);
+  },
+  updateRefundStatus: (id, action) => request(`/admin/payments/refunds/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action })
+  }),
+  getPaymentGateways: () => request('/admin/payments/gateways'),
+  updatePaymentGateway: (gatewayId, data) => request(`/admin/payments/gateways/${gatewayId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  testPaymentGateway: (gatewayId) => request(`/admin/payments/gateways/${gatewayId}/test`, {
+    method: 'POST'
   })
 };
