@@ -17,8 +17,43 @@ import AdminProfilePage from '../admin/AdminProfilePage';
 import AdminTablesPage from './ManagerTablesPage';
 import AdminSettingsPage from '../admin/AdminSettingsPage';
 
+const MANAGER_PATH_TO_TAB = {
+  '/manager': 'manager-dashboard',
+  '/manager/': 'manager-dashboard',
+  '/manager/dashboard': 'manager-dashboard',
+  '/manager/orders': 'orders',
+  '/manager/tables': 'tables',
+  '/manager/staff': 'staff',
+  '/manager/menu': 'menu',
+  '/manager/coupons': 'coupons',
+  '/manager/analytics': 'analytics',
+  '/manager/settings': 'settings',
+  '/manager/profile': 'profile'
+};
+
+const MANAGER_TAB_TO_PATH = {
+  'manager-dashboard': '/manager/dashboard',
+  'orders': '/manager/orders',
+  'tables': '/manager/tables',
+  'staff': '/manager/staff',
+  'menu': '/manager/menu',
+  'coupons': '/manager/coupons',
+  'analytics': '/manager/analytics',
+  'settings': '/manager/settings',
+  'profile': '/manager/profile'
+};
+
+const getManagerTabFromCurrentPath = () => {
+  const rawPath = (window.location.pathname || '').toLowerCase().trim();
+  if (MANAGER_PATH_TO_TAB[rawPath]) return MANAGER_PATH_TO_TAB[rawPath];
+  for (const [p, t] of Object.entries(MANAGER_PATH_TO_TAB)) {
+    if (p !== '/manager' && rawPath.startsWith(p)) return t;
+  }
+  return 'manager-dashboard';
+};
+
 export default function ManagerLayout({ setActivePage }) {
-  const [activeTab, setActiveTab] = useState('manager-dashboard');
+  const [activeTab, setActiveTab] = useState(() => getManagerTabFromCurrentPath());
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const contentViewportRef = useRef(null);
@@ -44,7 +79,21 @@ export default function ManagerLayout({ setActivePage }) {
       contentViewportRef.current.scrollTop = 0;
     }
     window.scrollTo(0, 0);
+
+    const targetPath = MANAGER_TAB_TO_PATH[activeTab] || `/manager/${activeTab}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ tab: activeTab }, '', targetPath);
+    }
   }, [activeTab]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const tab = getManagerTabFromCurrentPath();
+      setActiveTab(tab);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const branches = [
     'Jubilee Hills (Main Branch)',
     'Banjara Hills Branch',

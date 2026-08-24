@@ -4798,6 +4798,9 @@ h6 {
   border-radius: 16px;
   width: 100%;
   max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.2);
   border: 1px solid #E5DBC8;
   overflow: hidden;
@@ -5834,6 +5837,27 @@ body,
 /* ==========================================================================
    SMOOTH UI PRODUCT CARD SYSTEM FOR MENU ITEMS
    ========================================================================== */
+/* Exact 4 Cards per Row Desktop Grid for Chef Special Culinary Combos */
+.chef-combos-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+@media (max-width: 1023px) {
+  .chef-combos-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .chef-combos-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
 .smooth-product-card {
   background: #FFFFFF;
   border-radius: 16px;
@@ -5856,7 +5880,7 @@ body,
 .smooth-product-image-wrap {
   position: relative;
   width: 100%;
-  padding-top: 72%;
+  padding-top: 58%;
   overflow: hidden;
   background-color: #FAF6EE;
 }
@@ -5877,8 +5901,8 @@ body,
 
 .smooth-product-badge-group {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 8px;
+  left: 8px;
   z-index: 2;
   display: flex;
   gap: 6px;
@@ -5887,14 +5911,14 @@ body,
 .smooth-badge {
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(8px);
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 9999px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
   color: #1E4636;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.6);
   text-transform: uppercase;
@@ -5925,23 +5949,23 @@ body,
 
 .smooth-product-rating {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   z-index: 2;
   background: rgba(20, 47, 36, 0.85);
   backdrop-filter: blur(8px);
   color: #FFFFFF;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: 9999px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .smooth-product-content {
-  padding: 1.1rem;
+  padding: 0.9rem 1rem;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -5949,11 +5973,11 @@ body,
 }
 
 .smooth-product-header {
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.3rem;
 }
 
 .smooth-product-category {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   color: #E07A3C;
   text-transform: uppercase;
@@ -5963,7 +5987,7 @@ body,
 }
 
 .smooth-product-title {
-  font-size: 1.02rem;
+  font-size: 0.96rem;
   font-weight: 800;
   color: #1E4636;
   font-family: var(--font-heading), 'Poppins', sans-serif;

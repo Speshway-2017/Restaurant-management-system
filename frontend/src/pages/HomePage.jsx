@@ -10,12 +10,65 @@ import MagneticButton from '../components/MagneticButton';
 import InfiniteSlider from '../components/InfiniteSlider';
 import KineticCenterBuild from '../components/KineticCenterBuild';
 import Cta2 from '../components/Cta2';
+import { findItemInCatalog, calculateCartTotal } from '../utils/menuRegistry';
 
 export default function HomePage({ setActivePage, onOpenDemoModal }) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeCategory, setActiveCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, isHovered: false });
+
+  // Persistent shared cart state across pages
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_active_cart');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const updateCartState = (newCart) => {
+    setCart(newCart);
+    try {
+      localStorage.setItem('flavora_active_cart', JSON.stringify(newCart));
+      window.dispatchEvent(new Event('flavora_cart_updated'));
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    const handleCartSync = () => {
+      try {
+        const saved = localStorage.getItem('flavora_active_cart');
+        setCart(saved ? JSON.parse(saved) : {});
+      } catch (e) {}
+    };
+    window.addEventListener('flavora_cart_updated', handleCartSync);
+    return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
+  }, []);
+
+  const handleAddToCart = (id) => {
+    const updated = { ...cart, [id]: (cart[id] || 0) + 1 };
+    updateCartState(updated);
+  };
+
+  const handleDecreaseQty = (id) => {
+    const current = cart[id] || 0;
+    let updated;
+    if (current <= 1) {
+      updated = { ...cart };
+      delete updated[id];
+    } else {
+      updated = { ...cart, [id]: current - 1 };
+    }
+    updateCartState(updated);
+  };
+
+  const handleDeleteItem = (id) => {
+    const updated = { ...cart };
+    delete updated[id];
+    updateCartState(updated);
+  };
 
   // Default menu highlights
   const [menuHighlights, setMenuHighlights] = useState([
@@ -26,6 +79,9 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
     { id: 5, name: 'Saffron Shahi Tukda', category: 'Desserts', price: 260, origPrice: '₹320', isVeg: true, desc: 'Crispy fried bread soaked in saffron rabri topped with pistachios.', img: '/tandoor_oven.png' },
     { id: 6, name: 'Mango Lassi Delight', category: 'Beverages', price: 180, origPrice: '₹220', isVeg: true, desc: 'Thick churned yogurt blended with Alphonsa mango pulp.', img: '/carousel_3.png' }
   ]);
+
+  const totalCartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+  const totalCartPrice = calculateCartTotal(cart, menuHighlights);
 
   useEffect(() => {
     const loadHighlights = () => {
@@ -126,35 +182,89 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
     }
   ];
 
-  const specialCombos = [
+  const defaultCombosList = [
     {
+      id: 'Royal Biryani Feast Combo',
       title: 'Royal Biryani Feast Combo',
       desc: '1 Full Chicken Dum Biryani + 2 Butter Naan + 1 Paneer Tikka + Gulab Jamun + Soft Drinks.',
       price: 890,
       origPrice: '₹1,250',
       tag: 'BEST VALUE (30% OFF)',
       img: '/hero_dish_2.png',
-      isVeg: false
+      isVeg: false,
+      available: true
     },
     {
+      id: 'Tandoori Kebab Platter Special',
       title: 'Tandoori Kebab Platter Special',
       desc: 'Assorted Murgh Malai Kabab, Tandoori Chicken, Paneer Angara & Mint Chutney.',
       price: 760,
       origPrice: '₹980',
       tag: 'CHEF SPECIAL',
       img: '/carousel_1.png',
-      isVeg: false
+      isVeg: false,
+      available: true
     },
     {
+      id: 'Dal Makhani & Shahi Thali',
       title: 'Dal Makhani & Shahi Thali',
       desc: 'Dal Makhani Gold + Paneer Butter Masala + Saffron Rice + 3 Butter Rotis + Lassi.',
       price: 640,
       origPrice: '₹820',
       tag: 'PURE VEG ROYAL',
       img: '/hero_dish_1.png',
-      isVeg: true
+      isVeg: true,
+      available: true
+    },
+    {
+      id: 'Family Royal Celebration Feast',
+      title: 'Family Royal Celebration Feast',
+      desc: '2 Full Dum Biryanis + 4 Garlic Naans + Paneer Tikka + Gulab Jamun Platter + Beverages.',
+      price: 1150,
+      origPrice: '₹1,490',
+      tag: 'FAMILY COMBO (25% OFF)',
+      img: '/carousel_2.png',
+      isVeg: false,
+      available: true
     }
   ];
+
+  const [specialCombos, setSpecialCombos] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_combos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter(c => c.available !== false);
+        }
+      }
+    } catch (e) {}
+    return defaultCombosList;
+  });
+
+  useEffect(() => {
+    const loadDynamicCombos = () => {
+      try {
+        const saved = localStorage.getItem('flavora_combos');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSpecialCombos(parsed.filter(c => c.available !== false));
+            return;
+          }
+        }
+      } catch (e) {}
+      setSpecialCombos(defaultCombosList);
+    };
+
+    loadDynamicCombos();
+    window.addEventListener('flavora_combos_updated', loadDynamicCombos);
+    window.addEventListener('flavora_dishes_updated', loadDynamicCombos);
+    return () => {
+      window.removeEventListener('flavora_combos_updated', loadDynamicCombos);
+      window.removeEventListener('flavora_dishes_updated', loadDynamicCombos);
+    };
+  }, []);
 
   const marqueeBadges = [
     "🔥 Live Clay Tandoor Ovens",
@@ -190,19 +300,15 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
 
   const filteredMenuItems = menuHighlights.filter(item => {
     if (vegOnly && !item.isVeg) return false;
-    if (activeCategory === 'all') return true;
-
     const cat = (item.category || '').toLowerCase();
-    const sel = activeCategory.toLowerCase();
-    if (sel === 'starters') return cat.includes('starter');
-    if (sel === 'main-course' || sel === 'mains') return cat.includes('main') || cat.includes('curry') || cat.includes('biryani');
-    if (sel === 'curries') return cat.includes('curry') || cat.includes('curries');
-    if (sel === 'biryani') return cat.includes('biryani');
-    if (sel === 'breads') return cat.includes('bread') || cat.includes('roti') || cat.includes('naan');
-    if (sel === 'south-indian') return cat.includes('south');
-    if (sel === 'desserts') return cat.includes('dessert') || cat.includes('sweet');
-    if (sel === 'beverages') return cat.includes('beverage') || cat.includes('drink') || cat.includes('lassi');
-    return cat === sel;
+    const name = (item.name || '').toLowerCase();
+    const isBiryani = cat.includes('biryani') || name.includes('biryani');
+
+    if (activeCategory === 'biryani') return isBiryani;
+    if (activeCategory === 'specials') return !isBiryani;
+
+    // For 'all' on Home page, include Biryanis and Chef Special highlights
+    return isBiryani || item.bestseller || !isBiryani;
   });
 
   return (
@@ -397,39 +503,39 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
       </section>
 
       {/* ================= 3. OUR STORY & HERITAGE (LUXURY RMS FRESH MINT TINT) ================= */}
-      <section style={{ backgroundColor: '#F0F7F3', padding: '6rem 1.5rem', borderTop: '1px solid #D8EADF' }}>
+      <section style={{ backgroundColor: '#F0F7F3', padding: '3.5rem 1.5rem', borderTop: '1px solid #D8EADF' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'center' }}>
             
             <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                 OUR STORY & LEGACY
               </div>
 
-              <h2 className="text-h1" style={{ fontSize: '2.5rem', color: '#0F2A1D', marginBottom: '1.75rem', fontFamily: 'var(--font-heading)', lineHeight: 1.25 }}>
+              <h2 className="text-h1" style={{ fontSize: '2.3rem', color: '#0F2A1D', marginBottom: '1.25rem', fontFamily: 'var(--font-heading)', lineHeight: 1.25 }}>
                 A Journey of Authentic Flavors & Modern Hospitality
               </h2>
 
-              <p className="text-body" style={{ color: '#4A5568', fontSize: '1.05rem', lineHeight: '1.8', marginBottom: '1.5rem' }}>
+              <p className="text-body" style={{ color: '#4A5568', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.25rem' }}>
                 Flavora Kitchen brings the rich, authentic culinary traditions of India to your dining table. Founded in <strong>Jubilee Hills, Hyderabad in 2017</strong>, our master chefs infuse age-old recipes with Kashmiri spices, clay-tandoor roasting, and modern digital dining convenience.
               </p>
 
-              <p className="text-body" style={{ color: '#4A5568', fontSize: '1.05rem', lineHeight: '1.8', marginBottom: '2rem' }}>
+              <p className="text-body" style={{ color: '#4A5568', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>
                 From royal dum biryanis to slow-simmered Dal Makhani Gold, every dish is prepared fresh to order with pure desi ghee and hand-milled spices.
               </p>
 
-              <div style={{ display: 'flex', gap: '2.5rem', marginBottom: '2.5rem', borderTop: '1px solid rgba(15, 42, 29, 0.12)', paddingTop: '1.75rem' }}>
+              <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.75rem', borderTop: '1px solid rgba(15, 42, 29, 0.12)', paddingTop: '1.25rem' }}>
                 <div>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 700, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>2017</div>
-                  <div style={{ fontSize: '0.8rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Year Founded</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>2017</div>
+                  <div style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Year Founded</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 700, color: '#E07A3C', fontFamily: 'var(--font-heading)' }}>500K+</div>
-                  <div style={{ fontSize: '0.8rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Happy Diners</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#E07A3C', fontFamily: 'var(--font-heading)' }}>500K+</div>
+                  <div style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Happy Diners</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 700, color: '#2E7D32', fontFamily: 'var(--font-heading)' }}>50+</div>
-                  <div style={{ fontSize: '0.8rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Royal Dishes</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#2E7D32', fontFamily: 'var(--font-heading)' }}>50+</div>
+                  <div style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Royal Dishes</div>
                 </div>
               </div>
 
@@ -443,10 +549,10 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
               <div 
                 style={{
                   position: 'absolute',
-                  inset: '-12px',
+                  inset: '-10px',
                   background: 'linear-gradient(135deg, rgba(255, 138, 0, 0.25), rgba(15, 42, 29, 0.18))',
                   borderRadius: '24px',
-                  filter: 'blur(22px)',
+                  filter: 'blur(20px)',
                   zIndex: 1
                 }}
               />
@@ -457,10 +563,10 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
                   position: 'relative',
                   zIndex: 2,
                   width: '100%',
-                  maxHeight: '460px',
+                  maxHeight: '400px',
                   objectFit: 'cover',
                   borderRadius: '20px',
-                  boxShadow: '0 22px 45px rgba(15, 42, 29, 0.18)',
+                  boxShadow: '0 18px 40px rgba(15, 42, 29, 0.18)',
                   border: '2px solid rgba(255, 255, 255, 0.9)'
                 }}
               />
@@ -471,63 +577,64 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
       </section>
 
       {/* ================= 4. SPECIAL COMBOS & CHEF DEALS (NO RATING BADGES ON IMAGES) ================= */}
-      <section style={{ backgroundColor: '#FFFFFF', padding: '6rem 1.5rem', borderTop: '1px solid #EAEAEA' }}>
+      <section style={{ backgroundColor: '#FFFFFF', padding: '2.5rem 1.5rem 2rem 1.5rem', borderTop: '1px solid #EAEAEA' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.35rem', display: 'block' }}>
               EXCLUSIVE DEALS & COMBOS
             </span>
-            <h2 className="text-h1" style={{ fontSize: '2.5rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
+            <h2 className="text-h1" style={{ fontSize: '2.3rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
               Chef Special Culinary Combos
             </h2>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
-            {specialCombos.map((offer, idx) => (
-              <ProductCard
-                key={idx}
-                id={offer.title}
-                title={offer.title}
-                image={offer.img}
-                price={offer.price}
-                originalPrice={offer.origPrice}
-                badge={offer.tag}
-                isVeg={offer.isVeg}
-                desc={offer.desc}
-                category="Chef Combo Deal"
-                onAddToCart={onOpenDemoModal}
-              />
-            ))}
+          <div className="chef-combos-grid">
+            {specialCombos.map((offer, idx) => {
+              const comboKey = offer.id || offer.title;
+              const qty = cart[comboKey] || 0;
+              return (
+                <ProductCard
+                  key={idx}
+                  id={comboKey}
+                  title={offer.title}
+                  image={offer.img}
+                  price={offer.price}
+                  originalPrice={offer.origPrice}
+                  badge={offer.tag}
+                  isVeg={offer.isVeg}
+                  desc={offer.desc}
+                  category="Chef Combo Deal"
+                  quantity={qty}
+                  onAddToCart={() => handleAddToCart(comboKey)}
+                  onDecreaseQty={() => handleDecreaseQty(comboKey)}
+                  onDeleteItem={() => handleDeleteItem(comboKey)}
+                />
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* ================= 5. CURATED CULINARY SELECTION ================= */}
-      <section style={{ backgroundColor: '#FFFDF8', padding: '6rem 1.5rem', borderTop: '1px solid #F0F4F2' }}>
+      <section style={{ backgroundColor: '#FFFDF8', padding: '2rem 1.5rem 1.75rem 1.5rem', borderTop: '1px solid #F0F4F2' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
-          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.35rem', display: 'block' }}>
               OUR SIGNATURE MENU
             </span>
-            <h2 className="text-h1" style={{ fontSize: '2.5rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
+            <h2 className="text-h1" style={{ fontSize: '2.3rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
               Explore Curated Culinary Selection
             </h2>
           </div>
 
-          {/* Category Filter Pills & Veg Only Toggle */}
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '3rem' }}>
-            <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {/* Category Filter Pills (Biryanis & Chef Specials Only) */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', flexWrap: 'nowrap', width: '100%', maxWidth: '100%', overflowX: 'auto', marginBottom: '1.5rem', scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="no-scrollbar">
+            <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', flexWrap: 'nowrap', scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="no-scrollbar">
               {[
-                { id: 'all', label: 'All Dishes' },
-                { id: 'starters', label: 'Starters' },
-                { id: 'main-course', label: 'Main Course' },
-                { id: 'curries', label: 'Curries' },
-                { id: 'biryani', label: 'Biryani' },
-                { id: 'breads', label: 'Breads' },
-                { id: 'south-indian', label: 'South Indian' },
-                { id: 'desserts', label: 'Desserts' },
-                { id: 'beverages', label: 'Beverages' }
+                { id: 'all', label: '✨ All Highlights' },
+                { id: 'biryani', label: '🍚 Royal Biryanis' },
+                { id: 'specials', label: '🔥 Chef Specials' }
               ].map(cat => (
                 <button
                   key={cat.id}
@@ -543,6 +650,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
                     fontSize: '0.86rem',
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
+                    flexShrink: 0,
                     transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                     boxShadow: activeCategory === cat.id ? '0 4px 14px rgba(15, 42, 29, 0.2)' : 'none'
                   }}
@@ -552,7 +660,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
               ))}
             </div>
 
-            {/* Veg Only Toggle Switch */}
+            {/* Veg Only Toggle Switch (Single Line) */}
             <div 
               onClick={() => setVegOnly(!vegOnly)}
               style={{
@@ -562,13 +670,14 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
                 backgroundColor: 'transparent',
                 padding: '0.4rem 0.6rem',
                 cursor: 'pointer',
-                userSelect: 'none'
+                userSelect: 'none',
+                flexShrink: 0
               }}
             >
-              <span style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid #166534', borderRadius: '3px', position: 'relative' }}>
+              <span style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid #166534', borderRadius: '3px', position: 'relative', flexShrink: 0 }}>
                 <span style={{ position: 'absolute', inset: '2.5px', backgroundColor: '#166534', borderRadius: '50%' }}></span>
               </span>
-              <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#1E4636' }}>Veg Only</span>
+              <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#1E4636', whiteSpace: 'nowrap' }}>Veg Only</span>
               <div 
                 style={{
                   width: '44px',
@@ -579,7 +688,8 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
                   backgroundColor: vegOnly ? '#166534' : '#E2E8F0',
                   position: 'relative',
                   transition: 'all 0.2s ease',
-                  marginLeft: '0.25rem'
+                  marginLeft: '0.25rem',
+                  flexShrink: 0
                 }}
               >
                 <div style={{
@@ -597,31 +707,77 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
             </div>
           </div>
 
-          {/* Grid of SmoothUI Product Cards (NO RATING BADGES ON IMAGES) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '2rem' }}>
-            {filteredMenuItems.map((item, idx) => (
-              <ProductCard
-                key={idx}
-                id={item.id || item.name}
-                title={item.name}
-                image={item.img}
-                price={item.price}
-                originalPrice={item.origPrice}
-                badge={item.bestseller ? 'Bestseller' : item.isVeg ? 'Veg Special' : 'Chef Choice'}
-                isVeg={item.isVeg}
-                available={item.available}
-                isAvailable={item.available}
-                bestseller={item.bestseller}
-                isBestseller={item.bestseller}
-                desc={item.desc}
-                category={item.category}
-                onAddToCart={() => setActivePage('menu')}
-              />
-            ))}
-          </div>
+          {/* Render ONLY Royal Biryanis & Chef Specials on Home Page */}
+          {(() => {
+            const HOME_GROUPS = [
+              {
+                key: 'Royal Dum Biryanis',
+                icon: '🍚',
+                match: (item) => (item.category || '').toLowerCase().includes('biryani') || (item.name || '').toLowerCase().includes('biryani')
+              },
+              {
+                key: 'Chef Special Delicacies',
+                icon: '🔥',
+                match: (item) => !(item.category || '').toLowerCase().includes('biryani') && !(item.name || '').toLowerCase().includes('biryani')
+              }
+            ];
+
+            const homeSections = HOME_GROUPS.map(grp => {
+              const matchedItems = filteredMenuItems.filter(grp.match).slice(0, 4);
+              return {
+                key: grp.key,
+                icon: grp.icon,
+                items: matchedItems
+              };
+            }).filter(grp => grp.items.length > 0);
+
+            return homeSections.map((group) => (
+              <div key={group.key} style={{ marginBottom: '2.5rem' }}>
+                
+                {/* Category Alignment Section Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem', borderBottom: '2px solid rgba(15, 42, 29, 0.12)', paddingBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.4rem' }}>{group.icon}</span>
+                  <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0F2A1D', margin: 0, fontFamily: "var(--font-heading)" }}>
+                    {group.key}
+                  </h3>
+                </div>
+
+                {/* Grid of Dishes for this Category (4 Cards Per Row on Desktop) */}
+                <div className="chef-combos-grid">
+                  {group.items.map((item, idx) => {
+                    const itemKey = item.id || item.name;
+                    const qty = cart[itemKey] || 0;
+                    return (
+                      <ProductCard
+                        key={idx}
+                        id={itemKey}
+                        title={item.name}
+                        image={item.img}
+                        price={item.price}
+                        originalPrice={item.origPrice}
+                        badge={item.bestseller ? 'Bestseller' : item.isVeg ? 'Veg Special' : 'Chef Choice'}
+                        isVeg={item.isVeg}
+                        available={item.available}
+                        isAvailable={item.available}
+                        bestseller={item.bestseller}
+                        isBestseller={item.bestseller}
+                        desc={item.desc}
+                        category={item.category}
+                        quantity={qty}
+                        onAddToCart={() => handleAddToCart(itemKey)}
+                        onDecreaseQty={() => handleDecreaseQty(itemKey)}
+                        onDeleteItem={() => handleDeleteItem(itemKey)}
+                      />
+                    );
+                  })}
+                </div>
+
+              </div>
+            ));
+          })()}
 
           {/* View Full Menu CTA */}
-          <div style={{ textAlign: 'center', marginTop: '3.5rem' }}>
+          <div style={{ textAlign: 'center', marginTop: '2rem' }}>
             <MagneticButton onClick={() => setActivePage('menu')} variant="default" style={{ padding: '0.9rem 2.2rem', fontSize: '1rem' }}>
               <span>View Entire Menu (50+ Items)</span>
               <ArrowRight size={18} />
@@ -632,13 +788,13 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
       </section>
 
       {/* ================= 6. TESTIMONIALS INFINITE MARQUEE (SMOOTH UI) ================= */}
-      <section style={{ backgroundColor: '#F0F7F3', padding: '6rem 1.5rem', borderTop: '1px solid #D8EADF' }}>
+      <section style={{ backgroundColor: '#F0F7F3', padding: '2rem 1.5rem 2.25rem 1.5rem', borderTop: '1px solid #D8EADF' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.35rem', display: 'block' }}>
               GUEST FEEDBACK & REVIEWS
             </span>
-            <h2 className="text-h1" style={{ fontSize: '2.5rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
+            <h2 className="text-h1" style={{ fontSize: '2.3rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
               Loved by 500,000+ Guests & Resto Partners
             </h2>
           </div>
@@ -680,39 +836,45 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
         </div>
       </section>
 
-      {/* ================= 7. BOTTOM MAGNETIC CTA FOOTER BANNER ================= */}
-      <section style={{ backgroundColor: '#0A2318', padding: '6rem 1.5rem', textAlign: 'center', color: '#FFFFFF', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '-50%', left: '30%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(255, 138, 0, 0.18), transparent 70%)', pointerEvents: 'none' }} />
-
-        <div style={{ maxWidth: '750px', margin: '0 auto', position: 'relative', zIndex: 2 }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#FF8A00', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'block' }}>
-            READY FOR AN UNFORGETTABLE DINING EXPERIENCE?
-          </span>
-
-          <h2 className="text-h1" style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', color: '#FFFFFF', fontFamily: 'var(--font-heading)', lineHeight: 1.2, marginBottom: '1.25rem' }}>
-            Book Your Table or Order Instant QR Dining Today
-          </h2>
-
-          <p style={{ fontSize: '1.05rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.7, marginBottom: '2.5rem' }}>
-            Join 500,000+ happy diners enjoying authentic tandoori craftsmanship, royal dum biryani, and fast digital service.
-          </p>
-
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-            <MagneticButton onClick={() => setActivePage('menu')} variant="secondary" style={{ padding: '0.9rem 2rem', fontSize: '0.95rem' }}>
-              <span>Get Started</span>
-              <ArrowRight size={17} />
-            </MagneticButton>
-
-            <MagneticButton onClick={() => setActivePage('features')} variant="outline" style={{ borderColor: '#FFFFFF', color: '#FFFFFF', padding: '0.9rem 1.8rem', fontSize: '0.95rem' }}>
-              <span>Learn More</span>
-            </MagneticButton>
-
-            <MagneticButton onClick={() => setActivePage('contact')} variant="default" style={{ backgroundColor: '#142F24', borderColor: '#142F24', padding: '0.9rem 1.8rem', fontSize: '0.95rem' }}>
-              <span>Contact Us</span>
-            </MagneticButton>
-          </div>
-        </div>
-      </section>
+      {/* Small Floating View Cart Button at Bottom-Right (Appears when dishes added) */}
+      {totalCartCount > 0 && (
+        <button
+          onClick={() => setActivePage('menu')}
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 9999,
+            backgroundColor: '#FF8A00',
+            color: '#FFFFFF',
+            padding: '0.65rem 1.25rem',
+            borderRadius: '9999px',
+            boxShadow: '0 8px 24px rgba(255, 138, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem',
+            border: '2px solid #FFFFFF',
+            cursor: 'pointer',
+            fontWeight: 800,
+            fontSize: '0.88rem',
+            transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), boxShadow 0.2s ease',
+            animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 12px 30px rgba(255, 138, 0, 0.55)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 8px 24px rgba(255, 138, 0, 0.45)';
+          }}
+        >
+          <span style={{ fontSize: '1.1rem' }}>🛒</span>
+          <span>View Cart ({totalCartCount})</span>
+          <span style={{ opacity: 0.85, fontWeight: 700 }}>• ₹{totalCartPrice}</span>
+          <ArrowRight size={16} />
+        </button>
+      )}
 
     </div>
   );

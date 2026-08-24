@@ -1,13 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tag, Sparkles, Flame, Clock, Gift, CheckCircle2, ArrowRight, Search, ShoppingBag, Plus, Minus, Trash2 } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import MagneticButton from '../components/MagneticButton';
+import { findItemInCatalog, calculateCartTotal } from '../utils/menuRegistry';
 
 export default function OffersPage({ onOpenDemoModal }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [cart, setCart] = useState({});
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_active_cart');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const updateCartState = (newCart) => {
+    setCart(newCart);
+    try {
+      localStorage.setItem('flavora_active_cart', JSON.stringify(newCart));
+      window.dispatchEvent(new Event('flavora_cart_updated'));
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    const handleCartSync = () => {
+      try {
+        const saved = localStorage.getItem('flavora_active_cart');
+        setCart(saved ? JSON.parse(saved) : {});
+      } catch (e) {}
+    };
+    window.addEventListener('flavora_cart_updated', handleCartSync);
+    return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
+  }, []);
+
+  const handleAddToCart = (id) => {
+    const updated = { ...cart, [id]: (cart[id] || 0) + 1 };
+    updateCartState(updated);
+  };
+
+  const handleDecreaseQty = (id) => {
+    const current = cart[id] || 0;
+    let updated;
+    if (current <= 1) {
+      updated = { ...cart };
+      delete updated[id];
+    } else {
+      updated = { ...cart, [id]: current - 1 };
+    }
+    updateCartState(updated);
+  };
+
+  const handleDeleteItem = (id) => {
+    const updated = { ...cart };
+    delete updated[id];
+    updateCartState(updated);
+  };
+
+  const handleClearCart = () => {
+    updateCartState({});
+  };
 
   const deals = [
     {
@@ -90,53 +144,8 @@ export default function OffersPage({ onOpenDemoModal }) {
     }
   ];
 
-  const handleAddToCart = (id) => {
-    setCart(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-  };
-
-  const handleDecreaseQty = (id) => {
-    setCart(prev => {
-      const current = prev[id] || 0;
-      if (current <= 1) {
-        const copy = { ...prev };
-        delete copy[id];
-        return copy;
-      }
-      return { ...prev, [id]: current - 1 };
-    });
-  };
-
-  const handleDeleteItem = (id) => {
-    setCart(prev => {
-      const copy = { ...prev };
-      delete copy[id];
-      return copy;
-    });
-  };
-
-  const handleClearCart = () => {
-    setCart({});
-  };
-
-  const matchCategory = (itemCategory, selectedCat) => {
-    if (selectedCat === 'all') return true;
-    return (itemCategory || '').toLowerCase() === selectedCat.toLowerCase();
-  };
-
-  const filteredDeals = deals.filter(deal => {
-    const matchesCategory = matchCategory(deal.category, selectedCategory);
-    const matchesVeg = vegOnly ? deal.isVeg : true;
-    const matchesSearch = deal.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (deal.desc && deal.desc.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (deal.badge && deal.badge.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCategory && matchesVeg && matchesSearch;
-  });
-
   const totalCartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
-  const totalCartPrice = Object.entries(cart).reduce((sum, [id, qty]) => {
-    const dealItem = deals.find(d => String(d.id) === String(id));
-    return sum + (dealItem ? dealItem.price * qty : 0);
-  }, 0);
+  const totalCartPrice = calculateCartTotal(cart, deals);
 
   return (
     <div className="offers-page" style={{ position: 'relative', paddingBottom: totalCartCount > 0 ? '6rem' : '0', backgroundColor: '#FFFDF8' }}>
@@ -242,7 +251,7 @@ export default function OffersPage({ onOpenDemoModal }) {
       </section>
 
       {/* Offers Grid with SmoothUI Product Cards */}
-      <section style={{ padding: '3.5rem 1.5rem 5rem 1.5rem', backgroundColor: '#F0F7F3' }}>
+      <section style={{ padding: '2rem 1.5rem 2.5rem 1.5rem', backgroundColor: '#F0F7F3' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
           {filteredDeals.length === 0 ? (
