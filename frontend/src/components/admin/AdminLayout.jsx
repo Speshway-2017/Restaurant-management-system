@@ -23,8 +23,57 @@ import AdminProfilePage from './AdminProfilePage';
 import AdminBlogsPage from './AdminBlogsPage';
 import AdminGalleryPage from './AdminGalleryPage';
 
+const PATH_TO_TAB_MAP = {
+  '/admin': 'dashboard',
+  '/admin/': 'dashboard',
+  '/admin/dashboard': 'dashboard',
+  '/admin/overview': 'dashboard',
+  '/admin/menu': 'menu-mgmt',
+  '/admin/menu-mgmt': 'menu-mgmt',
+  '/admin/inventory': 'inventory',
+  '/admin/staff': 'staff-accounts',
+  '/admin/staff-accounts': 'staff-accounts',
+  '/admin/coupons': 'coupons',
+  '/admin/loyalty': 'coupons',
+  '/admin/analytics': 'analytics',
+  '/admin/reports': 'analytics',
+  '/admin/payments': 'payments',
+  '/admin/settlements': 'payments',
+  '/admin/settings': 'settings',
+  '/admin/tables': 'tables',
+  '/admin/reservations': 'reservations',
+  '/admin/blogs': 'blogs',
+  '/admin/gallery': 'gallery',
+  '/admin/profile': 'profile'
+};
+
+const TAB_TO_PATH_MAP = {
+  'dashboard': '/admin/dashboard',
+  'menu-mgmt': '/admin/menu',
+  'inventory': '/admin/inventory',
+  'staff-accounts': '/admin/staff',
+  'coupons': '/admin/coupons',
+  'analytics': '/admin/analytics',
+  'payments': '/admin/payments',
+  'settings': '/admin/settings',
+  'tables': '/admin/tables',
+  'reservations': '/admin/reservations',
+  'blogs': '/admin/blogs',
+  'gallery': '/admin/gallery',
+  'profile': '/admin/profile'
+};
+
+const getTabFromCurrentPath = () => {
+  const rawPath = (window.location.pathname || '').toLowerCase().trim();
+  if (PATH_TO_TAB_MAP[rawPath]) return PATH_TO_TAB_MAP[rawPath];
+  for (const [p, t] of Object.entries(PATH_TO_TAB_MAP)) {
+    if (p !== '/admin' && rawPath.startsWith(p)) return t;
+  }
+  return 'dashboard';
+};
+
 export default function AdminLayout({ setActivePage }) {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => getTabFromCurrentPath());
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('Jubilee Hills (Main Branch)');
@@ -164,7 +213,22 @@ export default function AdminLayout({ setActivePage }) {
       contentViewportRef.current.scrollTop = 0;
     }
     window.scrollTo(0, 0);
+
+    // Synchronize browser address bar URL with current activeTab
+    const targetPath = TAB_TO_PATH_MAP[activeTab] || `/admin/${activeTab}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ tab: activeTab }, '', targetPath);
+    }
   }, [activeTab]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const tab = getTabFromCurrentPath();
+      setActiveTab(tab);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const branches = [
     'Jubilee Hills (Main Branch)',

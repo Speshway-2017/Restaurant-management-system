@@ -15,8 +15,6 @@ export default function ProductCard({
   bestseller,
   isBestseller,
   isVeg = true,
-  available,
-  isAvailable = true,
   desc,
   category,
   quantity = 0,
@@ -29,7 +27,7 @@ export default function ProductCard({
   const itemTitle = title || name || 'Delicious Dish';
   const itemImage = image || img || '/hero_dish_2.png';
   const displayPrice = typeof price === 'number' ? `₹${price}` : price;
-  
+
   let displayOriginalPrice = null;
   if (originalPrice) {
     displayOriginalPrice = typeof originalPrice === 'number' ? `₹${originalPrice}` : originalPrice;
@@ -39,7 +37,6 @@ export default function ProductCard({
 
   const isBestsellerItem = bestseller || isBestseller || (badge && badge.toLowerCase().includes('bestseller')) || (tag && tag.toLowerCase().includes('bestseller'));
   const badgeText = isBestsellerItem ? 'Bestseller' : (badge || tag || (isVeg ? 'Veg Special' : 'Chef Choice'));
-  const isItemAvailable = (available !== undefined ? available : isAvailable) !== false;
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -65,12 +62,11 @@ export default function ProductCard({
           : 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)',
         transition: tilt.isHovered ? 'transform 0.1s ease-out' : 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)',
         transformStyle: 'preserve-3d',
-        willChange: 'transform',
-        opacity: isItemAvailable ? 1 : 0.85
+        willChange: 'transform'
       }}
     >
       {/* 1. IMAGE & BADGES CONTAINER */}
-      <div className="smooth-product-image-wrap" style={{ position: 'relative' }}>
+      <div className="smooth-product-image-wrap">
         <img
           src={itemImage}
           alt={itemTitle}
@@ -78,36 +74,9 @@ export default function ProductCard({
           loading="lazy"
           style={{
             transform: tilt.isHovered ? 'scale(1.12) translateZ(15px)' : 'scale(1) translateZ(0px)',
-            transition: 'transform 0.3s ease',
-            filter: isItemAvailable ? 'none' : 'grayscale(0.3)'
+            transition: 'transform 0.3s ease'
           }}
         />
-
-        {!isItemAvailable && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.5)',
-            backdropFilter: 'blur(2px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10
-          }}>
-            <span style={{
-              background: '#DC2626',
-              color: '#FFFFFF',
-              padding: '0.35rem 0.85rem',
-              borderRadius: '20px',
-              fontWeight: 800,
-              fontSize: '0.78rem',
-              letterSpacing: '0.5px',
-              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.4)'
-            }}>
-              Out of Stock
-            </span>
-          </div>
-        )}
 
         {/* Top-Left Badge (Bestseller / Chef Special / Veg indicator) */}
         <div className="smooth-product-badge-group" style={{ transform: 'translateZ(25px)' }}>
@@ -150,28 +119,10 @@ export default function ProductCard({
           </div>
 
           {/* Interactive Cart Button */}
-          {!isItemAvailable ? (
-            <button
-              type="button"
-              className="smooth-add-cart-btn"
-              disabled
-              style={{
-                backgroundColor: '#CBD5E1',
-                color: '#64748B',
-                cursor: 'not-allowed',
-                opacity: 0.85,
-                border: '1px solid #94A3B8',
-                boxShadow: 'none',
-                fontWeight: 700,
-                fontSize: '0.8rem'
-              }}
-            >
-              <span>Out of Stock</span>
-            </button>
-          ) : quantity > 0 ? (
+          {quantity > 0 ? (
             <div className="smooth-qty-counter">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); onDeleteItem ? onDeleteItem(id) : onDecreaseQty && onDecreaseQty(id); }}
                 className="smooth-qty-btn is-delete"
                 title="Remove item"
@@ -179,8 +130,8 @@ export default function ProductCard({
                 {quantity === 1 ? <Trash2 size={13} color="#C0392B" /> : <Minus size={13} color="#1E4636" />}
               </button>
               <span className="smooth-qty-num">{quantity}</span>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); onAddToCart && onAddToCart(id); }}
                 className="smooth-qty-btn"
                 title="Add one more"
