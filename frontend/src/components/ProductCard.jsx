@@ -18,6 +18,7 @@ export default function ProductCard({
   desc,
   category,
   quantity = 0,
+  requiresQrScan = false,
   onAddToCart,
   onDecreaseQty,
   onDeleteItem
@@ -119,7 +120,14 @@ export default function ProductCard({
           </div>
 
           {/* Interactive Cart Button */}
-          {quantity > 0 ? (
+          {requiresQrScan ? (
+            <span
+              onClick={(e) => { e.stopPropagation(); onAddToCart && onAddToCart(id || itemTitle); }}
+              style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 700, fontStyle: 'italic', backgroundColor: '#F1F5F9', padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid #E2E8F0', cursor: 'pointer' }}
+            >
+              Scan QR to Order
+            </span>
+          ) : quantity > 0 ? (
             <div className="smooth-qty-counter">
               <button
                 type="button"

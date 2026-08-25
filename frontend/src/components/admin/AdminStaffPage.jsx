@@ -134,15 +134,18 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
     api.getStaff()
       .then((data) => {
         if (data && data.length > 0) {
-          setStaffMembers(data.map((stf, idx) => {
+          const roleCounters = {};
+          setStaffMembers(data.map((stf) => {
             const role = stf.role || (isManagerMode ? 'Waiter' : 'Manager');
             let prefix = 'RMSM';
-            if (role === 'Waiter') prefix = 'RMSW';
-            else if (role === 'Receptionist') prefix = 'RMSR';
-            else if (role === 'Chef') prefix = 'RMSC';
+            if (role.toLowerCase().includes('waiter')) prefix = 'RMSW';
+            else if (role.toLowerCase().includes('receptionist')) prefix = 'RMSR';
+            else if (role.toLowerCase().includes('chef')) prefix = 'RMSC';
+            else if (role.toLowerCase().includes('admin')) prefix = 'RMSA';
 
-            const numStr = String(idx + 1).padStart(2, '0');
-            const formattedId = (stf.empId && stf.empId.startsWith('RMS')) ? stf.empId : `${prefix}-${numStr}`;
+            roleCounters[prefix] = (roleCounters[prefix] || 0) + 1;
+            const numStr = String(roleCounters[prefix]).padStart(2, '0');
+            const formattedId = (stf.empId && stf.empId.startsWith(prefix)) ? stf.empId : `${prefix}-${numStr}`;
 
             return {
               id: formattedId,
@@ -268,6 +271,16 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
 
       try {
         await api.createStaff(payload);
+        if (role === 'Manager') {
+          localStorage.setItem('flavora_profile_manager', JSON.stringify({
+            name: payload.name,
+            email: payload.email,
+            phone: payload.phone,
+            role: 'Restaurant Manager',
+            empId: formattedEmpId
+          }));
+          window.dispatchEvent(new Event('flavora_profile_updated'));
+        }
         showToast(`New ${role} "${formData.name}" (${formattedEmpId}) saved to Database!`);
         await fetchStaff();
         setIsAddModalOpen(false);

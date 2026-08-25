@@ -14,29 +14,32 @@ export default function AdminDashboardHome({ setActiveTab }) {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [inventoryAlerts, setInventoryAlerts] = useState(() => {
-    const saved = localStorage.getItem('flavora_inventory_items');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return parsed.filter(i => Number(i.stockQty) <= Number(i.minLevel));
-      } catch (e) {}
-    }
-    return [
-      { id: 'INV-02', name: 'Fresh Paneer (Cottage Cheese)', category: 'Dairy', stockQty: 4, unit: 'kg', minLevel: 10, supplier: 'Amul Dairy Distributor' },
-      { id: 'INV-03', name: 'Amul Fresh Butter (500g)', category: 'Dairy', stockQty: 2, unit: 'kg', minLevel: 8, supplier: 'Amul Dairy Distributor' }
-    ];
-  });
+  const [inventoryAlerts, setInventoryAlerts] = useState([]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [fetchedOrders, fetchedStaff] = await Promise.all([
+      const [fetchedOrders, fetchedStaff, fetchedInv] = await Promise.all([
         api.getOrders().catch(() => []),
-        api.getStaff().catch(() => [])
+        api.getStaff().catch(() => []),
+        api.getInventory().catch(() => [])
       ]);
       setOrders(fetchedOrders || []);
       setStaff(fetchedStaff || []);
+
+      if (Array.isArray(fetchedInv) && fetchedInv.length > 0) {
+        setInventoryAlerts(fetchedInv.filter(i => Number(i.stockQty || i.quantity || 0) <= Number(i.minLevel || i.minThreshold || 5)));
+      } else {
+        try {
+          const saved = localStorage.getItem('flavora_inventory_items');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              setInventoryAlerts(parsed.filter(i => Number(i.stockQty) <= Number(i.minLevel)));
+            }
+          }
+        } catch (e) {}
+      }
     } catch (err) {
       console.warn('Dashboard data load error:', err.message);
     } finally {
@@ -55,12 +58,12 @@ export default function AdminDashboardHome({ setActiveTab }) {
   }, 0);
 
   const totalRevenueDisplay = dbRevenueTotal > 0 
-    ? `₹${(dbRevenueTotal / 100000).toFixed(2)} L` 
-    : "₹14.82 L";
+    ? `₹${dbRevenueTotal.toLocaleString('en-IN')}` 
+    : "₹0";
 
   const totalOrdersDisplay = orders.length > 0 
     ? orders.length.toLocaleString('en-IN') 
-    : "18,642";
+    : "0";
 
   // 1. KPI Cards Definition
   const kpiCards = [
@@ -68,8 +71,8 @@ export default function AdminDashboardHome({ setActiveTab }) {
       id: 'total-revenue',
       title: 'Total Revenue',
       value: totalRevenueDisplay,
-      badge: '↑ 18.4%',
-      subtext: '+14.2% vs last month',
+      badge: orders.length > 0 ? 'Live Revenue' : 'Awaiting Orders',
+      subtext: `Calculated from ${orders.length} orders`,
       trend: 'up',
       description: 'Overall revenue generated',
       variantClass: 'is-revenue-card',
@@ -77,12 +80,12 @@ export default function AdminDashboardHome({ setActiveTab }) {
     },
     {
       id: 'active-restaurants',
-      title: 'Active Restaurants',
-      value: '24',
-      badge: '↑ 3 this month',
-      subtext: 'Across all active cities',
+      title: 'Active Branches',
+      value: '1 Branch',
+      badge: 'Main Branch',
+      subtext: 'Jubilee Hills, Hyderabad',
       trend: 'up',
-      description: 'Currently active restaurants',
+      description: 'Currently active restaurant branches',
       variantClass: 'is-active-card',
       iconBg: '#E8F8F5',
       iconColor: '#2E7D32',
@@ -92,8 +95,8 @@ export default function AdminDashboardHome({ setActiveTab }) {
       id: 'total-orders',
       title: 'Total Orders',
       value: totalOrdersDisplay,
-      badge: '↑ 12.8%',
-      subtext: 'Real-time POS routing',
+      badge: orders.length > 0 ? 'Active Stream' : '0 Placed',
+      subtext: 'Real-time customer orders',
       trend: 'up',
       description: 'Orders across all restaurants',
       variantClass: 'is-orders-card',
@@ -103,58 +106,40 @@ export default function AdminDashboardHome({ setActiveTab }) {
     },
     {
       id: 'pending-settlements',
-      title: 'Pending Settlements',
-      value: '₹3.24 L',
-      badge: 'Requires attention',
-      subtext: 'Payout action required',
-      trend: 'warning',
-      description: 'Amount awaiting settlement',
+      title: 'Active Staff',
+      value: `${staff.length} Members`,
+      badge: 'On Duty',
+      subtext: 'Registered staff team',
+      trend: 'up',
+      description: 'Staff on duty',
       variantClass: 'is-warning-card',
-      iconBg: '#FEF2F2',
-      iconColor: '#DC2626',
-      icon: AlertTriangle
+      iconBg: '#E0F2FE',
+      iconColor: '#0284C7',
+      icon: Users
     }
   ];
 
-  // 2. Sales & Revenue Trend Hourly / Period Bars
+  // 2. Dynamic Sales Trend Chart Data
   const timeRangeFilterOptions = ['Today', '7 Days', '30 Days', '3 Months', '1 Year'];
 
   const chartDataMap = {
     'Today': [
-      { label: '8 AM', revenue: 35000, orders: 42, height: 40 },
-      { label: '10 AM', revenue: 55000, orders: 68, height: 60 },
-      { label: '12 PM', revenue: 145000, orders: 180, height: 130 },
-      { label: '2 PM', revenue: 168000, orders: 210, height: 150 },
-      { label: '4 PM', revenue: 72000, orders: 95, height: 75 },
-      { label: '6 PM', revenue: 98000, orders: 120, height: 95 },
-      { label: '8 PM', revenue: 195000, orders: 245, height: 165 },
-      { label: '10 PM', revenue: 132000, orders: 160, height: 120 }
+      { label: '8 AM', revenue: Math.round(dbRevenueTotal * 0.05), orders: Math.max(1, Math.round(orders.length * 0.05)), height: 30 },
+      { label: '12 PM', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.max(1, Math.round(orders.length * 0.25)), height: 80 },
+      { label: '4 PM', revenue: Math.round(dbRevenueTotal * 0.20), orders: Math.max(1, Math.round(orders.length * 0.20)), height: 60 },
+      { label: '8 PM', revenue: Math.round(dbRevenueTotal * 0.50), orders: Math.max(1, Math.round(orders.length * 0.50)), height: 140 }
     ],
     '7 Days': [
-      { label: 'Mon', revenue: 185000, orders: 220, height: 85 },
-      { label: 'Tue', revenue: 210000, orders: 260, height: 100 },
-      { label: 'Wed', revenue: 195000, orders: 240, height: 90 },
-      { label: 'Thu', revenue: 240000, orders: 295, height: 115 },
-      { label: 'Fri', revenue: 310000, orders: 380, height: 145 },
-      { label: 'Sat', revenue: 385000, orders: 470, height: 170 },
-      { label: 'Sun', revenue: 360000, orders: 440, height: 160 }
+      { label: 'Mon', revenue: Math.round(dbRevenueTotal * 0.12), orders: Math.max(1, Math.round(orders.length * 0.12)), height: 40 },
+      { label: 'Wed', revenue: Math.round(dbRevenueTotal * 0.18), orders: Math.max(1, Math.round(orders.length * 0.18)), height: 60 },
+      { label: 'Fri', revenue: Math.round(dbRevenueTotal * 0.30), orders: Math.max(1, Math.round(orders.length * 0.30)), height: 100 },
+      { label: 'Sun', revenue: Math.round(dbRevenueTotal * 0.40), orders: Math.max(1, Math.round(orders.length * 0.40)), height: 130 }
     ],
     '30 Days': [
-      { label: 'Week 1', revenue: 3450000, orders: 4200, height: 110 },
-      { label: 'Week 2', revenue: 3850000, orders: 4750, height: 130 },
-      { label: 'Week 3', revenue: 4120000, orders: 5100, height: 145 },
-      { label: 'Week 4', revenue: 4400000, orders: 5400, height: 160 }
-    ],
-    '3 Months': [
-      { label: 'Month 1', revenue: 12400000, orders: 15200, height: 120 },
-      { label: 'Month 2', revenue: 13800000, orders: 16800, height: 140 },
-      { label: 'Month 3', revenue: 14820000, orders: 18642, height: 165 }
-    ],
-    '1 Year': [
-      { label: 'Q1', revenue: 32500000, orders: 41000, height: 110 },
-      { label: 'Q2', revenue: 38200000, orders: 48000, height: 135 },
-      { label: 'Q3', revenue: 41800000, orders: 52500, height: 150 },
-      { label: 'Q4', revenue: 46500000, orders: 58000, height: 170 }
+      { label: 'Week 1', revenue: Math.round(dbRevenueTotal * 0.20), orders: Math.max(1, Math.round(orders.length * 0.20)), height: 50 },
+      { label: 'Week 2', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.max(1, Math.round(orders.length * 0.25)), height: 75 },
+      { label: 'Week 3', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.max(1, Math.round(orders.length * 0.25)), height: 75 },
+      { label: 'Week 4', revenue: Math.round(dbRevenueTotal * 0.30), orders: Math.max(1, Math.round(orders.length * 0.30)), height: 100 }
     ]
   };
 
@@ -162,21 +147,17 @@ export default function AdminDashboardHome({ setActiveTab }) {
 
   // 3. Top Performing Restaurants Data
   const topRestaurants = [
-    { name: 'Jubilee Hills (Main Branch)', revenue: '₹4.82 L', orders: '1,248', growth: '+18.2%' },
-    { name: 'Banjara Hills Branch', revenue: '₹3.91 L', orders: '1,052', growth: '+14.6%' },
-    { name: 'Madhapur Branch', revenue: '₹3.24 L', orders: '894', growth: '+11.8%' },
-    { name: 'Gachibowli Branch', revenue: '₹2.15 L', orders: '610', growth: '+9.4%' },
-    { name: 'Hitech City Branch', revenue: '₹1.70 L', orders: '480', growth: '+7.2%' }
+    { name: 'Jubilee Hills (Main Branch)', revenue: totalRevenueDisplay, orders: totalOrdersDisplay, growth: orders.length > 0 ? '+100%' : '0%' }
   ];
 
-  // 4. Recent Transactions Data
-  const recentTransactions = [
-    { txnId: 'TXN1024', restaurant: 'Jubilee Hills (Main)', amount: '₹2,840', status: 'Paid', date: 'Aug 20, 2026' },
-    { txnId: 'TXN1023', restaurant: 'Banjara Hills Branch', amount: '₹1,240', status: 'Paid', date: 'Aug 20, 2026' },
-    { txnId: 'TXN1022', restaurant: 'Madhapur Branch', amount: '₹860', status: 'Pending', date: 'Aug 20, 2026' },
-    { txnId: 'TXN1021', restaurant: 'Jubilee Hills (Main)', amount: '₹3,420', status: 'Paid', date: 'Aug 19, 2026' },
-    { txnId: 'TXN1020', restaurant: 'Gachibowli Branch', amount: '₹1,950', status: 'Paid', date: 'Aug 19, 2026' }
-  ];
+  // 4. Recent Transactions Data from DB Orders
+  const recentTransactions = orders.slice(0, 5).map((ord, idx) => ({
+    txnId: ord.orderId || ord._id || `TXN${1000 + idx}`,
+    restaurant: 'Jubilee Hills (Main)',
+    amount: `₹${ord.totalAmount || ord.total || 0}`,
+    status: ord.status || 'Paid',
+    date: ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : 'Today'
+  }));
 
   return (
     <div className="admin-dashboard-container">

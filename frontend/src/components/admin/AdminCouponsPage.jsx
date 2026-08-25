@@ -39,18 +39,23 @@ export default function AdminCouponsPage() {
     api.getCoupons()
       .then((data) => {
         if (data && data.length > 0) {
-          setCoupons(data.map(c => ({
+          const formatted = data.map(c => ({
             id: c._id || c.id,
             code: c.code,
             type: c.discount <= 100 ? 'Percentage' : 'Flat Amount',
             discountVal: c.discount,
             discount: c.discount <= 100 ? `${c.discount}% OFF` : `₹${c.discount} OFF`,
             minOrder: `₹${c.minOrder || 300}`,
-            maxDisc: `₹${c.maxDiscount || 100}`,
+            maxDisc: `₹${c.maxDiscount || 150}`,
             usages: c.usages || 0,
             status: c.isActive !== false ? 'Active' : 'Inactive',
             expiry: c.validTill && c.validTill !== 'Never' ? c.validTill : 'Never'
-          })));
+          }));
+          setCoupons(formatted);
+          try {
+            localStorage.setItem('flavora_coupons', JSON.stringify(formatted));
+            window.dispatchEvent(new Event('flavora_coupons_updated'));
+          } catch (e) {}
         }
       })
       .catch((err) => {

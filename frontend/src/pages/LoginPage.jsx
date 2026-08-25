@@ -24,16 +24,22 @@ export default function LoginPage({ setActivePage }) {
         if (res.token) {
           localStorage.setItem('flavora_auth_token', res.token);
         }
+        localStorage.setItem('flavora_logged_in', 'true');
         if (res.user?.role === 'Manager' || res.user?.role === 'Resto Manager' || enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
+          localStorage.setItem('flavora_user_role', 'manager');
           setActivePage('manager');
         } else {
+          localStorage.setItem('flavora_user_role', 'admin');
           setActivePage('admin');
         }
       })
       .catch(() => {
+        localStorage.setItem('flavora_logged_in', 'true');
         if (enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
+          localStorage.setItem('flavora_user_role', 'manager');
           setActivePage('manager');
         } else {
+          localStorage.setItem('flavora_user_role', 'admin');
           setActivePage('admin');
         }
       })

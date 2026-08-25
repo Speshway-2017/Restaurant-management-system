@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
+import {
   UtensilsCrossed, Plus, Minus, Search, Edit3, MoreVertical, ChevronDown,
   Bookmark, Star, Clock, Flame, CheckCircle2, Trash2, Boxes,
   ArrowLeft, Save, Camera, Sparkles, Image as ImageIcon, UploadCloud, Link2
@@ -97,7 +97,7 @@ export default function AdminMenuPage() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (e) {}
+    } catch (e) { }
     return defaultCombosList;
   });
 
@@ -119,20 +119,25 @@ export default function AdminMenuPage() {
     api.getMenuItems()
       .then((data) => {
         if (data && data.length > 0) {
-          setMenuItems(data.map(item => ({
+          const mapped = data.map(item => ({
             id: item._id || item.id,
             name: item.name,
             category: item.category || 'Main Course',
             price: item.price,
             isVeg: item.isVeg !== undefined ? item.isVeg : true,
-            available: item.isAvailable !== undefined ? item.isAvailable : item.available,
-            bestseller: item.isBestseller !== undefined ? item.isBestseller : item.bestseller,
+            available: item.isAvailable !== undefined ? item.isAvailable : (item.available !== undefined ? item.available : true),
+            bestseller: item.isBestseller !== undefined ? item.isBestseller : (item.bestseller !== undefined ? item.bestseller : false),
             bookmarked: item.bookmarked || false,
             desc: item.desc || '',
             prepTime: item.prepTime || '15–20 mins',
             spice: item.spiceLevel || item.spice || 'Medium',
             img: item.img || '/hero_dish_2.png'
-          })));
+          }));
+          setMenuItems(mapped);
+          try {
+            localStorage.setItem('flavora_dishes', JSON.stringify(mapped));
+            window.dispatchEvent(new Event('flavora_dishes_updated'));
+          } catch (e) { }
         }
       })
       .catch((err) => {
@@ -286,10 +291,10 @@ export default function AdminMenuPage() {
     try {
       localStorage.setItem('flavora_dishes', JSON.stringify(updated));
       window.dispatchEvent(new Event('flavora_dishes_updated'));
-    } catch (e) {}
+    } catch (e) { }
     showToast(newStatus ? 'Dish marked as active' : 'Dish marked as inactive');
 
-    api.updateMenuItem(id, { isAvailable: newStatus }).catch(() => {});
+    api.updateMenuItem(id, { isAvailable: newStatus }).catch(() => { });
   };
 
   const toggleBookmark = (id) => {
@@ -297,8 +302,8 @@ export default function AdminMenuPage() {
     if (!item) return;
     const newStatus = !item.bookmarked;
     setMenuItems(menuItems.map(i => i.id === id ? { ...i, bookmarked: newStatus } : i));
-    
-    api.updateMenuItem(id, { bookmarked: newStatus }).catch(() => {});
+
+    api.updateMenuItem(id, { bookmarked: newStatus }).catch(() => { });
   };
 
   const toggleBestseller = (id) => {
@@ -310,10 +315,10 @@ export default function AdminMenuPage() {
     try {
       localStorage.setItem('flavora_dishes', JSON.stringify(updated));
       window.dispatchEvent(new Event('flavora_dishes_updated'));
-    } catch (e) {}
+    } catch (e) { }
     showToast('Bestseller status updated');
 
-    api.updateMenuItem(id, { isBestseller: newStatus }).catch(() => {});
+    api.updateMenuItem(id, { isBestseller: newStatus }).catch(() => { });
   };
 
   const handleDeleteDish = (id) => {
@@ -323,10 +328,10 @@ export default function AdminMenuPage() {
       try {
         localStorage.setItem('flavora_dishes', JSON.stringify(updated));
         window.dispatchEvent(new Event('flavora_dishes_updated'));
-      } catch (e) {}
+      } catch (e) { }
       showToast('Dish deleted successfully');
 
-      api.deleteMenuItem(id).catch(() => {});
+      api.deleteMenuItem(id).catch(() => { });
     }
   };
 
@@ -486,7 +491,7 @@ export default function AdminMenuPage() {
       localStorage.setItem('flavora_combos', JSON.stringify(updatedCombos));
       window.dispatchEvent(new Event('flavora_combos_updated'));
       window.dispatchEvent(new Event('flavora_dishes_updated'));
-    } catch (err) {}
+    } catch (err) { }
 
     setViewMode('list');
     setActiveSection('combos');
@@ -502,7 +507,7 @@ export default function AdminMenuPage() {
         localStorage.setItem('flavora_combos', JSON.stringify(updatedCombos));
         window.dispatchEvent(new Event('flavora_combos_updated'));
         window.dispatchEvent(new Event('flavora_dishes_updated'));
-      } catch (e) {}
+      } catch (e) { }
       showToast('Combo offer deleted');
     }
   };
@@ -514,7 +519,7 @@ export default function AdminMenuPage() {
       localStorage.setItem('flavora_combos', JSON.stringify(updatedCombos));
       window.dispatchEvent(new Event('flavora_combos_updated'));
       window.dispatchEvent(new Event('flavora_dishes_updated'));
-    } catch (e) {}
+    } catch (e) { }
     showToast('Combo availability status updated');
   };
 
@@ -525,7 +530,7 @@ export default function AdminMenuPage() {
       localStorage.setItem('flavora_combos', JSON.stringify(updatedCombos));
       window.dispatchEvent(new Event('flavora_combos_updated'));
       window.dispatchEvent(new Event('flavora_dishes_updated'));
-    } catch (e) {}
+    } catch (e) { }
     showToast('Combo bookmark updated');
   };
 
@@ -760,7 +765,7 @@ export default function AdminMenuPage() {
     try {
       localStorage.setItem('flavora_dishes', JSON.stringify(updatedList));
       window.dispatchEvent(new Event('flavora_dishes_updated'));
-    } catch (e) {}
+    } catch (e) { }
 
     setViewMode('list');
     setEditingDish(null);
@@ -768,9 +773,9 @@ export default function AdminMenuPage() {
 
   const filteredItems = menuItems.filter(item => {
     const itemCat = (item.category || '').toLowerCase();
-    const matchesCat = selectedCat === 'All' || 
-                       item.category === selectedCat || 
-                       (selectedCat === 'Main Course' && (item.category === 'Biryani' || item.category === 'Curries' || itemCat.includes('biryani') || itemCat.includes('curry')));
+    const matchesCat = selectedCat === 'All' ||
+      item.category === selectedCat ||
+      (selectedCat === 'Main Course' && (item.category === 'Biryani' || item.category === 'Curries' || itemCat.includes('biryani') || itemCat.includes('curry')));
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
     return matchesCat && matchesSearch;
   });
@@ -784,7 +789,7 @@ export default function AdminMenuPage() {
 
   return (
     <div className="admin-subpage-container">
-      
+
       {/* Toast Notification */}
       {toastMessage && (
         <div style={{
@@ -825,15 +830,15 @@ export default function AdminMenuPage() {
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <button className="btn btn-primary" onClick={handleOpenAddPage}>
                 <Plus size={16} />
-                <span>+ Add Menu Item</span>
+                <span>Add Menu Item</span>
               </button>
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={handleOpenCreateComboModal}
                 style={{ backgroundColor: '#E07A3C', borderColor: '#E07A3C' }}
               >
                 <Sparkles size={16} />
-                <span>+ Create Combo</span>
+                <span>Create Combo</span>
               </button>
             </div>
           </div>
@@ -951,15 +956,15 @@ export default function AdminMenuPage() {
                             <span>Bestseller</span>
                           </div>
                         )}
-                        <button 
-                          className="admin-menu-bookmark-btn" 
+                        <button
+                          className="admin-menu-bookmark-btn"
                           onClick={() => toggleBookmark(item.id)}
                           title="Bookmark Dish"
                         >
-                          <Bookmark 
-                            size={15} 
-                            color="#1E4636" 
-                            fill={item.bookmarked ? '#1E4636' : 'none'} 
+                          <Bookmark
+                            size={15}
+                            color="#1E4636"
+                            fill={item.bookmarked ? '#1E4636' : 'none'}
                           />
                         </button>
                       </div>
@@ -1005,8 +1010,8 @@ export default function AdminMenuPage() {
                           </div>
 
                           <div className="admin-menu-card-actions">
-                            <button 
-                              className="admin-menu-edit-btn" 
+                            <button
+                              className="admin-menu-edit-btn"
                               onClick={() => handleOpenEditPage(item)}
                               title="Edit Dish Information"
                             >
@@ -1015,8 +1020,8 @@ export default function AdminMenuPage() {
                             </button>
 
                             <div style={{ position: 'relative' }}>
-                              <button 
-                                className="admin-menu-more-btn" 
+                              <button
+                                className="admin-menu-more-btn"
                                 title="More options"
                                 onClick={() => setActiveMoreMenuId(activeMoreMenuId === item.id ? null : item.id)}
                               >
@@ -1025,9 +1030,9 @@ export default function AdminMenuPage() {
 
                               {activeMoreMenuId === item.id && (
                                 <>
-                                  <div 
-                                    style={{ position: 'fixed', inset: 0, zIndex: 99 }} 
-                                    onClick={() => setActiveMoreMenuId(null)} 
+                                  <div
+                                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                                    onClick={() => setActiveMoreMenuId(null)}
                                   />
                                   <div className="admin-card-more-dropdown">
                                     <button className="dropdown-opt" onClick={() => { toggleAvailability(item.id); setActiveMoreMenuId(null); }}>
@@ -1100,10 +1105,10 @@ export default function AdminMenuPage() {
                       <div key={combo.id} className="admin-menu-card-v2">
                         {/* Image Banner */}
                         <div className="admin-menu-card-img-wrapper">
-                          <img 
-                            src={combo.img || '/hero_dish_2.png'} 
-                            alt={combo.title || combo.name} 
-                            className="admin-menu-card-img" 
+                          <img
+                            src={combo.img || '/hero_dish_2.png'}
+                            alt={combo.title || combo.name}
+                            className="admin-menu-card-img"
                             onError={(e) => { e.target.onerror = null; e.target.src = '/hero_dish_2.png'; }}
                           />
                           <div className="admin-menu-bestseller-badge" style={{ backgroundColor: '#E07A3C', color: '#FFFFFF' }}>
@@ -1111,15 +1116,15 @@ export default function AdminMenuPage() {
                             <span>{combo.tag || 'CHEF COMBO'}</span>
                           </div>
 
-                          <button 
-                            className="admin-menu-bookmark-btn" 
+                          <button
+                            className="admin-menu-bookmark-btn"
                             onClick={() => toggleComboBookmark(combo.id)}
                             title="Bookmark Combo"
                           >
-                            <Bookmark 
-                              size={15} 
-                              color="#1E4636" 
-                              fill={combo.bookmarked ? '#1E4636' : 'none'} 
+                            <Bookmark
+                              size={15}
+                              color="#1E4636"
+                              fill={combo.bookmarked ? '#1E4636' : 'none'}
                             />
                           </button>
                         </div>
@@ -1177,8 +1182,8 @@ export default function AdminMenuPage() {
                             </div>
 
                             <div className="admin-menu-card-actions">
-                              <button 
-                                className="admin-menu-edit-btn" 
+                              <button
+                                className="admin-menu-edit-btn"
                                 onClick={() => handleOpenEditComboModal(combo)}
                                 title="Edit Combo Offer"
                               >
@@ -1187,8 +1192,8 @@ export default function AdminMenuPage() {
                               </button>
 
                               <div style={{ position: 'relative' }}>
-                                <button 
-                                  className="admin-menu-more-btn" 
+                                <button
+                                  className="admin-menu-more-btn"
                                   title="More options"
                                   onClick={() => setActiveMoreMenuId(activeMoreMenuId === `combo-${combo.id}` ? null : `combo-${combo.id}`)}
                                 >
@@ -1197,9 +1202,9 @@ export default function AdminMenuPage() {
 
                                 {activeMoreMenuId === `combo-${combo.id}` && (
                                   <>
-                                    <div 
-                                      style={{ position: 'fixed', inset: 0, zIndex: 99 }} 
-                                      onClick={() => setActiveMoreMenuId(null)} 
+                                    <div
+                                      style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                                      onClick={() => setActiveMoreMenuId(null)}
                                     />
                                     <div className="admin-card-more-dropdown">
                                       <button className="dropdown-opt" onClick={() => { toggleComboAvailability(combo.id); setActiveMoreMenuId(null); }}>
@@ -1264,7 +1269,7 @@ export default function AdminMenuPage() {
           {/* Combo Form Content Grid (2 Columns: Form Fields 7 cols | Live Card Preview & Pricing 5 cols) */}
           <form onSubmit={handleSaveCombo}>
             <div className="admin-grid-12" style={{ gap: '1.5rem' }}>
-              
+
               {/* Left Column (7 cols): Combo Details & Included Dishes */}
               <div className="admin-card col-span-7" style={{ padding: '1.75rem' }}>
                 <div className="admin-card-header mb-4" style={{ borderBottom: '1px solid #F0E8DA', paddingBottom: '0.75rem' }}>
@@ -1369,7 +1374,7 @@ export default function AdminMenuPage() {
                                     setComboFormData(prev => ({ ...prev, img: res.url }));
                                     showToast('Photo saved to Cloudinary CDN!');
                                   }
-                                } catch (err) {} finally {
+                                } catch (err) { } finally {
                                   setIsUploadingImage(false);
                                 }
                               }
@@ -1379,7 +1384,7 @@ export default function AdminMenuPage() {
                         }}
                         style={{ display: 'none' }}
                       />
-                      <div 
+                      <div
                         className={`admin-image-upload-dropzone ${isDraggingCombo ? 'is-dragging' : ''}`}
                         onClick={() => fileInputRef.current?.click()}
                         onDragOver={(e) => {
@@ -1399,12 +1404,12 @@ export default function AdminMenuPage() {
                           const file = e.dataTransfer.files?.[0];
                           if (file) handleComboFileDrop(file);
                         }}
-                        style={{ 
-                          background: isDraggingCombo ? '#FFF7ED' : '#FFFFFF', 
+                        style={{
+                          background: isDraggingCombo ? '#FFF7ED' : '#FFFFFF',
                           borderColor: isDraggingCombo ? '#E07A3C' : 'inherit',
                           borderStyle: 'dashed',
                           borderWidth: '2px',
-                          cursor: 'pointer', 
+                          cursor: 'pointer',
                           padding: '1.25rem',
                           transition: 'all 0.2s ease',
                           transform: isDraggingCombo ? 'scale(1.01)' : 'scale(1)'
@@ -1569,7 +1574,7 @@ export default function AdminMenuPage() {
 
               {/* Right Column (5 cols): Live Combo Card Preview & Pricing Summary */}
               <div className="admin-card col-span-5" style={{ padding: '1.75rem', height: 'fit-content' }}>
-                
+
                 {/* Section Title */}
                 <div className="admin-card-header mb-4" style={{ borderBottom: '1px solid #F0E8DA', paddingBottom: '0.75rem' }}>
                   <h2 className="admin-card-title" style={{ fontSize: '1.2rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#1E4636' }}>
@@ -1592,10 +1597,10 @@ export default function AdminMenuPage() {
                       <div className="admin-menu-card-v2" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}>
                         {/* Image Banner */}
                         <div className="admin-menu-card-img-wrapper">
-                          <img 
-                            src={comboFormData.img || '/hero_dish_2.png'} 
-                            alt={comboFormData.title || 'Combo Preview'} 
-                            className="admin-menu-card-img" 
+                          <img
+                            src={comboFormData.img || '/hero_dish_2.png'}
+                            alt={comboFormData.title || 'Combo Preview'}
+                            className="admin-menu-card-img"
                             onError={(e) => { e.target.onerror = null; e.target.src = '/hero_dish_2.png'; }}
                           />
                           <div className="admin-menu-bestseller-badge" style={{ backgroundColor: '#E07A3C', color: '#FFFFFF' }}>
@@ -1681,7 +1686,7 @@ export default function AdminMenuPage() {
                   const autoOriginalPrice = comboFormData.selectedItems.reduce((sum, i) => sum + (Number(i.price || 0) * Number(i.qty || 1)), 0);
                   const sellingPriceNum = Number(comboFormData.price || 0);
                   const savingsNum = Math.max(0, autoOriginalPrice - sellingPriceNum);
-                  
+
                   return (
                     <div>
                       <div className="admin-form-group mb-3">
@@ -1718,18 +1723,18 @@ export default function AdminMenuPage() {
                       )}
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.25rem' }}>
-                        <button 
-                          type="submit" 
-                          className="btn btn-primary" 
+                        <button
+                          type="submit"
+                          className="btn btn-primary"
                           style={{ backgroundColor: '#E07A3C', borderColor: '#E07A3C', color: '#FFFFFF', fontWeight: 800, padding: '0.85rem', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
                         >
                           <Sparkles size={18} />
                           <span>{editingCombo ? 'Update Combo Offer' : 'Save & Publish Combo'}</span>
                         </button>
-                        
-                        <button 
-                          type="button" 
-                          className="btn btn-outline" 
+
+                        <button
+                          type="button"
+                          className="btn btn-outline"
                           onClick={() => { setViewMode('list'); setActiveSection('combos'); }}
                           style={{ padding: '0.75rem', fontWeight: 700 }}
                         >
@@ -1774,7 +1779,7 @@ export default function AdminMenuPage() {
           {/* Form Content Grid */}
           <form onSubmit={handleSaveDishForm}>
             <div className="admin-grid-12" style={{ gap: '1.5rem' }}>
-              
+
               {/* Left Column: Dish Information Form Fields & Upload Photo */}
               <div className="admin-card col-span-7" style={{ padding: '1.75rem' }}>
                 <div className="admin-card-header mb-4" style={{ borderBottom: '1px solid #F0E8DA', paddingBottom: '0.75rem' }}>
@@ -1916,7 +1921,7 @@ export default function AdminMenuPage() {
                         onChange={handleImageFileUpload}
                         style={{ display: 'none' }}
                       />
-                      <div 
+                      <div
                         className={`admin-image-upload-dropzone mb-2 ${isDraggingDish ? 'is-dragging' : ''}`}
                         onClick={() => fileInputRef.current?.click()}
                         onDragOver={(e) => {
@@ -1936,8 +1941,8 @@ export default function AdminMenuPage() {
                           const file = e.dataTransfer.files?.[0];
                           if (file) handleDishFileDrop(file);
                         }}
-                        style={{ 
-                          background: isDraggingDish ? '#FFF7ED' : '#FFFFFF', 
+                        style={{
+                          background: isDraggingDish ? '#FFF7ED' : '#FFFFFF',
                           borderColor: isDraggingDish ? '#E07A3C' : 'inherit',
                           borderStyle: 'dashed',
                           borderWidth: '2px',
@@ -2023,15 +2028,15 @@ export default function AdminMenuPage() {
                 {/* Real-time Card Preview */}
                 <div className="mb-4">
                   <div className="admin-menu-card-v2" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.08)', borderRadius: '14px' }}>
-                    
+
                     {/* Image Banner */}
                     <div className="admin-menu-card-img-wrapper">
-                      <img 
-                        src={dishFormData.img || '/hero_dish_2.png'} 
-                        alt={dishFormData.name || 'Dish Preview'} 
-                        className="admin-menu-card-img" 
+                      <img
+                        src={dishFormData.img || '/hero_dish_2.png'}
+                        alt={dishFormData.name || 'Dish Preview'}
+                        className="admin-menu-card-img"
                       />
-                      
+
                       {dishFormData.bestseller && (
                         <div className="admin-menu-bestseller-badge">
                           <Star size={12} fill="#F2C14E" color="#F2C14E" />

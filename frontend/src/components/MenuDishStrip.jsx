@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { resolveDishImageUrl } from '../utils/menuRegistry';
 
 export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
   const containerRef = useRef(null);
@@ -21,15 +22,10 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
   // Single Source of Truth menu dishes
   const validDishes = (menuItems || []).filter(item => item && item.name);
 
-  if (validDishes.length === 0) return null;
-
-  // Highlight the exact middle dish
-  const middleIndex = Math.floor(validDishes.length / 2);
-
   // Smooth continuous auto-scroll loop
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || validDishes.length === 0) return;
 
     let animationFrameId;
     const scrollSpeed = 0.7; // Smooth slow marquee speed
@@ -51,6 +47,11 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
   }, [isPaused, validDishes]);
+
+  if (validDishes.length === 0) return null;
+
+  // Highlight the exact middle dish
+  const middleIndex = Math.floor(validDishes.length / 2);
 
   // Apply momentum decay physics after user pushes/flings dishes fast
   const startMomentum = () => {
@@ -173,7 +174,7 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
         {validDishes.map((item, idx) => {
           const isMiddle = idx === middleIndex;
           const isHovered = hoveredIdx === idx;
-          const dishImg = item.img || item.image || '/hero_dish_2.png';
+          const dishImg = resolveDishImageUrl(item);
           const dishName = item.name;
 
           return (
@@ -233,7 +234,11 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
 
               <img
                 src={dishImg}
-                alt={dishName}
+                alt=""
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = '/hero_dish_2.png';
+                }}
                 style={{
                   width: '100%',
                   height: '100%',

@@ -8,9 +8,21 @@ export default function OffersPage({ onOpenDemoModal }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const getCartStorageKey = () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tableParam = urlParams.get('table') || localStorage.getItem('flavora_scanned_table') || '';
+      if (tableParam) {
+        const clean = String(tableParam).toUpperCase().replace(/[^A-Z0-9-]/g, '');
+        return `flavora_cart_${clean}`;
+      }
+    } catch (e) {}
+    return 'flavora_cart_GENERAL';
+  };
+
   const [cart, setCart] = useState(() => {
     try {
-      const saved = localStorage.getItem('flavora_active_cart');
+      const saved = localStorage.getItem(getCartStorageKey());
       return saved ? JSON.parse(saved) : {};
     } catch (e) {
       return {};
@@ -20,7 +32,12 @@ export default function OffersPage({ onOpenDemoModal }) {
   const updateCartState = (newCart) => {
     setCart(newCart);
     try {
-      localStorage.setItem('flavora_active_cart', JSON.stringify(newCart));
+      const key = getCartStorageKey();
+      if (Object.keys(newCart).length === 0) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, JSON.stringify(newCart));
+      }
       window.dispatchEvent(new Event('flavora_cart_updated'));
     } catch (e) {}
   };
@@ -28,10 +45,11 @@ export default function OffersPage({ onOpenDemoModal }) {
   useEffect(() => {
     const handleCartSync = () => {
       try {
-        const saved = localStorage.getItem('flavora_active_cart');
+        const saved = localStorage.getItem(getCartStorageKey());
         setCart(saved ? JSON.parse(saved) : {});
       } catch (e) {}
     };
+    handleCartSync();
     window.addEventListener('flavora_cart_updated', handleCartSync);
     return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
   }, []);
@@ -143,6 +161,19 @@ export default function OffersPage({ onOpenDemoModal }) {
       isVeg: true
     }
   ];
+
+  const filteredDeals = deals.filter(deal => {
+    if (vegOnly && !deal.isVeg) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchTitle = (deal.title || '').toLowerCase().includes(q);
+      const matchDesc = (deal.desc || '').toLowerCase().includes(q);
+      const matchCategory = (deal.category || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchDesc && !matchCategory) return false;
+    }
+    if (selectedCategory !== 'all' && deal.category !== selectedCategory) return false;
+    return true;
+  });
 
   const totalCartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
   const totalCartPrice = calculateCartTotal(cart, deals);

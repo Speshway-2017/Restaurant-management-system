@@ -1,44 +1,54 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  LayoutDashboard, UtensilsCrossed, Users, Ticket, BarChart3, Receipt,
+  LayoutDashboard, UtensilsCrossed, ShoppingBag, Users, Ticket, BarChart3, Receipt,
   Settings, Bell, ChevronDown, LogOut, Menu, X, ArrowLeft, Building2, UserCheck,
   ChevronRight, Table2
 } from 'lucide-react';
 import PowerOffSlide from '../PowerOffSlide';
 
-// Import Views
+// Dedicated Manager Portal Page Views
 import ManagerDashboardHome from './ManagerDashboardHome';
-import AdminOrdersPage from '../admin/AdminOrdersPage';
-import AdminStaffPage from '../admin/AdminStaffPage';
-import AdminMenuPage from '../admin/AdminMenuPage';
-import AdminCouponsPage from '../admin/AdminCouponsPage';
-import AdminAnalyticsPage from '../admin/AdminAnalyticsPage';
-import AdminProfilePage from '../admin/AdminProfilePage';
-import AdminTablesPage from './ManagerTablesPage';
-import AdminSettingsPage from '../admin/AdminSettingsPage';
+import ManagerOrdersPage from './ManagerOrdersPage';
+import ManagerTablesPage from './ManagerTablesPage';
+import ManagerStaffPage from './ManagerStaffPage';
+import ManagerMenuPage from './ManagerMenuPage';
+import ManagerCouponsPage from './ManagerCouponsPage';
+import ManagerAnalyticsPage from './ManagerAnalyticsPage';
+import ManagerSettingsPage from './ManagerSettingsPage';
+import ManagerProfilePage from './ManagerProfilePage';
+import { api } from '../../services/api';
 
 const MANAGER_PATH_TO_TAB = {
   '/manager': 'manager-dashboard',
   '/manager/': 'manager-dashboard',
   '/manager/dashboard': 'manager-dashboard',
-  '/manager/orders': 'orders',
-  '/manager/tables': 'tables',
-  '/manager/staff': 'staff',
-  '/manager/menu': 'menu',
-  '/manager/coupons': 'coupons',
-  '/manager/analytics': 'analytics',
-  '/manager/settings': 'settings',
-  '/manager/profile': 'profile'
+  '/manager/orders': 'manager-orders',
+  '/manager/tables': 'manager-tables',
+  '/manager/staff': 'manager-staff',
+  '/manager/menu': 'manager-menu',
+  '/manager/coupons': 'manager-coupons',
+  '/manager/analytics': 'manager-reports',
+  '/manager/reports': 'manager-reports',
+  '/manager/settings': 'manager-settings',
+  '/manager/profile': 'manager-profile'
 };
 
 const MANAGER_TAB_TO_PATH = {
   'manager-dashboard': '/manager/dashboard',
+  'manager-orders': '/manager/orders',
+  'manager-tables': '/manager/tables',
+  'manager-staff': '/manager/staff',
+  'manager-menu': '/manager/menu',
+  'manager-coupons': '/manager/coupons',
+  'manager-reports': '/manager/reports',
+  'manager-settings': '/manager/settings',
+  'manager-profile': '/manager/profile',
   'orders': '/manager/orders',
   'tables': '/manager/tables',
   'staff': '/manager/staff',
   'menu': '/manager/menu',
   'coupons': '/manager/coupons',
-  'analytics': '/manager/analytics',
+  'analytics': '/manager/reports',
   'settings': '/manager/settings',
   'profile': '/manager/profile'
 };
@@ -94,6 +104,62 @@ export default function ManagerLayout({ setActivePage }) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+  const [managerProfile, setManagerProfile] = useState(() => {
+    const saved = localStorage.getItem('flavora_profile_manager');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+  });
+
+  useEffect(() => {
+    const fetchManagerFromDb = () => {
+      api.getStaff()
+        .then((staffList) => {
+          if (Array.isArray(staffList) && staffList.length > 0) {
+            const managerInDb = staffList.find(s => s.role === 'Manager' || s.role === 'Resto Manager' || (s.empId && s.empId.startsWith('RMSM')));
+            if (managerInDb && managerInDb.name) {
+              const fetchedProfile = {
+                name: managerInDb.name,
+                email: managerInDb.email || 'manager@flavorakitchen.in',
+                phone: managerInDb.phone || '9876512345',
+                role: 'Restaurant Manager',
+                empId: managerInDb.empId || 'RMSM-01'
+              };
+              setManagerProfile(fetchedProfile);
+              localStorage.setItem('flavora_profile_manager', JSON.stringify(fetchedProfile));
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not fetch manager profile from DB:', err.message);
+        });
+    };
+
+    fetchManagerFromDb();
+
+    const updateManagerProfile = () => {
+      const saved = localStorage.getItem('flavora_profile_manager');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.name) setManagerProfile(parsed);
+        } catch (e) {}
+      } else {
+        fetchManagerFromDb();
+      }
+    };
+
+    window.addEventListener('flavora_profile_updated', updateManagerProfile);
+    return () => window.removeEventListener('flavora_profile_updated', updateManagerProfile);
+  }, []);
+
+  const getInitials = (nameStr) => {
+    if (!nameStr) return 'RM';
+    const parts = nameStr.trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return nameStr.slice(0, 2).toUpperCase();
+  };
+
   const branches = [
     'Jubilee Hills (Main Branch)',
     'Banjara Hills Branch',
@@ -112,12 +178,12 @@ export default function ManagerLayout({ setActivePage }) {
 
   const navigationItems = [
     { id: 'manager-dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'manager-orders', label: 'Order Management', icon: UtensilsCrossed },
+    { id: 'manager-orders', label: 'Order Management', icon: ShoppingBag },
     { id: 'manager-tables', label: 'Table Management', icon: Table2 },
     { id: 'manager-staff', label: 'Staff Management', icon: Users },
     { id: 'manager-menu', label: 'Menu Management', icon: UtensilsCrossed },
     { id: 'manager-coupons', label: 'Coupons & Discounts', icon: Ticket },
-    { id: 'manager-reports', label: 'Shift Reports', icon: BarChart3 },
+    { id: 'manager-reports', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'manager-settings', label: 'Branch Settings', icon: Settings },
   ];
 
@@ -126,21 +192,24 @@ export default function ManagerLayout({ setActivePage }) {
       case 'manager-dashboard':
         return <ManagerDashboardHome setActiveTab={setActiveTab} />;
       case 'manager-orders':
-        return <AdminOrdersPage />;
+        return <ManagerOrdersPage />;
       case 'manager-tables':
-        return <AdminTablesPage />;
+      case 'tables':
+        return <ManagerTablesPage />;
       case 'manager-staff':
-        return <AdminStaffPage subTab="staff-shifts" />;
+        return <ManagerStaffPage />;
       case 'manager-menu':
-        return <AdminMenuPage />;
+        return <ManagerMenuPage />;
       case 'manager-coupons':
-        return <AdminCouponsPage />;
+        return <ManagerCouponsPage />;
       case 'manager-reports':
-        return <AdminAnalyticsPage />;
+        return <ManagerAnalyticsPage />;
       case 'manager-settings':
-        return <AdminSettingsPage isManagerMode={true} />;
+      case 'settings':
+        return <ManagerSettingsPage />;
       case 'manager-profile':
-        return <AdminProfilePage setActivePage={setActivePage} />;
+      case 'profile':
+        return <ManagerProfilePage />;
       default:
         return <ManagerDashboardHome setActiveTab={setActiveTab} />;
     }
@@ -275,11 +344,11 @@ export default function ManagerLayout({ setActivePage }) {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
               >
                 <div className="admin-user-avatar">
-                  M
+                  {getInitials(managerProfile.name)}
                 </div>
                 <div className="admin-user-info-text">
-                  <div className="admin-user-name">Manager Rahul</div>
-                  <div className="admin-user-role">RMSM-01 • Manager</div>
+                  <div className="admin-user-name">{managerProfile.name}</div>
+                  <div className="admin-user-role">{managerProfile.empId || 'RMSM-01'} • Manager</div>
                 </div>
                 <ChevronDown size={14} color="#5C5C5C" />
               </div>
@@ -288,8 +357,8 @@ export default function ManagerLayout({ setActivePage }) {
               {userMenuOpen && (
                 <div className="admin-profile-dropdown-menu">
                   <div className="admin-dropdown-user-info">
-                    <div className="user-info-name">Rahul Verma</div>
-                    <div className="user-info-email">manager@flavorakitchen.in</div>
+                    <div className="user-info-name">{managerProfile.name}</div>
+                    <div className="user-info-email">{managerProfile.email}</div>
                   </div>
                   <button
                     className="admin-dropdown-item"
@@ -303,11 +372,11 @@ export default function ManagerLayout({ setActivePage }) {
                   <button
                     className="admin-dropdown-item"
                     onClick={() => {
-                      setActivePage('admin');
+                      setActiveTab('manager-settings');
                       setUserMenuOpen(false);
                     }}
                   >
-                    <span>Switch to Admin View</span>
+                    <span>Settings</span>
                   </button>
                   <div className="admin-dropdown-divider" />
                   <div style={{ padding: '0.5rem 0.75rem' }}>
@@ -317,7 +386,11 @@ export default function ManagerLayout({ setActivePage }) {
                       onPowerOff={() => {
                         setUserMenuOpen(false);
                         localStorage.removeItem('flavora_auth_token');
-                        setActivePage('login');
+                        localStorage.removeItem('flavora_logged_in');
+                        localStorage.removeItem('flavora_user_role');
+                        localStorage.setItem('flavora_active_page', 'home');
+                        window.history.pushState({}, '', '/');
+                        setActivePage('home');
                       }}
                     />
                   </div>

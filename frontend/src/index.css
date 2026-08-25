@@ -66,11 +66,12 @@
 
 html {
   scroll-behavior: smooth;
-  font-size: 16px;
+  font-size: 15px !important;
+  overflow-x: hidden !important;
+  max-width: 100vw !important;
+  overscroll-behavior-x: none !important;
   -ms-overflow-style: none;
-  /* IE and Edge */
   scrollbar-width: none;
-  /* Firefox */
 }
 
 body {
@@ -657,9 +658,12 @@ h6 {
 
 /* Main Navbar */
 .navbar-header {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 1000;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 99999;
   background-color: #FFFFFF;
   border-bottom: 1px solid var(--color-neutral-200);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
@@ -3509,7 +3513,7 @@ h6 {
   border: 1px solid transparent;
   color: #A3C2B3;
   font-family: var(--font-body), sans-serif;
-  font-size: 0.82rem;
+  font-size: 0.90rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -3618,7 +3622,9 @@ h6 {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-width: 0;
   width: calc(100% - 225px);
+  box-sizing: border-box;
   background-color: #FFFFFF !important;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -3961,10 +3967,9 @@ h6 {
 /* 3. DASHBOARD VIEWPORT CONTAINER */
 .admin-content-viewport {
   padding: 1.25rem 1.75rem;
-  max-width: 1440px;
   width: 100%;
-  margin: 0 auto;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .admin-dashboard-header {
@@ -3978,16 +3983,16 @@ h6 {
 
 .admin-page-title {
   font-family: var(--font-heading), 'Poppins', sans-serif;
-  font-size: 1.85rem;
+  font-size: 1.45rem;
   font-weight: 800;
   color: #1E4636;
   line-height: 1.2;
 }
 
 .admin-page-subtitle {
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   color: #5C5C5C;
-  margin-top: 0.25rem;
+  margin-top: 0.2rem;
 }
 
 .admin-header-actions {
@@ -6283,6 +6288,7 @@ body,
   0% {
     transform: translateX(0%);
   }
+
   100% {
     transform: translateX(calc(-50% - (var(--slider-gap, 16px) / 2)));
   }
@@ -6325,6 +6331,7 @@ body,
     opacity: 0;
     transform: translateY(24px) scale(0.92);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -6336,6 +6343,7 @@ body,
     opacity: 0;
     transform: translateX(-16px);
   }
+
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -6347,6 +6355,7 @@ body,
     opacity: 1;
     transform: translateX(0);
   }
+
   100% {
     opacity: 0;
     transform: translateX(20px);
@@ -6356,7 +6365,8 @@ body,
 /* ==========================================================================
    PURE WHITE BACKGROUND FOR ALL PUBLIC LANDING PAGES
    ========================================================================== */
-body, html {
+body,
+html {
   background-color: #FFFFFF !important;
 }
 
@@ -6506,8 +6516,8 @@ body, html {
 }
 
 .trendy-table-card.is-status-cleaning {
-  background: linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%);
-  border-color: #E2E8F0;
+  background: linear-gradient(145deg, #FFFFFF 0%, #FEFCE8 100%);
+  border-color: #FEF08A;
 }
 
 .trendy-table-card:hover {
@@ -6586,9 +6596,9 @@ body, html {
 }
 
 .trendy-status-pill.is-cleaning {
-  background: #E2E8F0;
-  color: #334155;
-  border-color: #CBD5E1;
+  background: #FEF9C3;
+  color: #854D0E;
+  border-color: #FDE047;
 }
 
 /* Card Body & Meta Chips */
@@ -6860,6 +6870,7 @@ html:has(.admin-modal-backdrop),
     opacity: 0;
     transform: scale(0.94) translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -7038,14 +7049,17 @@ html:has(.admin-modal-backdrop),
    FIXED STICKY TOP NAVBAR & DASHBOARD APP-SHELL SYSTEM
    ========================================================================== */
 .navbar-header {
-  position: sticky !important;
+  position: fixed !important;
   top: 0 !important;
-  z-index: 1000 !important;
-  background-color: rgba(255, 255, 255, 0.95) !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  z-index: 99999 !important;
+  background-color: rgba(255, 255, 255, 0.98) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
   border-bottom: 1px solid #EAE3D2 !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
   transition: all 0.3s ease !important;
 }
 
@@ -7108,15 +7122,37 @@ html:has(.admin-modal-backdrop),
   margin-bottom: 1.5rem !important;
 }
 
-.col-span-12 { grid-column: span 12 / span 12 !important; }
-.col-span-8  { grid-column: span 8 / span 12 !important; }
-.col-span-7  { grid-column: span 7 / span 12 !important; }
-.col-span-6  { grid-column: span 6 / span 12 !important; }
-.col-span-5  { grid-column: span 5 / span 12 !important; }
-.col-span-4  { grid-column: span 4 / span 12 !important; }
+.col-span-12 {
+  grid-column: span 12 / span 12 !important;
+}
+
+.col-span-8 {
+  grid-column: span 8 / span 12 !important;
+}
+
+.col-span-7 {
+  grid-column: span 7 / span 12 !important;
+}
+
+.col-span-6 {
+  grid-column: span 6 / span 12 !important;
+}
+
+.col-span-5 {
+  grid-column: span 5 / span 12 !important;
+}
+
+.col-span-4 {
+  grid-column: span 4 / span 12 !important;
+}
 
 @media (max-width: 991px) {
-  .col-span-8, .col-span-7, .col-span-6, .col-span-5, .col-span-4 {
+
+  .col-span-8,
+  .col-span-7,
+  .col-span-6,
+  .col-span-5,
+  .col-span-4 {
     grid-column: span 12 / span 12 !important;
   }
 }
@@ -7711,5 +7747,440 @@ html:has(.admin-modal-backdrop),
 
   .admin-kpi-grid {
     grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+/* ==========================================================================
+   PUBLIC CUSTOMER QR ORDERING MODAL RESPONSIVE STYLES (SCOPED ONLY)
+   ========================================================================== */
+.customer-qr-checkout-backdrop {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 12px !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.customer-qr-checkout-modal {
+  width: calc(100% - 24px) !important;
+  max-width: 440px !important;
+  max-height: calc(100dvh - 24px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 18px !important;
+  overflow: hidden !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35) !important;
+  margin: auto !important;
+  box-sizing: border-box !important;
+  background-color: #FFFFFF !important;
+}
+
+.customer-qr-modal-header {
+  background-color: #0F2A1D !important;
+  color: #FFFFFF !important;
+  flex-shrink: 0 !important;
+  padding: 1rem 1.25rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+}
+
+.customer-qr-modal-title {
+  color: #FFFFFF !important;
+  font-size: 1.05rem !important;
+  margin: 0 !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+  word-break: break-word !important;
+}
+
+.customer-qr-modal-close {
+  color: #FFFFFF !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 1.5rem !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  border-radius: 50% !important;
+}
+
+.customer-qr-modal-close:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.customer-qr-modal-form {
+  padding: 1.25rem !important;
+  overflow-y: auto !important;
+  flex-grow: 1 !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box !important;
+}
+
+.customer-qr-dishes-box {
+  background-color: #FAF6EE !important;
+  padding: 0.95rem 1rem !important;
+  border-radius: 14px !important;
+  margin-bottom: 1.25rem !important;
+  border: 1.5px solid #EAE3D2 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03) !important;
+  box-sizing: border-box !important;
+}
+
+.customer-qr-dishes-header {
+  font-size: 0.8rem !important;
+  font-weight: 800 !important;
+  color: #0F2A1D !important;
+  margin-bottom: 0.75rem !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 0.4rem !important;
+}
+
+.customer-qr-dishes-title {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  word-break: break-word !important;
+}
+
+.customer-qr-dishes-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  flex-shrink: 0 !important;
+}
+
+.customer-qr-dish-count-badge {
+  color: #166534 !important;
+  background-color: #EBF4F0 !important;
+  padding: 0.15rem 0.55rem !important;
+  border-radius: 9999px !important;
+  font-size: 0.74rem !important;
+  font-weight: 800 !important;
+}
+
+.customer-qr-add-items-link {
+  background: none !important;
+  border: none !important;
+  color: #E07A3C !important;
+  font-size: 0.76rem !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.2rem !important;
+  text-decoration: underline !important;
+  padding: 2px !important;
+}
+
+.customer-qr-cart-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.75rem !important;
+  font-size: 0.86rem !important;
+  color: #334155 !important;
+  margin-bottom: 0.6rem !important;
+  border-bottom: 1px dashed #E2D7C5 !important;
+  padding-bottom: 0.5rem !important;
+  box-sizing: border-box !important;
+}
+
+.customer-qr-cart-info {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.customer-qr-cart-name {
+  font-weight: 800 !important;
+  color: #0F2A1D !important;
+  font-size: 0.88rem !important;
+  line-height: 1.25 !important;
+  word-break: break-word !important;
+}
+
+.customer-qr-cart-unit-price {
+  font-size: 0.74rem !important;
+  color: #64748B !important;
+  font-weight: 600 !important;
+  margin-top: 0.15rem !important;
+}
+
+.customer-qr-cart-controls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.65rem !important;
+  flex-shrink: 0 !important;
+}
+
+.customer-qr-qty-picker {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  background-color: #1E4636 !important;
+  color: #FFFFFF !important;
+  padding: 0.2rem 0.5rem !important;
+  border-radius: 8px !important;
+  min-height: 38px !important;
+  box-sizing: border-box !important;
+}
+
+.customer-qr-qty-btn {
+  background: none !important;
+  border: none !important;
+  color: #FFFFFF !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 4px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+}
+
+.customer-qr-qty-val {
+  font-weight: 800 !important;
+  font-size: 0.88rem !important;
+  min-width: 18px !important;
+  text-align: center !important;
+}
+
+.customer-qr-row-price {
+  font-weight: 800 !important;
+  color: #1E4636 !important;
+  min-width: 52px !important;
+  text-align: right !important;
+  font-size: 0.92rem !important;
+}
+
+.customer-qr-total-row {
+  padding-top: 0.65rem !important;
+  margin-top: 0.5rem !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-weight: 900 !important;
+  font-size: 1.05rem !important;
+  color: #E07A3C !important;
+  border-top: 1.5px solid #EAE3D2 !important;
+}
+
+.customer-qr-total-label {
+  color: #0F2A1D !important;
+}
+
+.customer-qr-footer-actions {
+  display: flex !important;
+  gap: 0.65rem !important;
+  align-items: center !important;
+  margin-top: 1.25rem !important;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+}
+
+.customer-qr-btn-secondary {
+  flex: 1 1 auto !important;
+  border-color: #1E4636 !important;
+  color: #1E4636 !important;
+  font-weight: 800 !important;
+  font-size: 0.82rem !important;
+  padding: 0.65rem 0.85rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.35rem !important;
+  border-radius: 10px !important;
+  white-space: nowrap !important;
+}
+
+.customer-qr-btn-primary {
+  flex: 1.5 1 auto !important;
+  background-color: #FF8A00 !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  font-weight: 800 !important;
+  font-size: 0.84rem !important;
+  padding: 0.65rem 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 14px rgba(255, 138, 0, 0.35) !important;
+  white-space: nowrap !important;
+}
+
+/* Mobile responsive breakpoints for Customer QR Checkout Modal */
+@media (max-width: 480px) {
+  .customer-qr-checkout-modal {
+    width: calc(100% - 16px) !important;
+    max-width: 100% !important;
+    margin: 8px auto !important;
+    border-radius: 14px !important;
+  }
+
+  .customer-qr-modal-form {
+    padding: 1rem !important;
+  }
+
+  .customer-qr-footer-actions {
+    flex-direction: column-reverse !important;
+    gap: 0.6rem !important;
+  }
+
+  .customer-qr-btn-secondary,
+  .customer-qr-btn-primary {
+    width: 100% !important;
+    flex: none !important;
+    padding: 0.75rem 1rem !important;
+    font-size: 0.88rem !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+}
+
+/* ==========================================================================
+   HIDE BROWSER NATIVE PASSWORD REVEAL & CLEAR BUTTONS (EDGE / CHROME / IE)
+   Prevents double eye icons inside password input fields
+   ========================================================================== */
+input::-ms-reveal,
+input::-ms-clear,
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ==========================================================================
+   TABLE CARD ALIGNED ACTION BAR & THREE-DOTS HOVER DROPDOWN MENU
+   ========================================================================== */
+.trendy-btn-primary-full {
+  flex: 1;
+  background: linear-gradient(135deg, #0F2A1D 0%, #1E4636 100%);
+  color: #FFFFFF;
+  border: none;
+  padding: 0.65rem 1rem;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(15, 42, 29, 0.15);
+}
+
+.trendy-btn-primary-full:hover {
+  background: linear-gradient(135deg, #1E4636 0%, #2A5A46 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 42, 29, 0.22);
+}
+
+.table-card-more-menu-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.table-card-dots-btn {
+  background: #FAF6EE;
+  border: 1.5px solid #E5DBC8;
+  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.table-card-dots-btn:hover {
+  background: #FFF3E0;
+  border-color: #E07A3C;
+  transform: translateY(-1px);
+}
+
+.table-card-dropdown-menu {
+  position: absolute;
+  right: 0;
+  bottom: 115%;
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 0.4rem;
+  min-width: 175px;
+  z-index: 99;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.table-card-more-menu-wrap:hover .table-card-dropdown-menu,
+.table-card-more-menu-wrap:focus-within .table-card-dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.table-card-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1E293B;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-align: left;
+}
+
+.table-card-dropdown-item:hover {
+  background: #F8FAFC;
+}
+
+.table-card-dropdown-item.is-danger {
+  color: #DC2626;
+}
+
+.table-card-dropdown-item.is-danger:hover {
+  background: #FEF2F2;
+}
+
+/* ==========================================================================
+   TABLE MANAGEMENT 3 CARDS PER ROW LAYOUT
+   ========================================================================== */
+.admin-floor-plan-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 1.25rem !important;
+}
+
+@media (max-width: 1100px) {
+  .admin-floor-plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-floor-plan-grid {
+    grid-template-columns: 1fr !important;
   }
 }

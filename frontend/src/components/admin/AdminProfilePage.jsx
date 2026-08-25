@@ -1,17 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Phone, ShieldCheck, Key, Save, CheckCircle2, Building2, Clock, Camera, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { api } from '../../services/api';
 
-export default function AdminProfilePage({ setActivePage }) {
+export default function AdminProfilePage({ setActivePage, isManagerMode = false }) {
+  const profileStorageKey = isManagerMode ? 'flavora_profile_manager' : 'flavora_profile_admin';
+
   const [profile, setProfile] = useState(() => {
-    const saved = localStorage.getItem('flavora_profile_admin');
+    const saved = localStorage.getItem(profileStorageKey);
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    return {
+    return isManagerMode ? {
+      name: 'Ramesh Sharma',
+      email: 'ramesh.manager@flavorakitchen.in',
+      phone: '9876512345',
+      role: 'Restaurant Manager',
+      branch: 'Jubilee Hills (Main Branch)',
+      empId: 'RMSM-01',
+      joinedDate: '10 Feb 2023'
+    } : {
       name: 'Chef Srikanth',
       email: 'admin@restaurant.com',
       phone: '9876512345',
-      role: 'Restaurant Owner & Admin',
+      role: 'Admin',
       branch: 'Jubilee Hills (Main Branch)',
       empId: 'RMSA-01',
       joinedDate: '15 Jan 2022'
@@ -37,22 +48,49 @@ export default function AdminProfilePage({ setActivePage }) {
     setTimeout(() => setToastMsg(''), 4000);
   };
 
-  const handleProfileSave = (e) => {
-    e.preventDefault();
+  const handleProfileSave = async (e) => {
+    if (e) e.preventDefault();
     if (!profile.name || !profile.email) {
-      showToast('Please fill in all required fields.', 'error');
+      alert('Please fill in required fields (Full Name and Email Address).');
+      showToast('Please fill in required fields.', 'error');
       return;
     }
     const cleanPhone = (profile.phone || '').replace(/\D/g, '');
-    if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
-      showToast('Mobile phone number must be exactly 10 digits.', 'error');
-      return;
+    if (cleanPhone.length > 0 && cleanPhone.length < 10) {
+      const confirmSave = window.confirm(`Phone number entered (${cleanPhone}) is ${cleanPhone.length} digits instead of 10. Do you want to save anyway?`);
+      if (!confirmSave) {
+        showToast('Please complete the 10-digit phone number.', 'error');
+        return;
+      }
     }
 
-    // Persist changes to local storage & broadcast event
-    localStorage.setItem('flavora_profile_admin', JSON.stringify(profile));
-    window.dispatchEvent(new Event('flavora_profile_updated'));
-    showToast('Profile details saved successfully!');
+    try {
+      // Persist changes to local storage & broadcast event
+      localStorage.setItem(profileStorageKey, JSON.stringify(profile));
+      window.dispatchEvent(new Event('flavora_profile_updated'));
+
+      // Also attempt updating backend MongoDB if staff ID is available
+      try {
+        const staffList = await api.getStaff();
+        if (Array.isArray(staffList)) {
+          const match = staffList.find(s => s.email?.toLowerCase() === profile.email?.toLowerCase() || s.empId === profile.empId);
+          if (match && (match._id || match.id)) {
+            await api.updateStaff(match._id || match.id, {
+              name: profile.name,
+              email: profile.email,
+              phone: profile.phone
+            });
+          }
+        }
+      } catch (dbErr) {
+        console.warn('Could not sync profile to MongoDB:', dbErr.message);
+      }
+
+      showToast('Profile details saved successfully!', 'success');
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      showToast('Failed to save profile. Please try again.', 'error');
+    }
   };
 
   const handlePasswordUpdate = (e) => {
@@ -108,19 +146,31 @@ export default function AdminProfilePage({ setActivePage }) {
         </div>
       </div>
 
+      {/* Floating High-Visibility Toast Pop-up Notification */}
       {toastMsg && (
-        <div className="admin-card mb-3" style={{ 
-          background: toastType === 'error' ? '#FEF2F2' : '#F0FDF4', 
-          borderColor: toastType === 'error' ? '#FCA5A5' : '#BBF7D0', 
-          padding: '0.85rem 1.25rem', 
-          color: toastType === 'error' ? '#991B1B' : '#166534', 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '0.5rem',
-          borderRadius: '10px'
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          backgroundColor: toastType === 'error' ? '#DC2626' : '#1E4636',
+          color: '#FFFFFF',
+          padding: '0.85rem 1.4rem',
+          borderRadius: '12px',
+          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.25)',
+          border: '1.5px solid rgba(255, 255, 255, 0.2)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.65rem',
+          fontWeight: 700,
+          fontSize: '0.9rem'
         }}>
-          {toastType === 'error' ? <AlertCircle size={18} color="#991B1B" /> : <CheckCircle2 size={18} color="#166534" />}
-          <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{toastMsg}</span>
+          {toastType === 'error' ? (
+            <AlertCircle size={20} color="#FECDD3" />
+          ) : (
+            <CheckCircle2 size={20} color="#F2C14E" />
+          )}
+          <span>{toastMsg}</span>
         </div>
       )}
 

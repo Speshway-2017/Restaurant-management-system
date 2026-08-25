@@ -25,7 +25,22 @@ export default function Navbar({ activePage, setActivePage }) {
   return (
     <>
       {/* Main Navigation Header */}
-      <header className="navbar-header">
+      <header 
+        className="navbar-header"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          width: '100%',
+          zIndex: 99999,
+          backgroundColor: 'rgba(255, 255, 255, 0.96)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: '1px solid #EAE3D2',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
+        }}
+      >
         <div className="navbar-container">
           {/* Brand Logo Image + Text */}
           <a href="#home" onClick={(e) => { e.preventDefault(); handleNavClick('home'); }} className="brand-logo-link">
@@ -58,14 +73,16 @@ export default function Navbar({ activePage, setActivePage }) {
 
           {/* Right Actions & Mobile Hamburger */}
           <div className="nav-actions">
-            <MagneticButton
-              onClick={() => handleNavClick('login')}
-              variant="secondary"
-              style={{ padding: '0.45rem 1.1rem', fontSize: '0.82rem' }}
-            >
-              <LogIn size={15} />
-              <span>LOGIN</span>
-            </MagneticButton>
+            {activePage !== 'menu' && (
+              <MagneticButton
+                onClick={() => handleNavClick('login')}
+                variant="secondary"
+                style={{ padding: '0.45rem 1.1rem', fontSize: '0.82rem' }}
+              >
+                <LogIn size={15} />
+                <span>LOGIN</span>
+              </MagneticButton>
+            )}
 
             <button
               className="mobile-hamburger-btn"
