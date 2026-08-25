@@ -156,7 +156,7 @@ export function findItemInCatalog(idKey, dynamicList = []) {
 
   // 1. Check passed dynamic list first
   if (Array.isArray(dynamicList) && dynamicList.length > 0) {
-    const foundDynamic = dynamicList.find(item => 
+    const foundDynamic = dynamicList.find(item =>
       String(item._id || item.id || '').trim().toLowerCase() === key ||
       String(item.name || item.title || '').trim().toLowerCase() === key
     );
@@ -172,7 +172,7 @@ export function findItemInCatalog(idKey, dynamicList = []) {
   }
 
   // 2. Check master items catalog
-  const foundMaster = MASTER_ITEMS_CATALOG.find(item => 
+  const foundMaster = MASTER_ITEMS_CATALOG.find(item =>
     String(item.id || '').trim().toLowerCase() === key ||
     String(item.name || item.title || '').trim().toLowerCase() === key
   );
@@ -191,7 +191,7 @@ export function findItemInCatalog(idKey, dynamicList = []) {
     const savedCombos = localStorage.getItem('flavora_combos');
     if (savedCombos) {
       const parsedCombos = JSON.parse(savedCombos);
-      const foundCombo = parsedCombos.find(item => 
+      const foundCombo = parsedCombos.find(item =>
         String(item.id || '').trim().toLowerCase() === key ||
         String(item.name || item.title || '').trim().toLowerCase() === key
       );
@@ -205,14 +205,14 @@ export function findItemInCatalog(idKey, dynamicList = []) {
         };
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // 4. Fallback check from localStorage saved dishes
   try {
     const saved = localStorage.getItem('flavora_dishes');
     if (saved) {
       const parsed = JSON.parse(saved);
-      const foundLocal = parsed.find(item => 
+      const foundLocal = parsed.find(item =>
         String(item._id || item.id || '').trim().toLowerCase() === key ||
         String(item.name || item.title || '').trim().toLowerCase() === key
       );
@@ -226,7 +226,7 @@ export function findItemInCatalog(idKey, dynamicList = []) {
         };
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   return null;
 }
@@ -240,4 +240,33 @@ export function calculateCartTotal(cartObject, dynamicList = []) {
     const unitPrice = item ? item.price : 0;
     return total + (unitPrice * qty);
   }, 0);
+}
+
+// Safely resolve valid HTTP/HTTPS/Cloudinary image URL or return food placeholder fallback
+export function resolveDishImageUrl(item, fallback = '/hero_dish_2.png') {
+  if (!item) return fallback;
+
+  let raw = item.img || item.image || item.imageUrl || item.photo || item.picture || item.photoUrl;
+
+  if (!raw) return fallback;
+
+  // Extract from Cloudinary / Mongoose image object e.g. { url: "...", secure_url: "..." }
+  if (typeof raw === 'object') {
+    raw = raw.secure_url || raw.url || raw.src || raw.path || '';
+  }
+
+  if (typeof raw !== 'string') return fallback;
+
+  const trimmed = raw.trim();
+
+  if (!trimmed || trimmed === '[object Object]' || trimmed === 'undefined' || trimmed === 'null') {
+    return fallback;
+  }
+
+  // Complete URL or Data URI or root-relative path
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/') || trimmed.startsWith('/')) {
+    return trimmed;
+  }
+
+  return `/${trimmed}`;
 }

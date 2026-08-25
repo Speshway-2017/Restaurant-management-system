@@ -9,31 +9,45 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  const [settingsData, setSettingsData] = useState({
-    restaurantName: 'Flavora Kitchen',
-    branchName: 'Jubilee Hills (Main Branch)',
-    tagline: 'Good food. Great moments.',
-    contactEmail: isManagerMode ? 'manager@flavorakitchen.in' : 'admin@flavorakitchen.in',
-    contactPhone: '+91 98765 43210',
-    address: 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
-    operatingHours: '10:00 AM - 11:00 PM',
-    autoAcceptOrders: true,
-    audioAlerts: true,
-    prepTimeWarning: '20 mins',
-    qrOrderingEnabled: true,
-    gstin: '29AAAAA0000A1Z5',
-    fssai: '11223344556677',
-    gstRate: '5%',
-    invoiceFootnote: 'Thank you for dining with Flavora Kitchen! Visit again.'
+  const [settingsData, setSettingsData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_restaurant_settings');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      restaurantName: 'Flavora Kitchen',
+      branchName: 'Jubilee Hills (Main Branch)',
+      tagline: 'Good food. Great moments.',
+      contactEmail: isManagerMode ? 'manager@flavorakitchen.in' : 'admin@flavorakitchen.in',
+      contactPhone: '+91 98765 43210',
+      address: 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
+      weekdayHours: '11:00 AM – 10:00 PM',
+      weekendHours: '10:00 AM – 12:00 AM',
+      restaurantStatus: 'open', // 'open', 'closed', 'force_open'
+      closedMessage: 'We are currently closed for orders. Please visit during our operating hours!',
+      autoAcceptOrders: true,
+      audioAlerts: true,
+      prepTimeWarning: '20 mins',
+      qrOrderingEnabled: true,
+      gstin: '29AAAAA0000A1Z5',
+      fssai: '11223344556677',
+      gstRate: '5%',
+      invoiceFootnote: 'Thank you for dining with Flavora Kitchen! Visit again.'
+    };
   });
 
   const handleSave = (e) => {
     e.preventDefault();
+    try {
+      localStorage.setItem('flavora_restaurant_settings', JSON.stringify(settingsData));
+      window.dispatchEvent(new Event('flavora_settings_updated'));
+    } catch (e) {}
+
     api.updateSettings(settingsData)
       .catch(() => {})
       .finally(() => {
         setSaveSuccess(true);
-        setToastMessage('Saved successfully');
+        setToastMessage('Settings updated & broadcasted successfully!');
         setTimeout(() => {
           setSaveSuccess(false);
           setToastMessage(null);
@@ -179,12 +193,107 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
             </div>
 
             <div className="admin-form-group">
-              <label className="form-label">Daily Operating Hours</label>
+              <label className="form-label">Weekday Timings (Monday – Friday) *</label>
               <input 
                 type="text" 
                 className="form-control" 
-                value={settingsData.operatingHours} 
-                onChange={(e) => setSettingsData({ ...settingsData, operatingHours: e.target.value })}
+                value={settingsData.weekdayHours || '11:00 AM – 10:00 PM'} 
+                onChange={(e) => setSettingsData({ ...settingsData, weekdayHours: e.target.value })}
+                placeholder="e.g. 11:00 AM – 10:00 PM"
+                required 
+              />
+            </div>
+
+            <div className="admin-form-group">
+              <label className="form-label">Weekend Timings (Saturday – Sunday) *</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                value={settingsData.weekendHours || '10:00 AM – 12:00 AM'} 
+                onChange={(e) => setSettingsData({ ...settingsData, weekendHours: e.target.value })}
+                placeholder="e.g. 10:00 AM – 12:00 AM"
+                required 
+              />
+            </div>
+
+            <div className="admin-form-group" style={{ gridColumn: 'span 2' }}>
+              <label className="form-label" style={{ fontWeight: 800 }}>Restaurant Live Operational Status *</label>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  backgroundColor: (settingsData.restaurantStatus === 'open' || !settingsData.restaurantStatus) ? '#F0FDF4' : '#F8FAFC',
+                  border: `2px solid ${(settingsData.restaurantStatus === 'open' || !settingsData.restaurantStatus) ? '#22C55E' : '#E2E8F0'}`,
+                  padding: '0.65rem 1.1rem',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.88rem'
+                }}>
+                  <input 
+                    type="radio" 
+                    name="restaurantStatus" 
+                    value="open" 
+                    checked={settingsData.restaurantStatus === 'open' || !settingsData.restaurantStatus} 
+                    onChange={() => setSettingsData({ ...settingsData, restaurantStatus: 'open' })}
+                  />
+                  <span>🟢 Auto Schedule (Based on Timings)</span>
+                </label>
+
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  backgroundColor: settingsData.restaurantStatus === 'closed' ? '#FEF2F2' : '#F8FAFC',
+                  border: `2px solid ${settingsData.restaurantStatus === 'closed' ? '#EF4444' : '#E2E8F0'}`,
+                  padding: '0.65rem 1.1rem',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.88rem'
+                }}>
+                  <input 
+                    type="radio" 
+                    name="restaurantStatus" 
+                    value="closed" 
+                    checked={settingsData.restaurantStatus === 'closed'} 
+                    onChange={() => setSettingsData({ ...settingsData, restaurantStatus: 'closed' })}
+                  />
+                  <span>🔴 Temporarily Closed (Force Closed)</span>
+                </label>
+
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  backgroundColor: settingsData.restaurantStatus === 'force_open' ? '#EFF6FF' : '#F8FAFC',
+                  border: `2px solid ${settingsData.restaurantStatus === 'force_open' ? '#3B82F6' : '#E2E8F0'}`,
+                  padding: '0.65rem 1.1rem',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.88rem'
+                }}>
+                  <input 
+                    type="radio" 
+                    name="restaurantStatus" 
+                    value="force_open" 
+                    checked={settingsData.restaurantStatus === 'force_open'} 
+                    onChange={() => setSettingsData({ ...settingsData, restaurantStatus: 'force_open' })}
+                  />
+                  <span>⚡ Force Open (Ignore Timings)</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="admin-form-group" style={{ gridColumn: 'span 2' }}>
+              <label className="form-label">Custom Closed Message (Shown when Closed)</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                value={settingsData.closedMessage || 'We are currently closed for orders. Please visit during our operating hours!'} 
+                onChange={(e) => setSettingsData({ ...settingsData, closedMessage: e.target.value })}
               />
             </div>
 

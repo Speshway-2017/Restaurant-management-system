@@ -9,7 +9,6 @@ import PowerOffSlide from '../PowerOffSlide';
 
 // Import Admin Sub-pages
 import AdminDashboardHome from './AdminDashboardHome';
-import AdminOrdersPage from './AdminOrdersPage';
 import AdminMenuPage from './AdminMenuPage';
 import AdminTablesPage from './AdminTablesPage';
 import AdminReservationsPage from './AdminReservationsPage';
@@ -184,7 +183,7 @@ export default function AdminLayout({ setActivePage }) {
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    return { name: 'Chef Srikanth', role: 'Restaurant Owner & Admin', email: 'admin@restaurant.com' };
+    return { name: 'Saikiran G', role: 'Admin', email: 'admin@rms.com' };
   });
 
   useEffect(() => {
@@ -281,8 +280,6 @@ export default function AdminLayout({ setActivePage }) {
     switch (activeTab) {
       case 'dashboard':
         return <AdminDashboardHome setActiveTab={setActiveTab} />;
-      case 'orders':
-        return <AdminOrdersPage />;
       case 'menu-mgmt':
         return <AdminMenuPage />;
       case 'blogs':
@@ -512,7 +509,7 @@ export default function AdminLayout({ setActivePage }) {
                 <div className="admin-user-avatar">{getInitials(adminProfile.name)}</div>
                 <div className="admin-user-details">
                   <div className="admin-user-name">{adminProfile.name || 'Chef Srikanth'}</div>
-                  <div className="admin-user-role">{adminProfile.role || 'Restaurant Owner & Admin'}</div>
+                  <div className="admin-user-role">Admin</div>
                 </div>
                 <ChevronDown
                   size={15}
@@ -559,7 +556,11 @@ export default function AdminLayout({ setActivePage }) {
                         onPowerOff={() => {
                           setUserMenuOpen(false);
                           localStorage.removeItem('flavora_auth_token');
-                          setActivePage('login');
+                          localStorage.removeItem('flavora_logged_in');
+                          localStorage.removeItem('flavora_user_role');
+                          localStorage.setItem('flavora_active_page', 'home');
+                          window.history.pushState({}, '', '/');
+                          setActivePage('home');
                         }}
                       />
                     </div>

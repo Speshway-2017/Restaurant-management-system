@@ -21,7 +21,7 @@ const createOrder = async (req, res) => {
 
 const updateOrderStatus = async (req, res) => {
   try {
-    const updated = await orderService.updateOrderStatus(req.params.id, req.body.status);
+    const updated = await orderService.updateOrderStatus(req.params.id, req.body.status, req.body);
     return successResponse(res, updated, 'Order status updated');
   } catch (error) {
     return errorResponse(res, error.message, 400);

@@ -19,14 +19,68 @@ import ManagerLayout from './components/manager/ManagerLayout';
 
 export default function App() {
   const [activePage, setActivePageState] = useState(() => {
-    return localStorage.getItem('flavora_active_page') || 'login';
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    const isLoggedIn = Boolean(localStorage.getItem('flavora_logged_in') === 'true' || localStorage.getItem('flavora_auth_token'));
+    
+    // If QR code scanned or URL contains /menu or ?table=, open 'menu' directly without login!
+    if (path.includes('/menu') || search.includes('table=')) {
+      return 'menu';
+    }
+    if (path.includes('/manager')) {
+      return isLoggedIn ? 'manager' : 'login';
+    }
+    if (path.includes('/admin')) {
+      return isLoggedIn ? 'admin' : 'login';
+    }
+    
+    const saved = localStorage.getItem('flavora_active_page');
+    if (saved) {
+      if ((saved === 'admin' || saved === 'manager') && !isLoggedIn) {
+        return 'home';
+      }
+      return saved;
+    }
+    return 'home';
   });
+
   const [demoModalOpen, setDemoModalOpen] = useState(false);
 
   const setActivePage = (newPage) => {
     setActivePageState(newPage);
     localStorage.setItem('flavora_active_page', newPage);
+
+    const isLoggedIn = Boolean(localStorage.getItem('flavora_logged_in') === 'true' || localStorage.getItem('flavora_auth_token'));
+    if (newPage === 'home') {
+      window.history.pushState({}, '', '/');
+    } else if (newPage === 'admin' && isLoggedIn) {
+      window.history.pushState({}, '', '/admin/dashboard');
+    } else if (newPage === 'manager' && isLoggedIn) {
+      window.history.pushState({}, '', '/manager/dashboard');
+    } else if (newPage === 'login') {
+      window.history.pushState({}, '', '/login');
+    }
   };
+
+  useEffect(() => {
+    const handleUrlRouting = () => {
+      const path = window.location.pathname.toLowerCase();
+      const search = window.location.search.toLowerCase();
+      const isLoggedIn = Boolean(localStorage.getItem('flavora_logged_in') === 'true' || localStorage.getItem('flavora_auth_token'));
+
+      if (path.includes('/menu') || search.includes('table=')) {
+        setActivePageState('menu');
+      } else if (path.includes('/manager')) {
+        setActivePageState(isLoggedIn ? 'manager' : 'login');
+      } else if (path.includes('/admin')) {
+        setActivePageState(isLoggedIn ? 'admin' : 'login');
+      }
+    };
+
+    handleUrlRouting();
+    window.addEventListener('popstate', handleUrlRouting);
+    return () => window.removeEventListener('popstate', handleUrlRouting);
+  }, []);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -107,7 +161,7 @@ export default function App() {
         />
       )}
 
-      <main className="main-content" style={isFullStandalonePage ? { minHeight: '100vh' } : {}}>
+      <main className="main-content" style={isFullStandalonePage ? { minHeight: '100vh' } : { paddingTop: '72px' }}>
         {renderCurrentPage()}
       </main>
 

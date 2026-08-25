@@ -1,4 +1,13 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && !envUrl.includes('localhost')) {
+    return envUrl;
+  }
+  const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+  return `http://${hostname}:5000/api`;
+};
+
+const API_BASE = getApiBaseUrl();
 
 const request = async (endpoint, options = {}) => {
   const headers = {
@@ -56,9 +65,9 @@ export const api = {
   // Orders API
   getOrders: () => request('/orders'),
   createOrder: (data) => request('/orders', { method: 'POST', body: JSON.stringify(data) }),
-  updateOrderStatus: (id, status) => request(`/orders/${id}/status`, {
+  updateOrderStatus: (id, status, fullData = {}) => request(`/orders/${id}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status })
+    body: JSON.stringify({ status, ...fullData })
   }),
 
   // Tables API
@@ -98,10 +107,16 @@ export const api = {
     body: JSON.stringify({ file: fileDataUrl, folder })
   }),
 
-  // Table QR API (node qrcode backend generator)
+  // Table QR & Management API
+  getTables: () => request('/tables'),
+  updateTableStatus: (id, data) => request(`/tables/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   generateTableQr: (tableNum, targetUrl) => request('/tables/generate-qr', {
     method: 'POST',
     body: JSON.stringify({ tableNum, targetUrl })
+  }),
+  updateTableStatusByNum: (tableNum, data) => request(`/tables/number/${tableNum}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
   }),
 
   // Reports & Analytics API

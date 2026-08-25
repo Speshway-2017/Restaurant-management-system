@@ -18,10 +18,67 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
   const [vegOnly, setVegOnly] = useState(false);
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, isHovered: false });
 
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_restaurant_settings');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    const handleSettingsSync = () => {
+      try {
+        const saved = localStorage.getItem('flavora_restaurant_settings');
+        setSettings(saved ? JSON.parse(saved) : {});
+      } catch (e) {}
+    };
+    window.addEventListener('flavora_settings_updated', handleSettingsSync);
+    return () => window.removeEventListener('flavora_settings_updated', handleSettingsSync);
+  }, []);
+
+  const getStatusInfo = () => {
+    const statusOverride = settings.restaurantStatus || 'open';
+    if (statusOverride === 'closed') {
+      return { label: '🔴 CLOSED NOW', isOpen: false, bg: '#FEF2F2', color: '#DC2626', border: '#FCA5A5' };
+    }
+    if (statusOverride === 'force_open') {
+      return { label: '🟢 OPEN NOW', isOpen: true, bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' };
+    }
+
+    const now = new Date();
+    const day = now.getDay();
+    const isWeekend = (day === 0 || day === 6);
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+
+    const openMin = isWeekend ? 600 : 660; // 10:00 AM vs 11:00 AM
+    const closeMin = isWeekend ? 1440 : 1320; // 12:00 AM vs 10:00 PM
+
+    const isOpen = currentMins >= openMin && currentMins < closeMin;
+    return isOpen
+      ? { label: '🟢 OPEN NOW', isOpen: true, bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' }
+      : { label: '🔴 CLOSED NOW', isOpen: false, bg: '#FEF2F2', color: '#DC2626', border: '#FCA5A5' };
+  };
+
+  const statusInfo = getStatusInfo();
+
+  const getCartStorageKey = () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tableParam = urlParams.get('table') || localStorage.getItem('flavora_scanned_table') || '';
+      if (tableParam) {
+        const clean = String(tableParam).toUpperCase().replace(/[^A-Z0-9-]/g, '');
+        return `flavora_cart_${clean}`;
+      }
+    } catch (e) {}
+    return 'flavora_cart_GENERAL';
+  };
+
   // Persistent shared cart state across pages
   const [cart, setCart] = useState(() => {
     try {
-      const saved = localStorage.getItem('flavora_active_cart');
+      const saved = localStorage.getItem(getCartStorageKey());
       return saved ? JSON.parse(saved) : {};
     } catch (e) {
       return {};
@@ -31,7 +88,12 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
   const updateCartState = (newCart) => {
     setCart(newCart);
     try {
-      localStorage.setItem('flavora_active_cart', JSON.stringify(newCart));
+      const key = getCartStorageKey();
+      if (Object.keys(newCart).length === 0) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, JSON.stringify(newCart));
+      }
       window.dispatchEvent(new Event('flavora_cart_updated'));
     } catch (e) {}
   };
@@ -39,17 +101,18 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
   useEffect(() => {
     const handleCartSync = () => {
       try {
-        const saved = localStorage.getItem('flavora_active_cart');
+        const saved = localStorage.getItem(getCartStorageKey());
         setCart(saved ? JSON.parse(saved) : {});
       } catch (e) {}
     };
+    handleCartSync();
     window.addEventListener('flavora_cart_updated', handleCartSync);
     return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
   }, []);
 
   const handleAddToCart = (id) => {
-    const updated = { ...cart, [id]: (cart[id] || 0) + 1 };
-    updateCartState(updated);
+    alert(`Ordering is available exclusively for Dine-In guests via Table QR Code. Please scan your dining table's QR code to unlock dish ordering.`);
+    if (setActivePage) setActivePage('menu');
   };
 
   const handleDecreaseQty = (id) => {
@@ -325,11 +388,30 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
           
           {/* Left Column: Kinetic Typography & Actions */}
           <div style={{ position: 'relative', zIndex: 3 }}>
-            <span className="ref-hero-badge" style={{ marginBottom: '1.25rem', display: 'inline-flex', alignItems: 'center', backgroundColor: '#EBF4F0', color: '#0F2A1D', border: '1px solid #C2E2D2' }}>
-              <span className="live-pulse-dot" style={{ backgroundColor: '#FF8A00' }} />
-              <Sparkles size={14} style={{ marginRight: '0.4rem', color: '#FF8A00' }} />
-              {activeSlideObj.badge}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+              <span className="ref-hero-badge" style={{ marginBottom: 0, display: 'inline-flex', alignItems: 'center', backgroundColor: '#EBF4F0', color: '#0F2A1D', border: '1px solid #C2E2D2' }}>
+                <span className="live-pulse-dot" style={{ backgroundColor: '#FF8A00' }} />
+                <Sparkles size={14} style={{ marginRight: '0.4rem', color: '#FF8A00' }} />
+                {activeSlideObj.badge}
+              </span>
+
+              <span style={{
+                backgroundColor: statusInfo.bg,
+                color: statusInfo.color,
+                border: `1px solid ${statusInfo.border}`,
+                padding: '0.35rem 0.85rem',
+                borderRadius: '9999px',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+              }}>
+                <Clock size={13} />
+                <span>{statusInfo.label}</span>
+              </span>
+            </div>
             
             <h1 className="ref-hero-title" style={{ fontSize: 'clamp(2.4rem, 5vw, 3.8rem)', fontWeight: 800, lineHeight: 1.15, marginBottom: '1.25rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
               <KineticCenterBuild
@@ -605,6 +687,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
                   desc={offer.desc}
                   category="Chef Combo Deal"
                   quantity={qty}
+                  requiresQrScan={true}
                   onAddToCart={() => handleAddToCart(comboKey)}
                   onDecreaseQty={() => handleDecreaseQty(comboKey)}
                   onDeleteItem={() => handleDeleteItem(comboKey)}
@@ -764,6 +847,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
                         desc={item.desc}
                         category={item.category}
                         quantity={qty}
+                        requiresQrScan={true}
                         onAddToCart={() => handleAddToCart(itemKey)}
                         onDecreaseQty={() => handleDecreaseQty(itemKey)}
                         onDeleteItem={() => handleDeleteItem(itemKey)}

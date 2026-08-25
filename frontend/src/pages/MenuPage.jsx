@@ -1,22 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Utensils, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send } from 'lucide-react';
+import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send } from 'lucide-react';
 import { api } from '../services/api';
 import MenuDishStrip from '../components/MenuDishStrip';
 import ExposureSlider from '../components/ExposureSlider';
-import { findItemInCatalog, calculateCartTotal } from '../utils/menuRegistry';
+import { findItemInCatalog, calculateCartTotal, resolveDishImageUrl } from '../utils/menuRegistry';
 
 export default function MenuPage({ onOpenDemoModal }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [cart, setCart] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flavora_active_cart');
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
-  });
   // Dynamic Table number initialized strictly from QR code parameter (?table=...) or stored scan (No default T-01)
   const [tableNum, setTableNum] = useState(() => {
     try {
@@ -32,32 +24,225 @@ export default function MenuPage({ onOpenDemoModal }) {
       return '';
     }
   });
+
+  const getCartStorageKey = (targetTable) => {
+    const t = targetTable || tableNum || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('table') : '') || localStorage.getItem('flavora_scanned_table') || '';
+    if (t) {
+      const clean = String(t).toUpperCase().replace(/[^A-Z0-9-]/g, '');
+      return `flavora_cart_${clean}`;
+    }
+    return 'flavora_cart_GENERAL';
+  };
+
+  const [cart, setCart] = useState(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tableParam = urlParams.get('table') || localStorage.getItem('flavora_scanned_table') || '';
+      const key = tableParam ? `flavora_cart_${String(tableParam).toUpperCase().replace(/[^A-Z0-9-]/g, '')}` : 'flavora_cart_GENERAL';
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isCustomerOrdersModalOpen, setIsCustomerOrdersModalOpen] = useState(false);
+  const [isCategoryDrawerOpen, setIsCategoryDrawerOpen] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [chefNotes, setChefNotes] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderSuccessMsg, setOrderSuccessMsg] = useState(null);
+  const [tableOccupiedInfo, setTableOccupiedInfo] = useState(null);
 
-  const updateCartState = (newCart) => {
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_restaurant_settings');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    const handleSettingsSync = () => {
+      try {
+        const saved = localStorage.getItem('flavora_restaurant_settings');
+        setSettings(saved ? JSON.parse(saved) : {});
+      } catch (e) { }
+    };
+    window.addEventListener('flavora_settings_updated', handleSettingsSync);
+    return () => window.removeEventListener('flavora_settings_updated', handleSettingsSync);
+  }, []);
+
+  const parseTimeToMinutes = (timeStr, defaultMins) => {
+    if (!timeStr) return defaultMins;
+    try {
+      const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+      if (!match) return defaultMins;
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3] ? match[3].toUpperCase() : null;
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    } catch (e) {
+      return defaultMins;
+    }
+  };
+
+  const getIsRestaurantClosed = () => {
+    const statusOverride = settings.restaurantStatus || 'open';
+    if (statusOverride === 'closed') return true;
+    if (statusOverride === 'force_open') return false;
+
+    const now = new Date();
+    const day = now.getDay();
+    const isWeekend = (day === 0 || day === 6);
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+
+    const hoursString = isWeekend ? (settings.weekendHours || '10:00 AM – 12:00 AM') : (settings.weekdayHours || '11:00 AM – 10:00 PM');
+    const parts = hoursString.split(/–|-/);
+
+    const openMin = parts[0] ? parseTimeToMinutes(parts[0], isWeekend ? 600 : 660) : (isWeekend ? 600 : 660);
+    const closeMin = parts[1] ? parseTimeToMinutes(parts[1], isWeekend ? 1440 : 1320) : (isWeekend ? 1440 : 1320);
+
+    return !(currentMins >= openMin && currentMins < closeMin);
+  };
+
+  const isClosedNow = getIsRestaurantClosed();
+
+  const [placedTableOrders, setPlacedTableOrders] = useState(() => {
+    try {
+      const currentTable = tableNum || localStorage.getItem('flavora_scanned_table');
+      if (currentTable) {
+        const saved = localStorage.getItem(`flavora_table_orders_${currentTable}`);
+        return saved ? JSON.parse(saved) : [];
+      }
+    } catch (e) { }
+    return [];
+  });
+
+  const [tableCleaningInfo, setTableCleaningInfo] = useState(null);
+
+  // Poll backend API for real-time table occupancy & cleaning status across mobile devices
+  useEffect(() => {
+    if (!tableNum) return;
+
+    const checkTableStatus = async () => {
+      try {
+        const cleanTableNum = String(tableNum).replace(/[^0-9]/g, '');
+
+        // 1. Check active order status first across backend orders & local table orders
+        const orders = await api.getOrders();
+        let activeOrd = null;
+        if (Array.isArray(orders) && orders.length > 0) {
+          activeOrd = orders.find(ord => {
+            const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
+            const isMatch = ordTableDigits && cleanTableNum && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
+            const isActiveStatus = ord.status && !['Cancelled', 'Completed'].includes(ord.status);
+            return isMatch && isActiveStatus;
+          });
+        }
+
+        if (activeOrd) {
+          setTableOccupiedInfo({
+            isOccupied: true,
+            orderId: activeOrd.orderId || activeOrd.id || activeOrd._id,
+            status: activeOrd.status || 'Placed'
+          });
+          setTableCleaningInfo(null);
+        } else {
+          setTableOccupiedInfo(null);
+
+          // 2. If NO active order exists, check if table is currently in Cleaning timer state
+          const dbTables = await api.getTables();
+          if (Array.isArray(dbTables)) {
+            const matchedTbl = dbTables.find(t => {
+              const tNum = String(t.number || t.name || '').replace(/[^0-9]/g, '');
+              return tNum && cleanTableNum && String(parseInt(tNum, 10)) === String(parseInt(cleanTableNum, 10));
+            });
+
+            if (matchedTbl && matchedTbl.status === 'Cleaning') {
+              const remainingMs = matchedTbl.cleaningUntil ? (new Date(matchedTbl.cleaningUntil).getTime() - Date.now()) : 0;
+              if (remainingMs > 0) {
+                setTableCleaningInfo({
+                  isCleaning: true,
+                  tableNum: matchedTbl.number || `T-${cleanTableNum.padStart(2, '0')}`,
+                  remainingSec: Math.ceil(remainingMs / 1000)
+                });
+              } else {
+                setTableCleaningInfo(null);
+              }
+            } else {
+              setTableCleaningInfo(null);
+            }
+          } else {
+            setTableCleaningInfo(null);
+          }
+        }
+
+          // Sync placedTableOrders with live backend statuses for this table
+          setPlacedTableOrders(prev => {
+            if (!Array.isArray(prev) || prev.length === 0) return prev;
+            return prev.map(pOrd => {
+              const matchedBackend = orders.find(o => (o.orderId || o._id) === (pOrd.orderId || pOrd.id));
+              if (matchedBackend && matchedBackend.status) {
+                return { ...pOrd, status: matchedBackend.status };
+              }
+              return pOrd;
+            });
+          });
+      } catch (err) {
+        console.warn("Could not fetch backend table status:", err);
+      }
+    };
+
+    checkTableStatus();
+    const interval = setInterval(checkTableStatus, 3000);
+    return () => clearInterval(interval);
+  }, [tableNum]);
+
+  const updateCartState = (newCart, targetTbl) => {
     setCart(newCart);
     try {
-      localStorage.setItem('flavora_active_cart', JSON.stringify(newCart));
+      const key = getCartStorageKey(targetTbl || tableNum);
+      if (Object.keys(newCart).length === 0) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, JSON.stringify(newCart));
+      }
       window.dispatchEvent(new Event('flavora_cart_updated'));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
     const handleCartSync = () => {
       try {
-        const saved = localStorage.getItem('flavora_active_cart');
+        const key = getCartStorageKey(tableNum);
+        const saved = localStorage.getItem(key);
         setCart(saved ? JSON.parse(saved) : {});
-      } catch (e) {}
+      } catch (e) {
+        setCart({});
+      }
     };
+    handleCartSync();
     window.addEventListener('flavora_cart_updated', handleCartSync);
     return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
-  }, []);
+  }, [tableNum]);
 
   const handleAddToCart = (id) => {
+    if (isClosedNow) {
+      alert(settings.closedMessage || `The restaurant is currently closed for orders. Operating hours: Mon-Fri 11:00 AM - 10:00 PM | Sat-Sun 10:00 AM - 12:00 AM`);
+      return;
+    }
+    if (!tableNum) {
+      alert(`Ordering is available exclusively for Dine-In guests via Table QR Code. Please scan your dining table's QR code to unlock dish ordering.`);
+      return;
+    }
+    if (tableOccupiedInfo && tableOccupiedInfo.isOccupied) {
+      alert(`Table ${tableNum} is currently occupied by another dining session. Adding items is locked until the session is completed.`);
+      return;
+    }
     const updated = { ...cart, [id]: (cart[id] || 0) + 1 };
     updateCartState(updated);
   };
@@ -84,126 +269,206 @@ export default function MenuPage({ onOpenDemoModal }) {
     updateCartState({});
   };
 
-  const [menuItems, setMenuItems] = useState([
-    { id: 1, name: 'Paneer Tikka Angara', category: 'Starters', price: 340, isVeg: true, desc: 'Cottage cheese marinated in Kashmiri chili and tandoori spices.', img: '/hero_dish_1.png', available: true },
-    { id: 2, name: 'Murgh Malai Kabab', category: 'Starters', price: 420, isVeg: false, desc: 'Tender chicken breast infused with cream, cheese, and cardamom.', img: '/carousel_3.png', available: true },
-    { id: 3, name: 'Tandoori Murgh Full', category: 'Starters', price: 560, isVeg: false, desc: 'Whole chicken marinated in mustard oil & spices roasted in clay tandoori oven.', img: '/tandoor_oven.png', available: true },
-    { id: 4, name: 'Dal Makhani Gold', category: 'Main Course', price: 380, isVeg: true, desc: 'Slow-cooked black lentils simmered overnight with white butter and cream.', img: '/carousel_2.png', available: true },
-    { id: 5, name: 'Paneer Butter Masala', category: 'Main Course', price: 390, isVeg: true, desc: 'Soft cottage cheese cubes in rich tomato cashew gravy.', img: '/hero_dish_1.png', available: true },
-    { id: 6, name: 'Butter Chicken Special', category: 'Main Course', price: 480, isVeg: false, desc: 'Charcoal-grilled chicken simmered in rich buttery tomato gravy.', img: '/hero_dish_2.png', available: true },
-    { id: 7, name: 'Hyderabadi Dum Biryani (Chicken)', category: 'Biryani', price: 490, isVeg: false, desc: 'Aromatic basmati rice layered with spiced marinated chicken cooked on dum.', img: '/hero_dish_2.png', available: true },
-    { id: 8, name: 'Hyderabadi Veg Dum Biryani', category: 'Biryani', price: 420, isVeg: true, desc: 'Garden fresh vegetables layered with saffron rice and fragrant biryani spices.', img: '/carousel_2.png', available: true },
-    { id: 9, name: 'Garlic Butter Naan', category: 'Breads', price: 90, isVeg: true, desc: 'Fresh clay tandoori bread brushed with melted butter & chopped garlic.', img: '/carousel_1.png', available: true },
-    { id: 10, name: 'Butter Tandoori Roti', category: 'Breads', price: 50, isVeg: true, desc: 'Whole wheat flatbread baked fresh in clay tandoori oven.', img: '/tandoor_oven.png', available: true },
-    { id: 11, name: 'Saffron Shahi Tukda', category: 'Desserts', price: 260, isVeg: true, desc: 'Crispy fried bread soaked in saffron rabri topped with pistachios.', img: '/chef_plating.png', available: true },
-    { id: 12, name: 'Gulab Jamun with Ice Cream', category: 'Desserts', price: 220, isVeg: true, desc: 'Hot khoya dumplings served with cold vanilla bean ice cream.', img: '/carousel_3.png', available: true },
-    { id: 13, name: 'Mango Lassi Delight', category: 'Beverages', price: 180, isVeg: true, desc: 'Thick churned sweet yogurt blended with Alphonsa mango pulp.', img: '/hero_dish_1.png', available: true },
-    { id: 14, name: 'Masala Butter Milk', category: 'Beverages', price: 120, isVeg: true, desc: 'Refreshing churned buttermilk infused with roasted cumin, green chili & mint.', img: '/carousel_2.png', available: true },
-  ]);
-
-  // Read ?table= query parameter from URL (e.g. ?table=T-03)
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tableParam = urlParams.get('table');
-    if (tableParam) {
-      setTableNum(tableParam.toUpperCase());
-    }
-  }, []);
+  const [menuItems, setMenuItems] = useState([]);
 
   useEffect(() => {
     const loadMenu = () => {
-      const savedLocal = localStorage.getItem('flavora_dishes');
-      let localDishesMap = {};
-      if (savedLocal) {
-        try {
-          const parsed = JSON.parse(savedLocal);
-          if (parsed && parsed.length > 0) {
-            parsed.forEach(item => {
-              const nameKey = (item.name || '').toLowerCase().trim();
-              localDishesMap[nameKey] = item;
-            });
-            setMenuItems(parsed.map(item => ({
-              id: item._id || item.id,
-              name: item.name,
-              category: item.category || 'Main Course',
-              price: item.price,
-              isVeg: item.isVeg !== undefined ? item.isVeg : true,
-              available: item.available !== undefined ? item.available : (item.isAvailable !== undefined ? item.isAvailable : true),
-              bestseller: item.bestseller !== undefined ? item.bestseller : (item.isBestseller !== undefined ? item.isBestseller : false),
-              desc: item.desc || '',
-              prepTime: item.prepTime || '15 mins',
-              spice: item.spiceLevel || item.spice || 'Medium',
-              img: item.img || '/hero_dish_2.png'
-            })));
-          }
-        } catch (e) {}
-      }
+      const formatItem = (item) => ({
+        id: item._id || item.id || item.name,
+        name: item.name,
+        category: item.category || 'Main Course',
+        price: Number(item.price || 0),
+        isVeg: item.isVeg !== undefined ? item.isVeg : true,
+        available: item.available !== undefined ? item.available : (item.isAvailable !== undefined ? item.isAvailable : true),
+        bestseller: item.bestseller !== undefined ? item.bestseller : (item.isBestseller !== undefined ? item.isBestseller : false),
+        desc: item.desc || '',
+        prepTime: item.prepTime || '15 mins',
+        spice: item.spiceLevel || item.spice || 'Medium',
+        img: resolveDishImageUrl(item)
+      });
 
-      // Fetch from API database and merge local availability status
+      const mergedMap = new Map();
+
+      // 1. Load Admin-saved dishes from localStorage (flavora_dishes)
+      try {
+        const savedLocal = localStorage.getItem('flavora_dishes');
+        if (savedLocal) {
+          const parsed = JSON.parse(savedLocal);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsed.forEach(item => {
+              if (item && item.name) {
+                const key = (item.name || '').toLowerCase().trim();
+                mergedMap.set(key, formatItem(item));
+              }
+            });
+          }
+        }
+      } catch (e) { }
+
+      // Immediately set initial items from Admin local storage if present
+      const initialItems = Array.from(mergedMap.values());
+      setMenuItems(initialItems);
+
+      // 2. Fetch live Admin menu items from backend API database
       api.getMenuItems()
         .then((data) => {
-          if (data && data.length > 0) {
-            setMenuItems(data.map(item => {
-              const nameKey = (item.name || '').toLowerCase().trim();
-              const localOverride = localDishesMap[nameKey];
-              const isAvail = localOverride ? (localOverride.available !== undefined ? localOverride.available : localOverride.isAvailable) : (item.isAvailable !== undefined ? item.isAvailable : true);
-              const isBest = localOverride ? (localOverride.bestseller !== undefined ? localOverride.bestseller : localOverride.isBestseller) : (item.isBestseller !== undefined ? item.isBestseller : item.bestseller);
-
-              return {
-                id: item._id || item.id,
-                name: item.name,
-                category: item.category || 'Main Course',
-                price: item.price,
-                isVeg: item.isVeg !== undefined ? item.isVeg : true,
-                available: isAvail !== false,
-                bestseller: isBest,
-                desc: item.desc || '',
-                prepTime: item.prepTime || '15 mins',
-                spice: item.spiceLevel || item.spice || 'Medium',
-                img: item.img || '/hero_dish_2.png'
-              };
-            }));
+          if (Array.isArray(data) && data.length > 0) {
+            const apiMap = new Map();
+            data.forEach(item => {
+              if (item && item.name) {
+                const key = (item.name || '').toLowerCase().trim();
+                apiMap.set(key, formatItem(item));
+              }
+            });
+            const updatedItems = Array.from(apiMap.values());
+            setMenuItems(updatedItems);
+            try {
+              localStorage.setItem('flavora_dishes', JSON.stringify(updatedItems));
+            } catch (e) { }
+          } else if (initialItems.length === 0) {
+            setMenuItems([]);
           }
         })
         .catch((err) => {
-          console.log('Using local fallback menu on MenuPage:', err.message);
+          console.log('Using local Admin menu items on MenuPage:', err.message);
         });
     };
 
     loadMenu();
     window.addEventListener('flavora_dishes_updated', loadMenu);
-    return () => window.removeEventListener('flavora_dishes_updated', loadMenu);
+    window.addEventListener('storage', loadMenu);
+    return () => {
+      window.removeEventListener('flavora_dishes_updated', loadMenu);
+      window.removeEventListener('storage', loadMenu);
+    };
   }, []);
 
+  const KNOWN_CATEGORY_ICONS = {
+    'all': '🍽️',
+    'starters': '🥗',
+    'main course': '🍲',
+    'mains': '🍲',
+    'curries': '🍛',
+    'biryani': '🍚',
+    'breads': '🫓',
+    'south indian': '🥞',
+    'southindian': '🥞',
+    'desserts': '🍨',
+    'beverages': '🥤',
+    'thalis': '🍱',
+    'combos': '🎁',
+    'snacks': '🍿',
+    'tandoori': '🍢',
+    'soups': '🥣',
+    'salads': '🥗'
+  };
 
+  const getCategoryIcon = (catName) => {
+    const c = (catName || '').toLowerCase().trim();
+    if (KNOWN_CATEGORY_ICONS[c]) return KNOWN_CATEGORY_ICONS[c];
+    for (const [key, icon] of Object.entries(KNOWN_CATEGORY_ICONS)) {
+      if (c.includes(key)) return icon;
+    }
+    return '✨';
+  };
+
+  // Build dynamic list of categories present in menuItems for the Category Drawer
+  const dynamicCategories = React.useMemo(() => {
+    const catMap = new Map();
+    catMap.set('all', { id: 'all', label: 'All Dishes', icon: '🍽️' });
+
+    // Default categories list
+    const defaultCats = [
+      { id: 'starters', label: 'Starters', icon: '🥗' },
+      { id: 'main course', label: 'Main Course', icon: '🍲' },
+      { id: 'curries', label: 'Curries', icon: '🍛' },
+      { id: 'biryani', label: 'Biryani', icon: '🍚' },
+      { id: 'breads', label: 'Breads', icon: '🫓' },
+      { id: 'south indian', label: 'South Indian', icon: '🥞' },
+      { id: 'desserts', label: 'Desserts', icon: '🍨' },
+      { id: 'beverages', label: 'Beverages', icon: '🥤' }
+    ];
+    defaultCats.forEach(cat => catMap.set(cat.id, cat));
+
+    // Extract any extra custom categories created by Admin
+    (menuItems || []).forEach(item => {
+      if (item && item.category) {
+        const trimmed = item.category.trim();
+        const lowerKey = trimmed.toLowerCase();
+        if (!catMap.has(lowerKey)) {
+          catMap.set(lowerKey, {
+            id: lowerKey,
+            label: trimmed,
+            icon: getCategoryIcon(trimmed)
+          });
+        }
+      }
+    });
+
+    return Array.from(catMap.values());
+  }, [menuItems]);
 
   const matchCategory = (itemCategory, selectedCat) => {
-    if (selectedCat === 'all') return true;
-    const catLower = (itemCategory || '').toLowerCase();
-    const selLower = selectedCat.toLowerCase();
-    if (selLower === 'starters') return catLower.includes('starter');
+    if (!selectedCat || selectedCat === 'all') return true;
+    const catLower = (itemCategory || '').toLowerCase().trim();
+    const selLower = selectedCat.toLowerCase().trim();
+
     if (selLower === 'mains' || selLower === 'main course' || selLower === 'main-course') {
-      return catLower.includes('main') || catLower.includes('biryani') || catLower.includes('curry');
+      return catLower.includes('main') || catLower.includes('curry');
     }
+    if (selLower === 'starters') return catLower.includes('starter');
     if (selLower === 'curries') return catLower.includes('curry') || catLower.includes('curries');
     if (selLower === 'biryani') return catLower.includes('biryani');
     if (selLower === 'breads') return catLower.includes('bread') || catLower.includes('roti') || catLower.includes('naan');
     if (selLower === 'desserts') return catLower.includes('dessert') || catLower.includes('sweet');
     if (selLower === 'beverages') return catLower.includes('beverage') || catLower.includes('drink');
-    if (selLower === 'southindian') return catLower.includes('south');
-    return catLower === selLower;
+    if (selLower === 'southindian' || selLower === 'south indian') return catLower.includes('south');
+
+    return catLower === selLower || catLower.includes(selLower) || selLower.includes(catLower);
   };
 
   const filteredItems = menuItems.filter(item => {
     const matchesCategory = matchCategory(item.category, selectedCategory);
     const matchesVeg = vegOnly ? item.isVeg : true;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (item.desc && item.desc.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.desc && item.desc.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesVeg && matchesSearch;
   });
 
   const totalCartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
   const totalCartPrice = calculateCartTotal(cart, menuItems);
+
+  // Group filtered dishes dynamically by category
+  const getNormalizedCategoryKey = (cat) => {
+    const c = (cat || '').toLowerCase().trim();
+    if (c.includes('starter')) return 'Starters';
+    if (c.includes('biryani')) return 'Biryani';
+    if (c.includes('bread') || c.includes('roti') || c.includes('naan')) return 'Breads';
+    if (c.includes('south')) return 'South Indian';
+    if (c.includes('dessert') || c.includes('sweet')) return 'Desserts';
+    if (c.includes('beverage') || c.includes('drink')) return 'Beverages';
+    if (c.includes('curry') || c.includes('curries')) return 'Curries';
+    if (c.includes('main')) return 'Main Course';
+    return (cat || '').trim() || 'Main Course';
+  };
+
+  const groupedDishes = React.useMemo(() => {
+    const groupsMap = {};
+
+    filteredItems.forEach(item => {
+      const normCat = getNormalizedCategoryKey(item.category);
+      if (!groupsMap[normCat]) {
+        groupsMap[normCat] = [];
+      }
+      groupsMap[normCat].push(item);
+    });
+
+    return Object.keys(groupsMap).map(catName => ({
+      key: catName,
+      icon: getCategoryIcon(catName),
+      items: groupsMap[catName]
+    }));
+  }, [filteredItems]);
 
   // Submit Order to Chef & Manager Backend
   const handleSendOrderToChefAndManager = async (e) => {
@@ -214,82 +479,303 @@ export default function MenuPage({ onOpenDemoModal }) {
     const orderItems = Object.entries(cart).map(([id, qty]) => {
       const dish = findItemInCatalog(id, menuItems);
       return {
-        dishId: id,
         name: dish ? dish.name : id,
-        qty,
-        price: dish ? dish.price : 0
+        price: dish ? dish.price : 0,
+        quantity: qty
       };
     });
 
+    const activeTable = tableNum || localStorage.getItem('flavora_scanned_table') || 'T-10';
+    const generatedOrderId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+
     const orderPayload = {
-      orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      tableNumber: tableNum,
-      guestName: guestName.trim() || 'Guest Diner',
+      orderId: generatedOrderId,
+      table: activeTable,
+      type: 'Dine-In',
+      customer: guestName.trim() || 'Guest Diner',
       items: orderItems,
-      totalAmount: totalCartPrice,
-      chefNotes: chefNotes.trim(),
-      orderType: 'Dine-In QR Order',
-      status: 'Pending'
+      total: totalCartPrice,
+      status: 'Placed'
     };
 
     try {
-      await api.createOrder(orderPayload);
-    } catch (err) {
-      console.warn('Simulated backend order dispatch:', err.message);
-    } finally {
+      // 1. Send HTTP POST request to backend API
+      const persistedOrder = await api.createOrder(orderPayload);
+
+      // 2. SUCCESS! The backend persisted the order document in MongoDB database.
       setIsSubmittingOrder(false);
       setIsCheckoutModalOpen(false);
+      const cartKey = getCartStorageKey(activeTable || tableNum);
+      try {
+        localStorage.removeItem(cartKey);
+        localStorage.removeItem('flavora_active_cart'); // Clear legacy single key if exists
+      } catch (e) {}
       setCart({});
+      window.dispatchEvent(new Event('flavora_cart_updated'));
       setGuestName('');
       setChefNotes('');
+
+      const backendOrderId = persistedOrder?.orderId || persistedOrder?._id || 'ORD-SUCCESS';
+
+      // 3. Display order success modal ONLY with the backend-returned order ID
       setOrderSuccessMsg({
-        table: tableNum,
-        orderId: orderPayload.orderId,
-        total: totalCartPrice
+        table: persistedOrder?.table || activeTable,
+        orderId: backendOrderId,
+        total: persistedOrder?.total || totalCartPrice
       });
+
+      // 4. Update local storage & table states
+      try {
+        const cleanT = activeTable.toUpperCase().replace('TABLE', '').replace('T-', '').trim();
+        const savedOrders = placedTableOrders;
+        const newPlacedOrders = [...savedOrders, { ...orderPayload, orderId: backendOrderId }];
+        setPlacedTableOrders(newPlacedOrders);
+
+        localStorage.setItem(`flavora_table_orders_${activeTable}`, JSON.stringify(newPlacedOrders));
+        localStorage.setItem(`flavora_table_orders_T-${cleanT}`, JSON.stringify(newPlacedOrders));
+
+        // Update local table list
+        const savedTables = localStorage.getItem('flavora_tables');
+        let tablesList = savedTables ? JSON.parse(savedTables) : [];
+        if (Array.isArray(tablesList) && tablesList.length > 0) {
+          tablesList = tablesList.map(t => {
+            const tClean = (t.num || '').replace(/[^0-9]/g, '');
+            const activeClean = activeTable.replace(/[^0-9]/g, '');
+            if (tClean && activeClean && parseInt(tClean, 10) === parseInt(activeClean, 10)) {
+              return {
+                ...t,
+                status: 'Occupied',
+                cleaningUntil: null,
+                orderId: backendOrderId,
+                amount: `₹${totalCartPrice}`,
+                customer: guestName.trim() || 'QR Diner'
+              };
+            }
+            return t;
+          });
+          localStorage.setItem('flavora_tables', JSON.stringify(tablesList));
+        }
+      } catch (e) { }
+
+      window.dispatchEvent(new Event('flavora_tables_updated'));
+    } catch (err) {
+      // API call failed! DO NOT show fake success modal or fake order ID!
+      setIsSubmittingOrder(false);
+      console.error('Failed to submit order to database:', err);
+      alert(`Order placement failed: ${err.message || 'Server connection error. Please try again.'}`);
     }
   };
 
-  const CATEGORY_MAP = [
-    { key: 'Starters', icon: '🥗', match: (c) => c.includes('starter') },
-    { key: 'Main Course', icon: '🍲', match: (c) => c.includes('main') || c.includes('curry') },
-    { key: 'Biryani', icon: '🍚', match: (c) => c.includes('biryani') },
-    { key: 'Breads', icon: '🫓', match: (c) => c.includes('bread') || c.includes('roti') || c.includes('naan') },
-    { key: 'South Indian', icon: '🥞', match: (c) => c.includes('south') },
-    { key: 'Desserts', icon: '🍨', match: (c) => c.includes('dessert') || c.includes('sweet') },
-    { key: 'Beverages', icon: '🥤', match: (c) => c.includes('beverage') || c.includes('drink') }
-  ];
-
-  const getNormalizedCategory = (cat) => {
-    const c = (cat || '').toLowerCase().trim();
-    for (const group of CATEGORY_MAP) {
-      if (group.match(c)) return group.key;
-    }
-    return cat || 'Main Course';
-  };
-
-  // Group filtered dishes by category
-  const groupedDishes = CATEGORY_MAP.map(group => {
-    const itemsInGroup = filteredItems.filter(item => getNormalizedCategory(item.category) === group.key);
-    return {
-      key: group.key,
-      icon: group.icon,
-      items: itemsInGroup
-    };
-  }).filter(group => group.items.length > 0);
-
-  const knownKeys = new Set(CATEGORY_MAP.map(g => g.key));
-  const unknownItems = filteredItems.filter(item => !knownKeys.has(getNormalizedCategory(item.category)));
-  if (unknownItems.length > 0) {
-    groupedDishes.push({
-      key: 'Chef Specials',
-      icon: '✨',
-      items: unknownItems
-    });
-  }
+  const isFixedTableBarActive = Boolean(tableNum && !tableCleaningInfo?.isCleaning);
 
   return (
-    <div className="menu-page" style={{ position: 'relative', backgroundColor: '#FFFDF8', color: '#1A202C', paddingBottom: totalCartCount > 0 ? '6rem' : '0' }}>
+    <div className="menu-page" style={{ position: 'relative', backgroundColor: '#FFFDF8', color: '#1A202C', paddingTop: isFixedTableBarActive ? '48px' : '0', paddingBottom: totalCartCount > 0 ? '6rem' : '0' }}>
+
+      {/* ================= TABLE CLEANING NOTICE OVERLAY ================= */}
+      {tableCleaningInfo?.isCleaning && (
+        <div
+          style={{
+            backgroundColor: '#FFFBEB',
+            borderBottom: '3px solid #F59E0B',
+            padding: '1rem 1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            boxShadow: '0 4px 20px rgba(245, 158, 11, 0.2)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ backgroundColor: '#FEF3C7', padding: '0.6rem', borderRadius: '12px', color: '#D97706' }}>
+              <Sparkles size={24} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#92400E' }}>
+                Table {tableCleaningInfo.tableNum} is currently being prepared.
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#B45309', fontWeight: 600, marginTop: '0.15rem' }}>
+                Please wait until the table is available.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ backgroundColor: '#FEF3C7', padding: '0.45rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, color: '#D97706', fontFamily: 'monospace' }}>
+            ⏱️ {Math.floor(tableCleaningInfo.remainingSec / 60)}m {tableCleaningInfo.remainingSec % 60}s
+          </div>
+        </div>
+      )}
+
+      {/* ================= CUSTOMER SEATED QR BADGE STRIP (PERMANENTLY FIXED AT TOP) ================= */}
+      {isFixedTableBarActive && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '72px',
+            left: 0,
+            right: 0,
+            zIndex: 9999,
+            backgroundColor: '#0F2A1D',
+            color: '#FFFFFF',
+            padding: '0.5rem 1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '0.4rem',
+            boxShadow: '0 4px 16px rgba(15, 42, 29, 0.22)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 800 }}>
+              Table {tableNum}
+            </span>
+            <span style={{ fontSize: '0.8rem', color: '#C8E6C9', fontWeight: 600 }}>
+              📍 Seated at Table {tableNum} • Digital Menu
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {placedTableOrders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsCustomerOrdersModalOpen(true)}
+                style={{
+                  backgroundColor: '#F2C14E',
+                  color: '#0F2A1D',
+                  border: 'none',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                }}
+              >
+                <ShoppingBag size={13} />
+                <span>My Orders ({placedTableOrders.length})</span>
+              </button>
+            )}
+
+            {/* Red Oval Cart Badge (Image 1 Style) */}
+            <button
+              type="button"
+              onClick={() => setIsCheckoutModalOpen(true)}
+              style={{
+                backgroundColor: '#B91C1C',
+                color: '#FFFFFF',
+                border: '1.5px solid rgba(255,255,255,0.3)',
+                padding: '0.35rem 0.95rem',
+                borderRadius: '9999px',
+                fontSize: '0.82rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                boxShadow: '0 4px 12px rgba(185, 28, 28, 0.4)',
+                transition: 'transform 0.15s ease'
+              }}
+            >
+              <ShoppingBag size={14} />
+              <span>Cart {totalCartCount > 0 ? `(${totalCartCount})` : ''}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Restaurant Closed Banner (Shown when restaurant is closed) */}
+      {isClosedNow && (
+        <div style={{
+          backgroundColor: '#FEF2F2',
+          border: '1.5px solid #FCA5A5',
+          borderRadius: '14px',
+          padding: '0.85rem 1.25rem',
+          margin: '1rem auto 0.5rem auto',
+          maxWidth: '1200px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.85rem',
+          boxShadow: '0 4px 16px rgba(220, 38, 38, 0.08)'
+        }}>
+          <div style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '0.55rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Clock size={22} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#991B1B', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span>🔴 RESTAURANT IS CURRENTLY CLOSED FOR ORDERS</span>
+            </div>
+            <p style={{ fontSize: '0.82rem', color: '#7F1D1D', margin: '0.2rem 0 0 0', fontWeight: 600 }}>
+              {settings.closedMessage || 'We are currently closed for orders. Operating Hours: Mon – Fri: 11:00 AM – 10:00 PM | Sat – Sun: 10:00 AM – 12:00 AM'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Scan QR Required Banner (Shown when customer opens menu without scanning a Table QR code) */}
+      {!tableNum && (
+        <div style={{
+          backgroundColor: '#FFFBEB',
+          border: '1.5px solid #FCD34D',
+          borderRadius: '14px',
+          padding: '0.85rem 1.25rem',
+          margin: '1rem auto 0.5rem auto',
+          maxWidth: '1200px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.85rem',
+          boxShadow: '0 4px 16px rgba(245, 158, 11, 0.08)'
+        }}>
+          <div style={{ backgroundColor: '#F59E0B', color: '#FFFFFF', padding: '0.55rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <QrCode size={22} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#92400E', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span>📲 Scan Table QR Code to Place an Order</span>
+            </div>
+            <p style={{ fontSize: '0.82rem', color: '#78350F', margin: '0.2rem 0 0 0', fontWeight: 600 }}>
+              Ordering is available exclusively for Dine-In guests. Please scan the QR code on your dining table to unlock dish ordering.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Occupied Table Alert Banner (Shown when scanning an already-occupied table) */}
+      {tableNum && tableOccupiedInfo && tableOccupiedInfo.isOccupied && (
+        <div style={{
+          backgroundColor: '#FEF2F2',
+          border: '1.5px solid #FCA5A5',
+          borderRadius: '14px',
+          padding: '1rem 1.25rem',
+          margin: '1rem auto 0.5rem auto',
+          maxWidth: '1200px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.85rem',
+          boxShadow: '0 4px 16px rgba(220, 38, 38, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '0.55rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <QrCode size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#991B1B', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                <span>🔒 Table {tableNum} is Currently Occupied</span>
+                <span style={{ backgroundColor: '#EF4444', color: '#FFFFFF', fontSize: '0.7rem', padding: '0.15rem 0.55rem', borderRadius: '9999px', fontWeight: 800 }}>
+                  ● Ordering Locked
+                </span>
+              </div>
+              <p style={{ fontSize: '0.82rem', color: '#7F1D1D', margin: '0.25rem 0 0 0', fontWeight: 600 }}>
+                This table is currently occupied by another dining session. Adding dishes and placing orders is blocked until the order is completed.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Success Alert Banner */}
       {orderSuccessMsg && (
@@ -310,7 +796,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       {/* ================= 1. EDITORIAL PAGE HERO SECTION ================= */}
       <section style={{ backgroundColor: '#FAF6EE', padding: '1.25rem 1.5rem 1.25rem 1.5rem', textAlign: 'center', borderBottom: '1px solid #EAE3D2' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          
+
           <h1 style={{ fontSize: 'clamp(2.2rem, 4vw, 3rem)', fontFamily: "var(--font-heading), 'Poppins', 'Inter', sans-serif", fontWeight: 800, color: '#1E4636', margin: '0 0 0.75rem 0', lineHeight: 1.15 }}>
             Dive Into Delicious Meal Dishes
           </h1>
@@ -321,16 +807,16 @@ export default function MenuPage({ onOpenDemoModal }) {
         </div>
       </section>
 
-      {/* ================= 2. SEARCH & CATEGORY FILTER BAR ================= */}
-      <section style={{ backgroundColor: '#FAF6EE', padding: '1.5rem 1.5rem 2rem 1.5rem', borderBottom: '1px dashed #E2D7C5' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'center', justifyContent: 'space-between' }}>
-          
+      {/* ================= 2. SEARCH & VEG TOGGLE BAR ================= */}
+      <section style={{ backgroundColor: '#FAF6EE', padding: '1.25rem 1.5rem', borderBottom: '1px dashed #E2D7C5' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexWrap: 'nowrap', gap: '0.85rem', alignItems: 'center', justifyContent: 'space-between' }}>
+
           {/* Search Box */}
-          <div style={{ position: 'relative', flexGrow: 1, maxWidth: '380px', minWidth: '260px' }}>
+          <div style={{ position: 'relative', flexGrow: 1, minWidth: 0 }}>
             <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
-            <input 
-              type="text" 
-              placeholder="Search dishes, ingredients..." 
+            <input
+              type="text"
+              placeholder="Search dishes, ingredients..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
@@ -343,102 +829,72 @@ export default function MenuPage({ onOpenDemoModal }) {
                 backgroundColor: '#FFFFFF',
                 fontSize: '0.9rem',
                 fontWeight: 600,
-                outline: 'none'
+                outline: 'none',
+                boxSizing: 'border-box'
               }}
             />
           </div>
 
-          {/* Category Filter Pills & Veg Only Toggle Switch in a Single Line */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexGrow: 1, minWidth: 0 }}>
-            
-            {/* Category Filter Pills Horizontal Track */}
-            <div 
-              style={{ 
-                display: 'flex', 
-                gap: '0.6rem', 
-                overflowX: 'auto', 
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none',
-                flexWrap: 'nowrap',
-                flexGrow: 1,
-                minWidth: 0,
-                WebkitOverflowScrolling: 'touch' 
+          {/* Veg Only Toggle Switch (Matching Reference Image 2) */}
+          <div
+            onClick={() => setVegOnly(!vegOnly)}
+            title={vegOnly ? "Showing Veg Only dishes (Click to show all)" : "Click to filter Veg Only dishes"}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#FFFFFF',
+              padding: '0.45rem 0.85rem',
+              borderRadius: '16px',
+              border: '1.5px solid #CBD5E1',
+              cursor: 'pointer',
+              userSelect: 'none',
+              flexShrink: 0,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+            }}
+          >
+            {/* Horizontal Pill Track */}
+            <div
+              style={{
+                width: '46px',
+                height: '16px',
+                borderRadius: '10px',
+                backgroundColor: vegOnly ? '#DCFCE7' : '#E2E8F0',
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'background-color 0.25s ease'
               }}
-              className="no-scrollbar"
             >
-              {[
-                { id: 'all', label: 'All Dishes' },
-                { id: 'starters', label: 'Starters' },
-                { id: 'mains', label: 'Main Course' },
-                { id: 'curries', label: 'Curries' },
-                { id: 'biryani', label: 'Biryani' },
-                { id: 'breads', label: 'Breads' },
-                { id: 'southindian', label: 'South Indian' },
-                { id: 'desserts', label: 'Desserts' },
-                { id: 'beverages', label: 'Beverages' }
-              ].map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  style={{
-                    padding: '0.55rem 1.25rem',
-                    borderRadius: '9999px',
-                    border: '1.5px solid',
-                    borderColor: selectedCategory === cat.id ? '#1E4636' : '#D8CEBC',
-                    backgroundColor: selectedCategory === cat.id ? '#1E4636' : '#FFFFFF',
-                    color: selectedCategory === cat.id ? '#FFFFFF' : '#1E4636',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Veg Only Toggle Switch (Single Line) */}
-            <div 
-              onClick={() => setVegOnly(!vegOnly)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.55rem', backgroundColor: 'transparent', padding: '0.3rem 0.5rem', cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}
-            >
-              <span style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid #166534', borderRadius: '3px', position: 'relative', flexShrink: 0 }}>
-                <span style={{ position: 'absolute', inset: '2.5px', backgroundColor: '#166534', borderRadius: '50%' }}></span>
-              </span>
-              <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#1E4636', whiteSpace: 'nowrap' }}>Veg Only</span>
-              <button 
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setVegOnly(!vegOnly); }}
+              {/* Sliding Green Veg Square Knob */}
+              <div
                 style={{
-                  width: '44px',
+                  width: '24px',
                   height: '24px',
-                  borderRadius: '14px',
-                  border: '1.5px solid #000000',
-                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
-                  backgroundColor: vegOnly ? '#166534' : '#CBD5E1',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  transition: 'all 0.2s ease',
-                  flexShrink: 0
+                  borderRadius: '7px',
+                  border: '2px solid #166534',
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                  position: 'absolute',
+                  top: '-4px',
+                  left: vegOnly ? '24px' : '-2px',
+                  transition: 'left 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                <div style={{
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  backgroundColor: '#FFFFFF',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                  position: 'absolute',
-                  top: '1.5px',
-                  left: vegOnly ? '21px' : '2px',
-                  transition: 'left 0.2s ease'
-                }} />
-              </button>
+                {/* Center Green Dot */}
+                <div
+                  style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    backgroundColor: '#166534'
+                  }}
+                />
+              </div>
             </div>
-
           </div>
 
         </div>
@@ -447,7 +903,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       {/* ================= 3. ALL DISHES EDITORIAL LIST GROUPED BY CATEGORY ================= */}
       <section style={{ backgroundColor: '#FAF6EE', padding: '2rem 1.5rem 1.5rem 1.5rem' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          
+
           {/* Centered Section Header */}
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#EBF4F0', marginBottom: '0.5rem' }}>
@@ -471,7 +927,7 @@ export default function MenuPage({ onOpenDemoModal }) {
             <div>
               {groupedDishes.map(group => (
                 <div key={group.key} style={{ marginBottom: '2rem' }}>
-                  
+
                   {/* Category Alignment Section Title Header */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem', borderBottom: '2px solid #EAE3D2', paddingBottom: '0.5rem' }}>
                     <span style={{ fontSize: '1.4rem' }}>{group.icon}</span>
@@ -481,28 +937,32 @@ export default function MenuPage({ onOpenDemoModal }) {
                   </div>
 
                   {/* 2-Column Clean Grid of Aligned Dish Rows under this Category */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.5rem 3rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '1.25rem 2rem' }}>
                     {group.items.map(item => {
                       const qty = cart[item.id] || 0;
                       const isAvailable = item.available !== false;
 
                       return (
-                        <div 
-                          key={item.id} 
+                        <div
+                          key={item.id}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '1.25rem',
+                            gap: '0.85rem',
                             paddingBottom: '1.25rem',
                             borderBottom: '1px dashed #E2D7C5',
                             position: 'relative'
                           }}
                         >
                           {/* Left: Thumbnail Image */}
-                          <div style={{ width: '72px', height: '72px', borderRadius: '12px', overflow: 'hidden', flexShrink: 0, position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
-                            <img 
-                              src={item.img} 
-                              alt={item.name} 
+                          <div style={{ width: '68px', height: '68px', borderRadius: '12px', overflow: 'hidden', flexShrink: 0, position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
+                            <img
+                              src={resolveDishImageUrl(item)}
+                              alt=""
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = '/hero_dish_2.png';
+                              }}
                               style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isAvailable ? 1 : 0.6 }}
                             />
                             {!isAvailable && (
@@ -514,19 +974,19 @@ export default function MenuPage({ onOpenDemoModal }) {
 
                           {/* Middle: Dish Info */}
                           <div style={{ flexGrow: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
                               {/* Veg / Non-Veg Indicator */}
                               <span style={{ display: 'inline-block', width: '14px', height: '14px', border: `2px solid ${item.isVeg ? '#166534' : '#DC2626'}`, borderRadius: '3px', position: 'relative', flexShrink: 0 }}>
                                 <span style={{ position: 'absolute', inset: '2px', backgroundColor: item.isVeg ? '#166534' : '#DC2626', borderRadius: '50%' }}></span>
                               </span>
-                              
-                              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F2A1D', margin: 0, fontFamily: "var(--font-heading), 'Poppins', 'Inter', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+                              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0F2A1D', margin: 0, fontFamily: "var(--font-heading), 'Poppins', 'Inter', sans-serif", lineHeight: 1.25 }}>
                                 {item.name}
                               </h3>
 
                               {item.bestseller && (
-                                <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '9999px', border: '1px solid #FCD34D' }}>
-                                  ⭐ Bestseller
+                                <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', fontSize: '0.64rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '9999px', border: '1px solid #FCD34D' }}>
+                                  ⭐ Best
                                 </span>
                               )}
                             </div>
@@ -565,9 +1025,35 @@ export default function MenuPage({ onOpenDemoModal }) {
                               >
                                 Out of Stock
                               </button>
+                            ) : !tableNum ? (
+                              <span style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 700, fontStyle: 'italic', backgroundColor: '#F1F5F9', padding: '0.3rem 0.75rem', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                                Scan QR to Order
+                              </span>
+                            ) : (tableOccupiedInfo && tableOccupiedInfo.isOccupied) ? (
+                              <button
+                                type="button"
+                                disabled
+                                title="Table is currently occupied by another session. Ordering is blocked until the session is completed."
+                                style={{
+                                  backgroundColor: '#E2E8F0',
+                                  color: '#64748B',
+                                  border: '1px solid #CBD5E1',
+                                  padding: '0.45rem 1rem',
+                                  borderRadius: '8px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 800,
+                                  cursor: 'not-allowed',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  opacity: 0.85
+                                }}
+                              >
+                                🔒 Locked
+                              </button>
                             ) : qty > 0 ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.2rem 0.5rem', borderRadius: '8px' }}>
-                                <button 
+                                <button
                                   type="button"
                                   onClick={() => handleDecreaseQty(item.id)}
                                   style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
@@ -575,7 +1061,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                                   <Minus size={14} />
                                 </button>
                                 <span style={{ fontWeight: 800, fontSize: '0.88rem', minWidth: '18px', textAlign: 'center' }}>{qty}</span>
-                                <button 
+                                <button
                                   type="button"
                                   onClick={() => handleAddToCart(item.id)}
                                   style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
@@ -622,162 +1108,209 @@ export default function MenuPage({ onOpenDemoModal }) {
         </div>
       </section>
 
-      {/* ================= 4. OUR CULTURE & CULINARY ARTISTRY EXPOSURE STUDIO ================= */}
-      <section style={{ backgroundColor: '#FAF6EE', padding: '1.5rem 1.5rem 2rem 1.5rem', borderTop: '1px dashed #E2D7C5' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', textAlign: 'center' }}>
-          
-          <h2 style={{ fontSize: '2rem', fontFamily: "var(--font-heading), 'Poppins', 'Inter', sans-serif", fontWeight: 800, color: '#1E4636', marginBottom: '1rem' }}>
-            Our Culture & Kitchen Artistry
-          </h2>
 
-          {/* SmoothUI Exposure Slider Studio */}
-          <ExposureSlider />
 
-        </div>
-      </section>
+      {/* Swiggy-Style Circular Floating MENU Button at Bottom-Right (Orange, Icon Only) */}
+      <button
+        type="button"
+        onClick={() => setIsCategoryDrawerOpen(true)}
+        aria-label="Open Menu Categories"
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 9999,
+          width: '58px',
+          height: '58px',
+          borderRadius: '50%',
+          backgroundColor: '#FF7A00',
+          backgroundImage: 'linear-gradient(135deg, #FF8A00 0%, #FF6800 100%)',
+          color: '#FFFFFF',
+          boxShadow: '0 8px 25px rgba(255, 122, 0, 0.45)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: '2.5px solid #FFFFFF',
+          cursor: 'pointer',
+          transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), boxShadow 0.2s ease',
+          animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+          padding: 0
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.08)';
+          e.currentTarget.style.boxShadow = '0 12px 32px rgba(255, 122, 0, 0.6)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 8px 25px rgba(255, 122, 0, 0.45)';
+        }}
+      >
+        <UtensilsCrossed size={28} strokeWidth={2.4} color="#FFFFFF" />
+      </button>
 
-      {/* ================= 5. CHEF TESTIMONIAL BANNER ================= */}
-      <section style={{ backgroundColor: '#FAF6EE', padding: '0 1.5rem 2.5rem 1.5rem' }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-          <div style={{ backgroundColor: '#E07A3C', borderRadius: '24px', padding: '2.5rem 2rem', color: '#FFFFFF', display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2rem', alignItems: 'center', boxShadow: '0 15px 35px rgba(224, 122, 60, 0.25)' }}>
-            <div>
-              <p style={{ fontSize: '1.25rem', fontFamily: "var(--font-heading), 'Poppins', 'Inter', sans-serif", fontStyle: 'italic', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-                "I love Flavora because it allows us to show our diners how authentic clay-tandoor dishes and hand-milled spices transform dining into a royal celebration. Every order is a source of pride."
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                <img src="/chef_plating.png" alt="Executive Chef" style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid #FFFFFF', objectFit: 'cover' }} />
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>Executive Chef Srikanth</div>
-                  <div style={{ fontSize: '0.82rem', opacity: 0.9 }}>Master Culinary Director • Flavora Group</div>
-                </div>
+
+
+      {/* ================= 6. CATEGORY SELECTION BOTTOM DRAWER ================= */}
+      {isCategoryDrawerOpen && (
+        <div className="admin-modal-backdrop" onClick={() => setIsCategoryDrawerOpen(false)} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0', zIndex: 10000 }}>
+          <div
+            className="admin-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '520px',
+              width: '100%',
+              borderRadius: '24px 24px 0 0',
+              overflow: 'hidden',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.35)',
+              backgroundColor: '#FFFFFF'
+            }}
+          >
+            {/* Drawer Header */}
+            <div style={{ backgroundColor: '#0F2A1D', color: '#FFFFFF', padding: '1.1rem 1.4rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Utensils size={22} strokeWidth={2.2} color="#FF8A00" />
+                <h3 style={{ color: '#FFFFFF', fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>
+                  Select Menu Category
+                </h3>
+              </div>
+              <button className="admin-modal-close" onClick={() => setIsCategoryDrawerOpen(false)} style={{ color: '#FFFFFF' }}>×</button>
+            </div>
+
+            {/* Categories Grid List */}
+            <div style={{ padding: '1.25rem', backgroundColor: '#FAF6EE', maxHeight: '65vh', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                {dynamicCategories.map((cat) => {
+                  const isActive = selectedCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(cat.id);
+                        setIsCategoryDrawerOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1rem 0.6rem',
+                        borderRadius: '14px',
+                        border: '2px solid',
+                        borderColor: isActive ? '#FF8A00' : '#EAE3D2',
+                        backgroundColor: isActive ? '#1E4636' : '#FFFFFF',
+                        color: isActive ? '#FFFFFF' : '#0F2A1D',
+                        fontWeight: 800,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        boxShadow: isActive ? '0 6px 16px rgba(30,70,54,0.35)' : '0 2px 6px rgba(0,0,0,0.03)',
+                        transition: 'all 0.15s ease',
+                        gap: '0.4rem'
+                      }}
+                    >
+                      <span style={{ fontSize: '1.6rem' }}>{cat.icon}</span>
+                      <span style={{ textAlign: 'center', lineHeight: 1.2 }}>{cat.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-              <img src="/hero_dish_1.png" alt="Dish 1" style={{ width: '100%', height: '120px', borderRadius: '16px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.4)' }} />
-              <img src="/hero_dish_2.png" alt="Dish 2" style={{ width: '100%', height: '120px', borderRadius: '16px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.4)' }} />
-              <img src="/carousel_1.png" alt="Dish 3" style={{ width: '100%', height: '120px', borderRadius: '16px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.4)' }} />
-              <img src="/tandoor_oven.png" alt="Dish 4" style={{ width: '100%', height: '120px', borderRadius: '16px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.4)' }} />
+            <div style={{ padding: '0.85rem 1.4rem', backgroundColor: '#FFFFFF', borderTop: '1px solid #EAE3D2', textAlign: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setIsCategoryDrawerOpen(false)}
+                style={{ width: '100%', borderRadius: '10px', fontWeight: 800, padding: '0.65rem', borderColor: '#1E4636', color: '#1E4636' }}
+              >
+                Close Category Menu
+              </button>
             </div>
+
           </div>
         </div>
-      </section>
-
-      {/* Small Floating View Cart Button at Bottom-Right (Appears when dishes added) */}
-      {totalCartCount > 0 && (
-        <button
-          type="button"
-          onClick={() => setIsCheckoutModalOpen(true)}
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            zIndex: 9999,
-            backgroundColor: '#FF8A00',
-            color: '#FFFFFF',
-            padding: '0.65rem 1.25rem',
-            borderRadius: '9999px',
-            boxShadow: '0 8px 24px rgba(255, 138, 0, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.6rem',
-            border: '2px solid #FFFFFF',
-            cursor: 'pointer',
-            fontWeight: 800,
-            fontSize: '0.88rem',
-            transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), boxShadow 0.2s ease',
-            animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.05)';
-            e.currentTarget.style.boxShadow = '0 12px 30px rgba(255, 138, 0, 0.55)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 8px 24px rgba(255, 138, 0, 0.45)';
-          }}
-        >
-          <span style={{ fontSize: '1.1rem' }}>🛒</span>
-          <span>View Cart ({totalCartCount})</span>
-          <span style={{ opacity: 0.85, fontWeight: 700 }}>• ₹{totalCartPrice}</span>
-          <Send size={16} />
-        </button>
       )}
 
       {/* ================= 7. CHECKOUT MODAL FOR TABLE ORDERING ================= */}
       {isCheckoutModalOpen && (
-        <div className="admin-modal-backdrop" onClick={() => setIsCheckoutModalOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', overflow: 'hidden' }}>
-          <div 
-            className="admin-modal-card" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ 
-              maxWidth: '500px', 
-              width: '100%', 
-              maxHeight: '90vh', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              borderRadius: '16px', 
-              overflow: 'hidden', 
-              boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
-              margin: 'auto'
-            }}
+        <div className="admin-modal-backdrop customer-qr-checkout-backdrop" onClick={() => setIsCheckoutModalOpen(false)}>
+          <div
+            className="admin-modal-card customer-qr-checkout-modal"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="admin-modal-header" style={{ backgroundColor: '#0F2A1D', color: '#FFFFFF', flexShrink: 0, padding: '1.1rem 1.4rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <ChefHat size={22} color="#FF8A00" />
-                <h3 className="admin-modal-title" style={{ color: '#FFFFFF', fontSize: '1.1rem' }}>
+            <div className="admin-modal-header customer-qr-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: '1 1 auto' }}>
+                <ChefHat size={22} color="#FF8A00" style={{ flexShrink: 0 }} />
+                <h3 className="admin-modal-title customer-qr-modal-title">
                   {tableNum ? `Send Order — Table ${tableNum}` : 'Review Cart & Send Order'}
                 </h3>
               </div>
-              <button className="admin-modal-close" onClick={() => setIsCheckoutModalOpen(false)} style={{ color: '#FFFFFF' }}>×</button>
+              <button
+                type="button"
+                className="admin-modal-close customer-qr-modal-close"
+                onClick={() => setIsCheckoutModalOpen(false)}
+                aria-label="Close modal"
+              >
+                ×
+              </button>
             </div>
 
-            <form onSubmit={handleSendOrderToChefAndManager} style={{ padding: '1.4rem', overflowY: 'auto', flexGrow: 1, WebkitOverflowScrolling: 'touch' }}>
-              
+            <form onSubmit={handleSendOrderToChefAndManager} className="customer-qr-modal-form">
+
               {/* Order Items Summary */}
-              <div style={{ backgroundColor: '#FAF6EE', padding: '0.9rem 1rem', borderRadius: '12px', marginBottom: '1.25rem', border: '1px solid #EAE3D2' }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.65rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>{tableNum ? `SELECTED DISHES (TABLE ${tableNum}):` : 'SELECTED DISHES IN YOUR CART:'}</span>
-                  <span style={{ color: '#166534', backgroundColor: '#EBF4F0', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontSize: '0.72rem' }}>
-                    {totalCartCount} {totalCartCount === 1 ? 'Dish' : 'Dishes'}
-                  </span>
+              <div className="customer-qr-dishes-box">
+                <div className="customer-qr-dishes-header">
+                  <span className="customer-qr-dishes-title">{tableNum ? `SELECTED DISHES (TABLE ${tableNum}):` : 'SELECTED DISHES IN YOUR CART:'}</span>
+                  <div className="customer-qr-dishes-actions">
+                    <span className="customer-qr-dish-count-badge">
+                      {totalCartCount} {totalCartCount === 1 ? 'Dish' : 'Dishes'}
+                    </span>
+                  </div>
                 </div>
 
-                {Object.entries(cart).map(([id, qty]) => {
-                  const dish = findItemInCatalog(id, menuItems);
-                  return dish ? (
-                    <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.86rem', color: '#334155', marginBottom: '0.4rem', borderBottom: '1px dashed #E2D7C5', paddingBottom: '0.35rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexGrow: 1 }}>
-                        <span style={{ fontWeight: 800, color: '#0F2A1D' }}>{dish.name}</span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                        {/* Quantity Adjuster inside Modal */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.15rem 0.45rem', borderRadius: '6px' }}>
-                          <button 
-                            type="button"
-                            onClick={() => handleDecreaseQty(dish.id || id)}
-                            style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '1px' }}
-                          >
-                            <Minus size={12} />
-                          </button>
-                          <span style={{ fontWeight: 800, fontSize: '0.8rem', minWidth: '16px', textAlign: 'center' }}>{qty}</span>
-                          <button 
-                            type="button"
-                            onClick={() => handleAddToCart(dish.id || id)}
-                            style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '1px' }}
-                          >
-                            <Plus size={12} />
-                          </button>
+                <div className="customer-qr-dishes-list">
+                  {Object.entries(cart).map(([id, qty]) => {
+                    const dish = findItemInCatalog(id, menuItems);
+                    return dish ? (
+                      <div key={id} className="customer-qr-cart-row">
+                        {/* Left: Dish Name & Unit Price */}
+                        <div className="customer-qr-cart-info">
+                          <div className="customer-qr-cart-name">
+                            {dish.name}
+                          </div>
+                          <div className="customer-qr-cart-unit-price">₹{dish.price} each</div>
                         </div>
-                        <span style={{ fontWeight: 800, color: '#1E4636', minWidth: '60px', textAlign: 'right' }}>₹{dish.price * qty}</span>
-                      </div>
-                    </div>
-                  ) : null;
-                })}
 
-                <div style={{ paddingTop: '0.5rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '1.05rem', color: '#FF8A00' }}>
-                  <span>Total Amount:</span>
+                        {/* Right: Quantity Adjuster & Row Total */}
+                        <div className="customer-qr-cart-controls">
+                          <div className="customer-qr-qty-picker">
+                            <button
+                              type="button"
+                              onClick={() => handleDecreaseQty(dish.id || id)}
+                              className="customer-qr-qty-btn"
+                              aria-label="Decrease quantity"
+                            >
+                              <Minus size={13} />
+                            </button>
+                            <span className="customer-qr-qty-val">{qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleAddToCart(dish.id || id)}
+                              className="customer-qr-qty-btn"
+                              aria-label="Increase quantity"
+                            >
+                              <Plus size={13} />
+                            </button>
+                          </div>
+                          <span className="customer-qr-row-price">₹{dish.price * qty}</span>
+                        </div>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+
+                <div className="customer-qr-total-row">
+                  <span className="customer-qr-total-label">Total Amount Payable:</span>
                   <span>₹{totalCartPrice}</span>
                 </div>
               </div>
@@ -822,24 +1355,117 @@ export default function MenuPage({ onOpenDemoModal }) {
                   value={chefNotes}
                   onChange={(e) => setChefNotes(e.target.value)}
                   className="form-control"
-                  style={{ fontSize: '0.88rem' }}
+                  style={{ fontSize: '0.88rem', minHeight: '85px' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-outline" onClick={() => setIsCheckoutModalOpen(false)}>Cancel</button>
-                <button 
-                  type="submit" 
-                  disabled={isSubmittingOrder}
-                  className="btn btn-primary" 
-                  style={{ backgroundColor: '#FF8A00', color: '#FFFFFF', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800 }}
+              <div className="customer-qr-footer-actions">
+                <button
+                  type="button"
+                  className="btn btn-outline customer-qr-btn-secondary"
+                  onClick={() => setIsCheckoutModalOpen(false)}
                 >
-                  <Send size={16} />
-                  <span>{isSubmittingOrder ? 'Transmitting...' : 'Confirm & Transmit Order'}</span>
+                  <span>Add More Items</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingOrder}
+                  className="btn btn-primary customer-qr-btn-primary"
+                  style={{ backgroundColor: '#FF8A00', borderColor: '#FF8A00' }}
+                >
+                  <Send size={15} />
+                  <span>{isSubmittingOrder ? 'Placing Order...' : 'Confirm & Place Order'}</span>
                 </button>
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 8. CUSTOMER "MY TABLE ORDERS ONLY" MODAL ================= */}
+      {isCustomerOrdersModalOpen && (
+        <div className="admin-modal-backdrop" onClick={() => setIsCustomerOrdersModalOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div
+            className="admin-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '480px',
+              width: '100%',
+              borderRadius: '18px',
+              overflow: 'hidden',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.35)'
+            }}
+          >
+            <div className="admin-modal-header" style={{ backgroundColor: '#0F2A1D', color: '#FFFFFF', padding: '1.25rem 1.4rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
+                  Table {tableNum}
+                </span>
+                <h3 className="admin-modal-title" style={{ color: '#FFFFFF', fontSize: '1.1rem', margin: 0 }}>
+                  My Table Ordered Items
+                </h3>
+              </div>
+              <button className="admin-modal-close" onClick={() => setIsCustomerOrdersModalOpen(false)} style={{ color: '#FFFFFF' }}>×</button>
+            </div>
+
+            <div style={{ padding: '1.4rem', maxHeight: '75vh', overflowY: 'auto' }}>
+              {placedTableOrders.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748B' }}>
+                  <ShoppingBag size={36} color="#94A3B8" style={{ margin: '0 auto 0.5rem auto' }} />
+                  <div style={{ fontWeight: 700, color: '#1E4636' }}>No active orders placed for Table {tableNum}</div>
+                  <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Browse the menu and add dishes to place an order.</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {placedTableOrders.map((ord, idx) => (
+                    <div key={ord.orderId || idx} style={{ backgroundColor: '#FAF6EE', border: '1.5px solid #EAE3D2', borderRadius: '14px', padding: '1rem 1.1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', borderBottom: '1px solid #EAE3D2', paddingBottom: '0.45rem' }}>
+                        <div>
+                          <span style={{ fontWeight: 800, color: '#1E4636', fontSize: '0.92rem' }}>#{ord.orderId}</span>
+                          <span style={{ fontSize: '0.76rem', color: '#64748B', marginLeft: '0.5rem' }}>Dine-In • Table {tableNum}</span>
+                        </div>
+                        <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.55rem', borderRadius: '9999px' }}>
+                          ● {ord.status || 'Preparing in Kitchen'}
+                        </span>
+                      </div>
+
+                      {/* Items List */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.65rem' }}>
+                        {ord.items.map((it, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', color: '#334155' }}>
+                            <span><strong>{it.qty}x</strong> {it.name}</span>
+                            <span style={{ fontWeight: 700, color: '#1E4636' }}>₹{it.price * it.qty}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {ord.chefNotes && (
+                        <div style={{ fontSize: '0.78rem', color: '#9A3412', backgroundColor: '#FFF7ED', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.65rem' }}>
+                          📝 Note: {ord.chefNotes}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.4rem', borderTop: '1px dashed #D5C9B5', fontWeight: 900, color: '#0F2A1D', fontSize: '0.95rem' }}>
+                        <span>Order Total</span>
+                        <span style={{ color: '#E07A3C' }}>₹{ord.totalAmount}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="admin-modal-footer" style={{ justifyContent: 'space-between', backgroundColor: '#F8FAFC' }}>
+              <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 600 }}>
+                📍 Table {tableNum} Dine-In Session
+              </div>
+              <button className="btn btn-primary" onClick={() => setIsCustomerOrdersModalOpen(false)} style={{ backgroundColor: '#1E4636', color: '#FFFFFF' }}>
+                Close
+              </button>
+            </div>
+
           </div>
         </div>
       )}
