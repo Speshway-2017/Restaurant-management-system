@@ -47,9 +47,9 @@ export default function Navbar({ activePage, setActivePage }) {
             <img
               src="/logo.png"
               alt="Flavora Kitchen Logo"
-              style={{ height: '42px', width: 'auto', display: 'block', objectFit: 'contain', borderRadius: '5px' }}
+              style={{ height: '30px', width: 'auto', display: 'block', objectFit: 'contain', borderRadius: '4px' }}
             />
-            <div className="brand-text-logo" style={{ display: 'flex', gap: '0.3rem' }}>
+            <div className="brand-text-logo" style={{ display: 'flex', gap: '0.2rem', fontSize: '1.15rem' }}>
               <span className="brand-favora">Flavora</span>
               <span className="brand-kitchen">Kitchen</span>
             </div>

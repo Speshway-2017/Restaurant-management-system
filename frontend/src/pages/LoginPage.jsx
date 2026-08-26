@@ -25,7 +25,10 @@ export default function LoginPage({ setActivePage }) {
           localStorage.setItem('flavora_auth_token', res.token);
         }
         localStorage.setItem('flavora_logged_in', 'true');
-        if (res.user?.role === 'Manager' || res.user?.role === 'Resto Manager' || enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
+        if (res.user?.role === 'Chef' || enteredInput.includes('chef')) {
+          localStorage.setItem('flavora_user_role', 'chef');
+          setActivePage('chef');
+        } else if (res.user?.role === 'Manager' || res.user?.role === 'Resto Manager' || enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
           localStorage.setItem('flavora_user_role', 'manager');
           setActivePage('manager');
         } else {
@@ -35,7 +38,10 @@ export default function LoginPage({ setActivePage }) {
       })
       .catch(() => {
         localStorage.setItem('flavora_logged_in', 'true');
-        if (enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
+        if (enteredInput.includes('chef')) {
+          localStorage.setItem('flavora_user_role', 'chef');
+          setActivePage('chef');
+        } else if (enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
           localStorage.setItem('flavora_user_role', 'manager');
           setActivePage('manager');
         } else {
@@ -56,6 +62,11 @@ export default function LoginPage({ setActivePage }) {
   const handleQuickManagerFill = () => {
     setEmailOrPhone('manager@flavorakitchen.in');
     setPassword('manager123');
+  };
+
+  const handleQuickChefFill = () => {
+    setEmailOrPhone('chef@flavorakitchen.in');
+    setPassword('chef123');
   };
 
   const handleQuickDemoFill = () => {
@@ -213,6 +224,63 @@ export default function LoginPage({ setActivePage }) {
             <button type="submit" disabled={isLoggingIn} className="button-submit">
               {isLoggingIn ? 'Signing In...' : 'Sign In'}
             </button>
+
+            {/* Quick Role Fill Pills */}
+            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #E2E8F0', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700, marginBottom: '0.5rem' }}>
+                ⚡ QUICK DEMO LOGIN ROLES:
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={handleQuickAdminFill}
+                  style={{
+                    padding: '0.35rem 0.7rem',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#F8FAFC',
+                    color: '#0F2A1D',
+                    fontSize: '0.74rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  👑 Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={handleQuickManagerFill}
+                  style={{
+                    padding: '0.35rem 0.7rem',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#F8FAFC',
+                    color: '#0F2A1D',
+                    fontSize: '0.74rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  👔 Manager
+                </button>
+                <button
+                  type="button"
+                  onClick={handleQuickChefFill}
+                  style={{
+                    padding: '0.35rem 0.7rem',
+                    borderRadius: '8px',
+                    border: '1px solid #E07A3C',
+                    backgroundColor: '#FFF3EB',
+                    color: '#E07A3C',
+                    fontSize: '0.74rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🍳 Chef KDS
+                </button>
+              </div>
+            </div>
           </form>
 
         </div>

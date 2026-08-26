@@ -673,7 +673,7 @@ h6 {
 .navbar-container {
   max-width: 1380px;
   margin: 0 auto;
-  padding: 0.85rem 1.5rem;
+  padding: 0.55rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
