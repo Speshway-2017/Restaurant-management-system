@@ -122,24 +122,26 @@ export default function AdminDashboardHome({ setActiveTab }) {
   // 2. Dynamic Sales Trend Chart Data
   const timeRangeFilterOptions = ['Today', '7 Days', '30 Days', '3 Months', '1 Year'];
 
+  const hasChartData = dbRevenueTotal > 0 || orders.length > 0;
+
   const chartDataMap = {
     'Today': [
-      { label: '8 AM', revenue: Math.round(dbRevenueTotal * 0.05), orders: Math.max(1, Math.round(orders.length * 0.05)), height: 30 },
-      { label: '12 PM', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.max(1, Math.round(orders.length * 0.25)), height: 80 },
-      { label: '4 PM', revenue: Math.round(dbRevenueTotal * 0.20), orders: Math.max(1, Math.round(orders.length * 0.20)), height: 60 },
-      { label: '8 PM', revenue: Math.round(dbRevenueTotal * 0.50), orders: Math.max(1, Math.round(orders.length * 0.50)), height: 140 }
+      { label: '8 AM', revenue: Math.round(dbRevenueTotal * 0.05), orders: Math.round(orders.length * 0.05), height: hasChartData ? 30 : 0 },
+      { label: '12 PM', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.round(orders.length * 0.25), height: hasChartData ? 80 : 0 },
+      { label: '4 PM', revenue: Math.round(dbRevenueTotal * 0.20), orders: Math.round(orders.length * 0.20), height: hasChartData ? 60 : 0 },
+      { label: '8 PM', revenue: Math.round(dbRevenueTotal * 0.50), orders: Math.round(orders.length * 0.50), height: hasChartData ? 140 : 0 }
     ],
     '7 Days': [
-      { label: 'Mon', revenue: Math.round(dbRevenueTotal * 0.12), orders: Math.max(1, Math.round(orders.length * 0.12)), height: 40 },
-      { label: 'Wed', revenue: Math.round(dbRevenueTotal * 0.18), orders: Math.max(1, Math.round(orders.length * 0.18)), height: 60 },
-      { label: 'Fri', revenue: Math.round(dbRevenueTotal * 0.30), orders: Math.max(1, Math.round(orders.length * 0.30)), height: 100 },
-      { label: 'Sun', revenue: Math.round(dbRevenueTotal * 0.40), orders: Math.max(1, Math.round(orders.length * 0.40)), height: 130 }
+      { label: 'Mon', revenue: Math.round(dbRevenueTotal * 0.12), orders: Math.round(orders.length * 0.12), height: hasChartData ? 40 : 0 },
+      { label: 'Wed', revenue: Math.round(dbRevenueTotal * 0.18), orders: Math.round(orders.length * 0.18), height: hasChartData ? 60 : 0 },
+      { label: 'Fri', revenue: Math.round(dbRevenueTotal * 0.30), orders: Math.round(orders.length * 0.30), height: hasChartData ? 100 : 0 },
+      { label: 'Sun', revenue: Math.round(dbRevenueTotal * 0.40), orders: Math.round(orders.length * 0.40), height: hasChartData ? 130 : 0 }
     ],
     '30 Days': [
-      { label: 'Week 1', revenue: Math.round(dbRevenueTotal * 0.20), orders: Math.max(1, Math.round(orders.length * 0.20)), height: 50 },
-      { label: 'Week 2', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.max(1, Math.round(orders.length * 0.25)), height: 75 },
-      { label: 'Week 3', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.max(1, Math.round(orders.length * 0.25)), height: 75 },
-      { label: 'Week 4', revenue: Math.round(dbRevenueTotal * 0.30), orders: Math.max(1, Math.round(orders.length * 0.30)), height: 100 }
+      { label: 'Week 1', revenue: Math.round(dbRevenueTotal * 0.20), orders: Math.round(orders.length * 0.20), height: hasChartData ? 50 : 0 },
+      { label: 'Week 2', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.round(orders.length * 0.25), height: hasChartData ? 75 : 0 },
+      { label: 'Week 3', revenue: Math.round(dbRevenueTotal * 0.25), orders: Math.round(orders.length * 0.25), height: hasChartData ? 75 : 0 },
+      { label: 'Week 4', revenue: Math.round(dbRevenueTotal * 0.30), orders: Math.round(orders.length * 0.30), height: hasChartData ? 100 : 0 }
     ]
   };
 

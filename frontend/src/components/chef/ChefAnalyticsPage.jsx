@@ -38,9 +38,9 @@ export default function ChefAnalyticsPage({ ordersList, getElapsedMins }) {
       {/* Header */}
       <div className="admin-dashboard-header" style={{ marginBottom: '1.5rem' }}>
         <div className="page-breadcrumb-bar">
-          <span>Kitchen Pass</span>
+          <span>Chef</span>
           <span className="crumb-sep">›</span>
-          <span className="crumb-current">Database Kitchen Performance Analytics</span>
+          <span className="crumb-current">Analytics</span>
         </div>
         <h1 className="admin-page-title">Database Kitchen Efficiency & Prep Velocity</h1>
         <p className="admin-page-subtitle">Real-time breakdown of ticket prep speeds, station load, and dish dispatch velocity derived directly from database orders.</p>

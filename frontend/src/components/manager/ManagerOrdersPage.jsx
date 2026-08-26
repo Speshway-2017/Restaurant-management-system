@@ -9,67 +9,26 @@ export default function ManagerOrdersPage() {
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
   const [selectedOrderTicketModal, setSelectedOrderTicketModal] = useState(null);
 
-  const defaultMockOrders = [
-    { id: 'ORD-6462', table: 'Table 01', type: 'Dine-In', customer: 'Jayanth', phone: '9876543210', total: 1620, payment: 'Pending', status: 'Placed', time: '05:16 pm', items: [{ name: 'Chicken 65', quantity: 1, price: 320 }, { name: 'Chicken Seekh Kebab', quantity: 1, price: 380 }, { name: 'Chicken Wings', quantity: 1, price: 320 }, { name: 'Mutton Dum Biryani', quantity: 2, price: 600 }] },
-    { id: 'ORD-7124', table: 'Table 02', type: 'Dine-In', customer: 'Ram', phone: '9876543211', total: 1450, payment: 'Pending', status: 'Placed', time: '04:37 pm', items: [{ name: 'Chicken 65', quantity: 1, price: 320 }, { name: 'Chicken Pepper Fry', quantity: 1, price: 350 }, { name: 'Chicken Dum Biryani', quantity: 1, price: 380 }, { name: 'Fresh Lime Soda', quantity: 1, price: 100 }] }
-  ];
-
-  const [ordersList, setOrdersList] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flavora_manager_orders');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return defaultMockOrders;
-  });
+  const [ordersList, setOrdersList] = useState([]);
 
   const fetchBackendOrders = async () => {
     try {
       const backendData = await api.getOrders();
-      let localStatusMap = {};
-      try {
-        const saved = localStorage.getItem('flavora_manager_orders');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            parsed.forEach(o => { if (o.id) localStatusMap[o.id] = o.status; });
-          }
-        }
-      } catch (e) {}
-
-      if (Array.isArray(backendData) && backendData.length > 0) {
-        const mapped = backendData.map(o => {
-          const idStr = o.orderId || o._id;
-          const activeStatus = o.status === 'Completed' || localStatusMap[idStr] === 'Completed'
-            ? 'Completed'
-            : (o.status || localStatusMap[idStr] || 'Placed');
-
-          return {
-            id: idStr,
-            table: o.table || 'Takeaway',
-            type: o.type || 'Dine-In',
-            customer: o.customer || 'Guest',
-            phone: o.phone || '',
-            total: o.total || 0,
-            payment: o.payment || 'Pending',
-            status: activeStatus,
-            time: o.time || 'Just now',
-            items: o.items || []
-          };
-        });
-
-        defaultMockOrders.forEach(mock => {
-          if (!mapped.some(m => m.id === mock.id)) {
-            mapped.push({
-              ...mock,
-              status: localStatusMap[mock.id] || mock.status
-            });
-          }
-        });
+      if (Array.isArray(backendData)) {
+        const mapped = backendData.map(o => ({
+          id: o.orderId || o._id,
+          table: o.table || 'Takeaway',
+          type: o.type || 'Dine-In',
+          customer: o.customer || 'Guest',
+          phone: o.phone || '',
+          total: o.total || 0,
+          payment: o.payment || 'Pending',
+          status: o.status || 'Placed',
+          time: o.time || 'Just now',
+          items: o.items || []
+        }));
 
         setOrdersList(mapped);
-        try {
-          localStorage.setItem('flavora_manager_orders', JSON.stringify(mapped));
-        } catch (e) {}
       }
     } catch (err) {
       console.warn("Backend orders fetch error:", err);
@@ -592,34 +551,6 @@ export default function ManagerOrdersPage() {
                               </button>
                             )}
 
-                            {/* Complete Order Option */}
-                            {!isCompleted && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleUpdateStatus(ord, 'Completed');
-                                  setOpenActionMenuId(null);
-                                }}
-                                style={{
-                                  width: '100%',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.5rem',
-                                  padding: '0.45rem 0.75rem',
-                                  borderRadius: '6px',
-                                  border: 'none',
-                                  backgroundColor: '#ECFDF5',
-                                  color: '#047857',
-                                  fontSize: '0.8rem',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                  textAlign: 'left'
-                                }}
-                              >
-                                <CheckCircle2 size={14} color="#047857" />
-                                <span>Complete Order</span>
-                              </button>
-                            )}
                           </div>
                         </>
                         )}
@@ -741,27 +672,6 @@ export default function ManagerOrdersPage() {
                   style={{ backgroundColor: '#6B21A8', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '0.5rem 1.1rem', fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}
                 >
                   Mark Served
-                </button>
-              )}
-              {selectedOrderTicketModal.status !== 'Completed' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleUpdateStatus(selectedOrderTicketModal, 'Completed');
-                    setSelectedOrderTicketModal(null);
-                  }}
-                  style={{
-                    backgroundColor: '#7A1C1C',
-                    color: '#FFFFFF',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '0.5rem 1.1rem',
-                    fontWeight: 800,
-                    fontSize: '0.82rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Complete Order
                 </button>
               )}
               <button

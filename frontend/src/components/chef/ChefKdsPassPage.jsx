@@ -131,7 +131,7 @@ export default function ChefKdsPassPage({
               {/* Dish List with Checkbox Strikeout */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 {ord.items.map((item, idx) => {
-                  const isChecked = checkedDishItems[ord.id]?.[idx];
+                  const isChecked = checkedDishItems[ord.id]?.[idx] || item.status === 'READY' || item.isReady || item.status === 'DELIVERED' || item.isDelivered;
                   return (
                     <div
                       key={idx}

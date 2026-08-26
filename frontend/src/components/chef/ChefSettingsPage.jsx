@@ -25,9 +25,9 @@ export default function ChefSettingsPage() {
       {/* Header */}
       <div className="admin-dashboard-header" style={{ marginBottom: '1.5rem' }}>
         <div className="page-breadcrumb-bar">
-          <span>Kitchen Pass</span>
+          <span>Chef</span>
           <span className="crumb-sep">›</span>
-          <span className="crumb-current">Kitchen Display Preferences</span>
+          <span className="crumb-current">Settings</span>
         </div>
         <h1 className="admin-page-title">Kitchen Display System (KDS) Settings</h1>
         <p className="admin-page-subtitle">Configure ticket refresh intervals, audio chime alerts, overdue warning thresholds, and layout preferences.</p>

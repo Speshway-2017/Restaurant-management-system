@@ -38,21 +38,7 @@ export default function ManagerAnalyticsPage() {
         console.warn("Backend getOrders notice:", e.message);
       }
 
-      // Merge with local manager orders if present
-      try {
-        const localSaved = localStorage.getItem('flavora_manager_orders');
-        if (localSaved) {
-          const parsedLocal = JSON.parse(localSaved);
-          if (Array.isArray(parsedLocal)) {
-            const existingIds = new Set(fetchedOrders.map(o => o.orderId || o._id || o.id));
-            parsedLocal.forEach(lo => {
-              if (lo && !existingIds.has(lo.id || lo._id || lo.orderId)) {
-                fetchedOrders.push(lo);
-              }
-            });
-          }
-        }
-      } catch (e) {}
+
 
       // Normalize orders
       const normalizedOrders = fetchedOrders.map((o, idx) => {

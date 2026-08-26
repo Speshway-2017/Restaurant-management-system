@@ -306,7 +306,7 @@ export default function ManagerLayout({ setActivePage }) {
         {/* Sidebar Footer */}
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-version" style={{ marginTop: 0 }}>
-            RestoOS Manager • v3.4
+            Resto Manager • v3.4
           </div>
         </div>
 
@@ -347,28 +347,6 @@ export default function ManagerLayout({ setActivePage }) {
           </div>
 
           <div className="admin-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {/* Chef Duty Status Toggle Button in Manager Navbar */}
-            <button
-              type="button"
-              onClick={handleToggleChefDuty}
-              style={{
-                backgroundColor: chefDutyStatus === 'LOGGED_IN' ? '#DCFCE7' : '#FEF2F2',
-                border: `1px solid ${chefDutyStatus === 'LOGGED_IN' ? '#86EFAC' : '#FCA5A5'}`,
-                color: chefDutyStatus === 'LOGGED_IN' ? '#166534' : '#991B1B',
-                borderRadius: '8px',
-                padding: '0.35rem 0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              title="Click to toggle Chef duty status"
-            >
-              <span>{chefDutyStatus === 'LOGGED_IN' ? '👨‍🍳 Chef Logged In' : '👨‍🍳 Chef Logged Out'}</span>
-            </button>
 
             {/* Notifications Bell */}
             <div className="admin-header-icon-btn-wrapper">

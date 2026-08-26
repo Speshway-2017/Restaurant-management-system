@@ -115,22 +115,10 @@ export default function ManagerTablesPage() {
     });
   };
 
-  const [tables, setTables] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flavora_tables');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return syncTableOrdersWithLocalStorage(parsed);
-        }
-      }
-    } catch (e) {}
-    return syncTableOrdersWithLocalStorage(defaultTables);
-  });
+  const [tables, setTables] = useState([]);
 
   React.useEffect(() => {
     const handleSync = () => {
-      // Fetch live tables & active orders from backend API
       const extractDigits = (val) => {
         if (!val) return '';
         const d = String(val).replace(/[^0-9]/g, '');
@@ -139,127 +127,70 @@ export default function ManagerTablesPage() {
 
       Promise.all([api.getTables().catch(() => []), api.getOrders().catch(() => [])])
         .then(([dbTables, dbOrders]) => {
-          let managerOrdersList = [];
+          const combinedOrders = Array.isArray(dbOrders) ? [...dbOrders] : [];
+          const baseList = (dbTables && dbTables.length > 0) ? dbTables : [];
+
+          let savedLocalTables = [];
           try {
-            const savedMgr = localStorage.getItem('flavora_manager_orders');
-            if (savedMgr) {
-              const parsed = JSON.parse(savedMgr);
-              if (Array.isArray(parsed)) managerOrdersList = parsed;
-            }
+            const raw = localStorage.getItem('flavora_tables');
+            if (raw) savedLocalTables = JSON.parse(raw);
           } catch (e) {}
 
-          const combinedOrders = Array.isArray(dbOrders) ? [...dbOrders] : [];
-          managerOrdersList.forEach(mOrd => {
-            const idx = combinedOrders.findIndex(o => (o.orderId || o.id || o._id) === mOrd.id);
-            if (idx !== -1) {
-              combinedOrders[idx] = { ...combinedOrders[idx], status: mOrd.status };
-            } else {
-              combinedOrders.push({
-                orderId: mOrd.id,
-                table: mOrd.table,
-                customer: mOrd.customer,
-                total: mOrd.total,
-                status: mOrd.status
-              });
-            }
-          });
+          const mapped = baseList.map(dbT => {
+            const cleanT = extractDigits(dbT.number || dbT.name);
 
-          setTables(prevTables => {
-            const merged = prevTables.map(t => {
-              const cleanT = extractDigits(t.num);
-              
-              const matchedDb = Array.isArray(dbTables) ? dbTables.find(dbT => {
-                const dbNumClean = extractDigits(dbT.number || dbT.name);
-                return dbNumClean && cleanT && dbNumClean === cleanT;
-              }) : null;
+            // Preserve QR placement state from localStorage or default to TRUE
+            const savedT = savedLocalTables.find(st => 
+              (st.id && dbT._id && String(st.id) === String(dbT._id)) || 
+              (st.num && dbT.number && extractDigits(st.num) === cleanT)
+            );
 
-              // Check backend orders status (ONLY non-completed, non-cancelled orders count as Occupied)
-              const activeOrder = combinedOrders.find(o => {
-                const oClean = extractDigits(o.tableNumber || o.table);
-                return oClean && cleanT && oClean === cleanT && o.status !== 'Completed' && o.status !== 'Cancelled';
-              });
+            const isQrPlaced = savedT && savedT.qrPlaced !== undefined ? Boolean(savedT.qrPlaced) : (dbT.qrPlaced !== undefined ? Boolean(dbT.qrPlaced) : true);
+            const customQr = savedT && savedT.customQrUrl ? savedT.customQrUrl : (dbT.customQrUrl || '');
 
-              // RULE 1: If an active uncompleted order exists -> Table MUST BE Occupied!
-              if (activeOrder) {
-                const custName = activeOrder.customer || activeOrder.guestName || (t.customer && t.customer !== '-' ? t.customer : 'Guest Diner');
-                const amtVal = (activeOrder.total !== undefined && activeOrder.total !== null) ? `₹${activeOrder.total}` : (activeOrder.totalAmount ? `₹${activeOrder.totalAmount}` : (t.amount !== '-' ? t.amount : '₹0'));
-                
-                if (matchedDb && matchedDb.status === 'Cleaning') {
-                  api.updateTableStatus(matchedDb._id || matchedDb.id, 'Occupied', activeOrder.orderId || activeOrder.id || '').catch(() => {});
-                }
-
-                return {
-                  ...t,
-                  status: 'Occupied',
-                  cleaningUntil: null,
-                  orderId: activeOrder.orderId || activeOrder.id || activeOrder._id || t.orderId,
-                  amount: amtVal,
-                  customer: custName,
-                  guest: custName,
-                  elapsed: 'Just Now'
-                };
-              }
-
-              // RULE 2: If NO active order exists, and table is currently Cleaning
-              if (t.status === 'Cleaning' || (matchedDb && matchedDb.status === 'Cleaning')) {
-                const cleaningTime = t.cleaningUntil || (matchedDb && matchedDb.cleaningUntil ? new Date(matchedDb.cleaningUntil).getTime() : null);
-                const now = Date.now();
-                if (cleaningTime && now >= cleaningTime) {
-                  return {
-                    ...t,
-                    status: 'Available',
-                    cleaningUntil: null,
-                    guest: '-',
-                    customer: '-',
-                    orderId: null,
-                    amount: '-'
-                  };
-                } else {
-                  return {
-                    ...t,
-                    status: 'Cleaning',
-                    cleaningUntil: cleaningTime || (Date.now() + 10 * 60 * 1000),
-                    guest: '-',
-                    customer: '-',
-                    orderId: null,
-                    amount: '-'
-                  };
-                }
-              }
-
-              // RULE 3: If no active order & not cleaning, respect backend table status or default
-              if (matchedDb && matchedDb.status && matchedDb.status !== 'Occupied') {
-                return {
-                  ...t,
-                  status: matchedDb.status,
-                  cleaningUntil: matchedDb.cleaningUntil ? new Date(matchedDb.cleaningUntil).getTime() : null,
-                  orderId: matchedDb.status === 'Available' ? null : (matchedDb.currentOrder || t.orderId),
-                  customer: matchedDb.status === 'Available' || matchedDb.status === 'Cleaning' ? '-' : t.customer,
-                  amount: matchedDb.status === 'Available' || matchedDb.status === 'Cleaning' ? '-' : t.amount
-                };
-              }
-
-              // RULE 4: If table was marked Occupied locally (e.g. from MenuPage placement), keep as Occupied until sync
-              if (t.status === 'Occupied' && t.orderId) {
-                return t;
-              }
-
-              return {
-                ...t,
-                status: 'Available',
-                cleaningUntil: null,
-                orderId: null,
-                customer: '-',
-                guest: '-',
-                amount: '-'
-              };
+            const activeOrder = combinedOrders.find(o => {
+              const oClean = extractDigits(o.tableNumber || o.table);
+              return oClean && cleanT && oClean === cleanT && o.status !== 'Completed' && o.status !== 'Cancelled' && o.status !== 'Paid' && o.payment !== 'Completed' && o.payment !== 'Paid';
             });
-            const synced = syncTableOrdersWithLocalStorage(merged);
-            try {
-              localStorage.setItem('flavora_tables', JSON.stringify(synced));
-            } catch (e) {}
-            return synced;
+
+            if (activeOrder) {
+              const custName = activeOrder.customer || activeOrder.guestName || 'Guest Diner';
+              const amtVal = `₹${activeOrder.total || activeOrder.totalAmount || 0}`;
+              
+              return {
+                id: dbT._id || dbT.id,
+                num: dbT.number || dbT.name || `T-${cleanT}`,
+                zone: dbT.section || 'Main Dining',
+                cap: dbT.seats || 4,
+                status: (activeOrder.status === 'Bill Generated' || activeOrder.payment === 'Awaiting Payment') ? 'Bill Generated' : 'Occupied',
+                cleaningUntil: null,
+                orderId: activeOrder.orderId || activeOrder.id || activeOrder._id,
+                amount: amtVal,
+                customer: custName,
+                guest: custName,
+                qrPlaced: isQrPlaced,
+                customQrUrl: customQr
+              };
+            }
+
+            return {
+              id: dbT._id || dbT.id,
+              num: dbT.number || dbT.name || `T-${cleanT}`,
+              zone: dbT.section || 'Main Dining',
+              cap: dbT.seats || 4,
+              status: dbT.status || 'Available',
+              cleaningUntil: dbT.cleaningUntil ? new Date(dbT.cleaningUntil).getTime() : null,
+              orderId: null,
+              customer: '-',
+              guest: '-',
+              amount: '-',
+              elapsed: '-',
+              qrPlaced: isQrPlaced,
+              customQrUrl: customQr
+            };
           });
+
+          setTables(mapped);
         });
     };
 
