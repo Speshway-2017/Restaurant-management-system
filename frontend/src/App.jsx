@@ -16,16 +16,20 @@ import MenuPage from './pages/MenuPage';
 import OffersPage from './pages/OffersPage';
 import AdminLayout from './components/admin/AdminLayout';
 import ManagerLayout from './components/manager/ManagerLayout';
+import ChefLayout from './components/chef/ChefLayout';
 
 export default function App() {
   const [activePage, setActivePageState] = useState(() => {
     const path = window.location.pathname.toLowerCase();
     const search = window.location.search.toLowerCase();
     const isLoggedIn = Boolean(localStorage.getItem('flavora_logged_in') === 'true' || localStorage.getItem('flavora_auth_token'));
-    
+
     // If QR code scanned or URL contains /menu or ?table=, open 'menu' directly without login!
     if (path.includes('/menu') || search.includes('table=')) {
       return 'menu';
+    }
+    if (path.includes('/chef')) {
+      return isLoggedIn ? 'chef' : 'login';
     }
     if (path.includes('/manager')) {
       return isLoggedIn ? 'manager' : 'login';
@@ -33,10 +37,10 @@ export default function App() {
     if (path.includes('/admin')) {
       return isLoggedIn ? 'admin' : 'login';
     }
-    
+
     const saved = localStorage.getItem('flavora_active_page');
     if (saved) {
-      if ((saved === 'admin' || saved === 'manager') && !isLoggedIn) {
+      if ((saved === 'admin' || saved === 'manager' || saved === 'chef') && !isLoggedIn) {
         return 'home';
       }
       return saved;
@@ -57,6 +61,8 @@ export default function App() {
       window.history.pushState({}, '', '/admin/dashboard');
     } else if (newPage === 'manager' && isLoggedIn) {
       window.history.pushState({}, '', '/manager/dashboard');
+    } else if (newPage === 'chef' && isLoggedIn) {
+      window.history.pushState({}, '', '/chef/dashboard');
     } else if (newPage === 'login') {
       window.history.pushState({}, '', '/login');
     }
@@ -70,6 +76,8 @@ export default function App() {
 
       if (path.includes('/menu') || search.includes('table=')) {
         setActivePageState('menu');
+      } else if (path.includes('/chef')) {
+        setActivePageState(isLoggedIn ? 'chef' : 'login');
       } else if (path.includes('/manager')) {
         setActivePageState(isLoggedIn ? 'manager' : 'login');
       } else if (path.includes('/admin')) {
@@ -91,7 +99,7 @@ export default function App() {
     const observer = new MutationObserver(() => {
       const modalOpen = document.querySelector('.admin-modal-backdrop, .modal-backdrop, [role="dialog"]');
       const containers = document.querySelectorAll('html, body, #root, main, .admin-content-viewport, .admin-dashboard-container, .admin-layout-main');
-      
+
       if (modalOpen) {
         containers.forEach(el => {
           if (el) {
@@ -144,37 +152,39 @@ export default function App() {
         return <AdminLayout setActivePage={setActivePage} />;
       case 'manager':
         return <ManagerLayout setActivePage={setActivePage} />;
+      case 'chef':
+        return <ChefLayout setActivePage={setActivePage} />;
       default:
         return <HomePage setActivePage={setActivePage} onOpenDemoModal={() => setDemoModalOpen(true)} />;
     }
   };
 
-  const isFullStandalonePage = activePage === 'login' || activePage === 'admin' || activePage === 'manager';
+  const isFullStandalonePage = activePage === 'login' || activePage === 'admin' || activePage === 'manager' || activePage === 'chef';
 
   return (
     <div className="app-container">
       {!isFullStandalonePage && (
-        <Navbar 
-          activePage={activePage} 
-          setActivePage={setActivePage} 
-          onOpenDemoModal={() => setDemoModalOpen(true)} 
+        <Navbar
+          activePage={activePage}
+          setActivePage={setActivePage}
+          onOpenDemoModal={() => setDemoModalOpen(true)}
         />
       )}
 
-      <main className="main-content" style={isFullStandalonePage ? { minHeight: '100vh' } : { paddingTop: '72px' }}>
+      <main className="main-content" style={isFullStandalonePage ? { minHeight: '100vh' } : { paddingTop: '50px' }}>
         {renderCurrentPage()}
       </main>
 
       {!isFullStandalonePage && (
-        <Footer 
-          setActivePage={setActivePage} 
-          onOpenDemoModal={() => setDemoModalOpen(true)} 
+        <Footer
+          setActivePage={setActivePage}
+          onOpenDemoModal={() => setDemoModalOpen(true)}
         />
       )}
 
-      <DemoModal 
-        isOpen={demoModalOpen} 
-        onClose={() => setDemoModalOpen(false)} 
+      <DemoModal
+        isOpen={demoModalOpen}
+        onClose={() => setDemoModalOpen(false)}
       />
     </div>
   );

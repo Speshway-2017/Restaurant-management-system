@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send } from 'lucide-react';
+import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send, Clock } from 'lucide-react';
 import { api } from '../services/api';
 import MenuDishStrip from '../components/MenuDishStrip';
 import ExposureSlider from '../components/ExposureSlider';
@@ -181,17 +181,17 @@ export default function MenuPage({ onOpenDemoModal }) {
           }
         }
 
-          // Sync placedTableOrders with live backend statuses for this table
-          setPlacedTableOrders(prev => {
-            if (!Array.isArray(prev) || prev.length === 0) return prev;
-            return prev.map(pOrd => {
-              const matchedBackend = orders.find(o => (o.orderId || o._id) === (pOrd.orderId || pOrd.id));
-              if (matchedBackend && matchedBackend.status) {
-                return { ...pOrd, status: matchedBackend.status };
-              }
-              return pOrd;
-            });
+        // Sync placedTableOrders with live backend statuses for this table
+        setPlacedTableOrders(prev => {
+          if (!Array.isArray(prev) || prev.length === 0) return prev;
+          return prev.map(pOrd => {
+            const matchedBackend = orders.find(o => (o.orderId || o._id) === (pOrd.orderId || pOrd.id));
+            if (matchedBackend && matchedBackend.status) {
+              return { ...pOrd, status: matchedBackend.status };
+            }
+            return pOrd;
           });
+        });
       } catch (err) {
         console.warn("Could not fetch backend table status:", err);
       }
@@ -231,10 +231,6 @@ export default function MenuPage({ onOpenDemoModal }) {
   }, [tableNum]);
 
   const handleAddToCart = (id) => {
-    if (isClosedNow) {
-      alert(settings.closedMessage || `The restaurant is currently closed for orders. Operating hours: Mon-Fri 11:00 AM - 10:00 PM | Sat-Sun 10:00 AM - 12:00 AM`);
-      return;
-    }
     if (!tableNum) {
       alert(`Ordering is available exclusively for Dine-In guests via Table QR Code. Please scan your dining table's QR code to unlock dish ordering.`);
       return;
@@ -470,9 +466,12 @@ export default function MenuPage({ onOpenDemoModal }) {
     }));
   }, [filteredItems]);
 
-  // Submit Order to Chef & Manager Backend
   const handleSendOrderToChefAndManager = async (e) => {
     e.preventDefault();
+    if (isClosedNow) {
+      alert(settings.closedMessage || `The restaurant is currently closed for orders. Operating hours: Mon-Fri 11:00 AM - 10:00 PM | Sat-Sun 10:00 AM - 12:00 AM. Your items are saved in your cart, but orders cannot be placed while the restaurant is closed.`);
+      return;
+    }
     if (totalCartCount === 0) return;
 
     setIsSubmittingOrder(true);
@@ -509,7 +508,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       try {
         localStorage.removeItem(cartKey);
         localStorage.removeItem('flavora_active_cart'); // Clear legacy single key if exists
-      } catch (e) {}
+      } catch (e) { }
       setCart({});
       window.dispatchEvent(new Event('flavora_cart_updated'));
       setGuestName('');
@@ -605,36 +604,39 @@ export default function MenuPage({ onOpenDemoModal }) {
         </div>
       )}
 
-      {/* ================= CUSTOMER SEATED QR BADGE STRIP (PERMANENTLY FIXED AT TOP) ================= */}
+      {/* ================= CUSTOMER SEATED QR BADGE STRIP (SINGLE LINE FIT AT TOP) ================= */}
       {isFixedTableBarActive && (
         <div
           style={{
             position: 'fixed',
-            top: '72px',
+            top: '50px',
             left: 0,
             right: 0,
             zIndex: 9999,
+            height: '46px',
             backgroundColor: '#0F2A1D',
             color: '#FFFFFF',
-            padding: '0.5rem 1rem',
+            padding: '0 0.85rem',
             display: 'flex',
-            justifyContent: 'space-between',
             alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '0.4rem',
-            boxShadow: '0 4px 16px rgba(15, 42, 29, 0.22)'
+            justifyContent: 'space-between',
+            flexWrap: 'nowrap',
+            gap: '0.5rem',
+            boxShadow: '0 4px 14px rgba(15, 42, 29, 0.22)'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 800 }}>
+          {/* Left Side: Table Badge & Seated Text */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, flexShrink: 1 }}>
+            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
               Table {tableNum}
             </span>
-            <span style={{ fontSize: '0.8rem', color: '#C8E6C9', fontWeight: 600 }}>
-              📍 Seated at Table {tableNum} • Digital Menu
+            <span style={{ fontSize: '0.76rem', color: '#C8E6C9', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              📍 Seated
             </span>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {/* Right Side: My Orders (if any) + Cart Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
             {placedTableOrders.length > 0 && (
               <button
                 type="button"
@@ -643,43 +645,43 @@ export default function MenuPage({ onOpenDemoModal }) {
                   backgroundColor: '#F2C14E',
                   color: '#0F2A1D',
                   border: 'none',
-                  padding: '0.35rem 0.75rem',
+                  padding: '0.25rem 0.6rem',
                   borderRadius: '8px',
-                  fontSize: '0.78rem',
+                  fontSize: '0.75rem',
                   fontWeight: 800,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.35rem',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  gap: '0.3rem',
+                  whiteSpace: 'nowrap'
                 }}
               >
-                <ShoppingBag size={13} />
-                <span>My Orders ({placedTableOrders.length})</span>
+                <ShoppingBag size={12} />
+                <span>Orders ({placedTableOrders.length})</span>
               </button>
             )}
 
-            {/* Red Oval Cart Badge (Image 1 Style) */}
+            {/* Red Oval Cart Badge */}
             <button
               type="button"
               onClick={() => setIsCheckoutModalOpen(true)}
               style={{
                 backgroundColor: '#B91C1C',
                 color: '#FFFFFF',
-                border: '1.5px solid rgba(255,255,255,0.3)',
-                padding: '0.35rem 0.95rem',
+                border: '1px solid rgba(255,255,255,0.3)',
+                padding: '0.3rem 0.85rem',
                 borderRadius: '9999px',
-                fontSize: '0.82rem',
+                fontSize: '0.78rem',
                 fontWeight: 800,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.4rem',
-                boxShadow: '0 4px 12px rgba(185, 28, 28, 0.4)',
-                transition: 'transform 0.15s ease'
+                gap: '0.35rem',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(185, 28, 28, 0.4)'
               }}
             >
-              <ShoppingBag size={14} />
+              <ShoppingBag size={13} />
               <span>Cart {totalCartCount > 0 ? `(${totalCartCount})` : ''}</span>
             </button>
           </div>
@@ -1359,6 +1361,13 @@ export default function MenuPage({ onOpenDemoModal }) {
                 />
               </div>
 
+              {isClosedNow && (
+                <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.7rem 0.9rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Clock size={16} color="#DC2626" />
+                  <span>Restaurant is currently closed. You can add dishes to cart, but order placement is disabled while closed.</span>
+                </div>
+              )}
+
               <div className="customer-qr-footer-actions">
                 <button
                   type="button"
@@ -1370,12 +1379,17 @@ export default function MenuPage({ onOpenDemoModal }) {
 
                 <button
                   type="submit"
-                  disabled={isSubmittingOrder}
+                  disabled={isSubmittingOrder || isClosedNow}
                   className="btn btn-primary customer-qr-btn-primary"
-                  style={{ backgroundColor: '#FF8A00', borderColor: '#FF8A00' }}
+                  style={{
+                    backgroundColor: isClosedNow ? '#94A3B8' : '#FF8A00',
+                    borderColor: isClosedNow ? '#94A3B8' : '#FF8A00',
+                    cursor: isClosedNow ? 'not-allowed' : 'pointer',
+                    opacity: isClosedNow ? 0.7 : 1
+                  }}
                 >
                   <Send size={15} />
-                  <span>{isSubmittingOrder ? 'Placing Order...' : 'Confirm & Place Order'}</span>
+                  <span>{isClosedNow ? 'Closed for Orders' : (isSubmittingOrder ? 'Placing Order...' : 'Confirm & Place Order')}</span>
                 </button>
               </div>
 
