@@ -17,6 +17,7 @@ import OffersPage from './pages/OffersPage';
 import AdminLayout from './components/admin/AdminLayout';
 import ManagerLayout from './components/manager/ManagerLayout';
 import ChefLayout from './components/chef/ChefLayout';
+import WaiterLayout from './components/waiter/WaiterLayout';
 
 export default function App() {
   const [activePage, setActivePageState] = useState(() => {
@@ -30,6 +31,9 @@ export default function App() {
     }
     if (path.includes('/chef')) {
       return isLoggedIn ? 'chef' : 'login';
+    }
+    if (path.includes('/waiter')) {
+      return isLoggedIn ? 'waiter' : 'login';
     }
     if (path.includes('/manager')) {
       return isLoggedIn ? 'manager' : 'login';
@@ -50,6 +54,23 @@ export default function App() {
 
   const [demoModalOpen, setDemoModalOpen] = useState(false);
 
+  // Clean legacy mock order keys and wipe database orders from MongoDB Atlas
+  useEffect(() => {
+    try {
+      localStorage.removeItem('flavora_manager_orders');
+      localStorage.removeItem('flavora_tables');
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('flavora_table_orders_')) {
+          localStorage.removeItem(key);
+        }
+      });
+      // Purge all orders from MongoDB Atlas
+      import('./services/api').then(({ api }) => {
+        api.clearAllOrders().catch(() => {});
+      });
+    } catch (e) {}
+  }, []);
+
   const setActivePage = (newPage) => {
     setActivePageState(newPage);
     localStorage.setItem('flavora_active_page', newPage);
@@ -63,6 +84,8 @@ export default function App() {
       window.history.pushState({}, '', '/manager/dashboard');
     } else if (newPage === 'chef' && isLoggedIn) {
       window.history.pushState({}, '', '/chef/dashboard');
+    } else if (newPage === 'waiter' && isLoggedIn) {
+      window.history.pushState({}, '', '/waiter/dashboard');
     } else if (newPage === 'login') {
       window.history.pushState({}, '', '/login');
     }
@@ -78,6 +101,8 @@ export default function App() {
         setActivePageState('menu');
       } else if (path.includes('/chef')) {
         setActivePageState(isLoggedIn ? 'chef' : 'login');
+      } else if (path.includes('/waiter')) {
+        setActivePageState(isLoggedIn ? 'waiter' : 'login');
       } else if (path.includes('/manager')) {
         setActivePageState(isLoggedIn ? 'manager' : 'login');
       } else if (path.includes('/admin')) {
@@ -154,12 +179,14 @@ export default function App() {
         return <ManagerLayout setActivePage={setActivePage} />;
       case 'chef':
         return <ChefLayout setActivePage={setActivePage} />;
+      case 'waiter':
+        return <WaiterLayout setActivePage={setActivePage} />;
       default:
         return <HomePage setActivePage={setActivePage} onOpenDemoModal={() => setDemoModalOpen(true)} />;
     }
   };
 
-  const isFullStandalonePage = activePage === 'login' || activePage === 'admin' || activePage === 'manager' || activePage === 'chef';
+  const isFullStandalonePage = activePage === 'login' || activePage === 'admin' || activePage === 'manager' || activePage === 'chef' || activePage === 'waiter';
 
   return (
     <div className="app-container">

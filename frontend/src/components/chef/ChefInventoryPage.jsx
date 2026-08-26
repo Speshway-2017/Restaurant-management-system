@@ -16,7 +16,7 @@ export default function ChefInventoryPage({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
-            86'd Kitchen Item Availability Manager
+            Kitchen Item Availability Manager
           </h3>
           <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#64748B' }}>
             Toggle dishes as "Out of Stock" to instantly disable customer ordering on live QR menus.

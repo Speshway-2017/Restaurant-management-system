@@ -3,19 +3,12 @@ const Table = require('../models/Table');
 
 class OrderService {
   async getOrders() {
-    let orders = await orderRepository.findAll();
+    const orders = await orderRepository.findAll();
     if (!orders || orders.length === 0) {
       try {
-        const OrderModel = require('../models/Order');
-        const defaultOrders = [
-          { orderId: 'ORD-6462', table: 'Table 01', type: 'Dine-In', customer: 'Jayanth', phone: '9876543210', total: 1620, payment: 'Pending', status: 'Placed', time: '05:16 pm', items: [{ name: 'Chicken 65', quantity: 1, price: 320 }, { name: 'Chicken Seekh Kebab', quantity: 1, price: 380 }, { name: 'Chicken Wings', quantity: 1, price: 320 }, { name: 'Mutton Dum Biryani', quantity: 2, price: 600 }] },
-          { orderId: 'ORD-7124', table: 'Table 02', type: 'Dine-In', customer: 'Ram', phone: '9876543211', total: 1450, payment: 'Pending', status: 'Placed', time: '04:37 pm', items: [{ name: 'Chicken 65', quantity: 1, price: 320 }, { name: 'Chicken Pepper Fry', quantity: 1, price: 350 }, { name: 'Chicken Dum Biryani', quantity: 1, price: 380 }, { name: 'Fresh Lime Soda', quantity: 1, price: 100 }] }
-        ];
-        await OrderModel.insertMany(defaultOrders);
-        orders = await orderRepository.findAll();
-      } catch (e) {
-        console.warn("Could not auto-seed orders:", e.message);
-      }
+        await Table.updateMany({}, { status: 'Available', currentOrder: '', cleaningUntil: null });
+      } catch (e) {}
+      return [];
     }
     return orders;
   }
@@ -37,10 +30,14 @@ class OrderService {
       type: (data.type === 'Takeaway' || data.type === 'Delivery') ? data.type : 'Dine-In',
       customer: data.customer || data.guestName || 'Guest Diner',
       phone: data.phone || '+91 Direct QR',
-      items: Array.isArray(data.items) ? data.items.map(item => ({
+      items: Array.isArray(data.items) ? data.items.map((item, idx) => ({
+        id: item.id || item._id || `item-${Date.now()}-${idx}`,
         name: item.name || item.dishId || 'Delicious Item',
         price: Number(item.price) || 0,
-        quantity: Number(item.quantity || item.qty || 1)
+        quantity: Number(item.quantity || item.qty || 1),
+        status: item.status || (item.isDelivered ? 'DELIVERED' : (item.isReady ? 'READY' : 'PREPARING')),
+        isReady: Boolean(item.isReady || item.status === 'READY' || item.status === 'DELIVERED'),
+        isDelivered: Boolean(item.isDelivered || item.status === 'DELIVERED')
       })) : [],
       total: Number(data.total || data.totalAmount || 0),
       status: (data.status && ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Cancelled'].includes(data.status)) ? data.status : 'Placed',
@@ -90,7 +87,7 @@ class OrderService {
     return newOrder;
   }
 
-  async syncTableStatusForOrder(tableIdentifier) {
+  async syncTableStatusForOrder(tableIdentifier, forceStatus = null) {
     if (!tableIdentifier) return;
     const rawDigits = String(tableIdentifier).replace(/[^0-9]/g, '');
     const cleanNum = rawDigits ? String(parseInt(rawDigits, 10)) : '';
@@ -99,6 +96,23 @@ class OrderService {
     try {
       const OrderModel = require('../models/Order');
       const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i');
+
+      if (forceStatus === 'Cleaning') {
+        await Table.findOneAndUpdate(
+          { $or: [{ number: exactRegex }, { name: exactRegex }] },
+          { status: 'Cleaning', currentOrder: '' }
+        );
+        return;
+      }
+
+      if (forceStatus === 'Available') {
+        await Table.findOneAndUpdate(
+          { $or: [{ number: exactRegex }, { name: exactRegex }] },
+          { status: 'Available', currentOrder: '' }
+        );
+        return;
+      }
+
       const tableOrders = await OrderModel.find({
         $or: [
           { table: exactRegex },
@@ -106,12 +120,13 @@ class OrderService {
         ]
       });
 
-      const activeStatuses = ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served'];
-      const activeOrders = tableOrders.filter(o => activeStatuses.includes(o.status));
+      // Orders that keep the table OCCUPIED (including Bill Generated and Awaiting Payment)
+      const occupiedStatuses = ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Bill Generated', 'Awaiting Payment'];
+      const activeOccupiedOrders = tableOrders.filter(o => occupiedStatuses.includes(o.status) && o.payment !== 'Completed' && o.payment !== 'Paid');
 
-      if (activeOrders.length > 0) {
-        // CASE 2 & 3: Other active order(s) exist -> Table MUST REMAIN Occupied
-        const latestActive = activeOrders[activeOrders.length - 1];
+      if (activeOccupiedOrders.length > 0) {
+        // Table MUST REMAIN Occupied
+        const latestActive = activeOccupiedOrders[activeOccupiedOrders.length - 1];
         await Table.findOneAndUpdate(
           { $or: [{ number: exactRegex }, { name: exactRegex }] },
           {
@@ -120,16 +135,17 @@ class OrderService {
           }
         );
       } else {
-        // CASE 1: No active orders exist -> Release table to 'Cleaning' for 10 mins
-        const cleaningExpiration = new Date(Date.now() + 10 * 60 * 1000);
-        await Table.findOneAndUpdate(
-          { $or: [{ number: exactRegex }, { name: exactRegex }] },
-          {
-            status: 'Cleaning',
-            cleaningUntil: cleaningExpiration,
-            currentOrder: ''
-          }
-        );
+        // Check if latest order was Paid / Completed -> Auto transition to Cleaning
+        const lastOrder = tableOrders[tableOrders.length - 1];
+        if (lastOrder && (lastOrder.payment === 'Completed' || lastOrder.payment === 'Paid' || lastOrder.status === 'Completed' || lastOrder.status === 'Paid')) {
+          await Table.findOneAndUpdate(
+            { $or: [{ number: exactRegex }, { name: exactRegex }] },
+            {
+              status: 'Cleaning',
+              currentOrder: ''
+            }
+          );
+        }
       }
     } catch (err) {
       console.warn("Could not sync table status for order completion:", err.message);
@@ -137,12 +153,105 @@ class OrderService {
   }
 
   async updateOrderStatus(id, status, fullOrderData = {}) {
-    const updatedOrder = await orderRepository.updateStatus(id, status, fullOrderData);
-    if (updatedOrder && updatedOrder.table) {
-      await this.syncTableStatusForOrder(updatedOrder.table);
-    } else if (fullOrderData && fullOrderData.table) {
-      await this.syncTableStatusForOrder(fullOrderData.table);
+    // Revenue Rule: Strictly strip tips or extra payment fields
+    if (fullOrderData.tip || fullOrderData.tipAmount) {
+      delete fullOrderData.tip;
+      delete fullOrderData.tipAmount;
     }
+
+    const isPaid = status === 'Paid' || status === 'Completed' || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid';
+    const isBillGenerated = status === 'Bill Generated' || status === 'Awaiting Payment' || fullOrderData.payment === 'Bill Generated' || fullOrderData.payment === 'Awaiting Payment';
+
+    const updatePayload = {
+      ...fullOrderData,
+      status: isPaid ? 'Completed' : (status || 'Placed'),
+      payment: isPaid ? 'Completed' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.payment || 'Pending'))
+    };
+
+    const updatedOrder = await orderRepository.updateStatus(id, updatePayload.status, updatePayload);
+    const tableId = (updatedOrder && updatedOrder.table) || (fullOrderData && fullOrderData.table);
+
+    if (tableId) {
+      if (isPaid) {
+        // Successful payment -> Table AUTOMATICALLY changes to Cleaning
+        await this.syncTableStatusForOrder(tableId, 'Cleaning');
+      } else if (isBillGenerated) {
+        // Bill Generated -> Table STAYS Occupied
+        await this.syncTableStatusForOrder(tableId, 'Occupied');
+      } else {
+        await this.syncTableStatusForOrder(tableId);
+      }
+    }
+    return updatedOrder;
+  }
+
+  async updateOrderItemStatus(id, itemIds = [], targetStatus = 'DELIVERED') {
+    const order = await orderRepository.findById(id);
+    if (!order) throw new Error('Order not found');
+
+    const itemIdsToUpdate = Array.isArray(itemIds) ? itemIds.map(i => String(i)) : [String(itemIds)];
+
+    let rawItems = order.items || [];
+    let itemsUpdatedCount = 0;
+
+    const updatedItems = rawItems.map((item, idx) => {
+      const itemObj = item.toObject ? item.toObject() : item;
+      const itemIdStr = String(itemObj._id || itemObj.id || itemObj.itemId || `item-${idx}`);
+      const isTarget = itemIdsToUpdate.includes(itemIdStr) || 
+                       itemIdsToUpdate.includes(String(idx)) || 
+                       itemIdsToUpdate.includes(String(itemObj.name));
+
+      if (isTarget) {
+        if (targetStatus === 'DELIVERED') {
+          // Backend Validation Rule (Req #12):
+          // Must ONLY allow delivery if item's current status is READY (or isReady is true) and NOT ALREADY DELIVERED.
+          const isCurrentlyReady = itemObj.status === 'READY' || itemObj.isReady === true || order.status === 'Ready';
+          const isAlreadyDelivered = itemObj.status === 'DELIVERED' || itemObj.isDelivered === true;
+
+          if (isCurrentlyReady && !isAlreadyDelivered) {
+            itemObj.status = 'DELIVERED';
+            itemObj.isDelivered = true;
+            itemObj.isReady = true;
+            itemsUpdatedCount++;
+          }
+        } else if (targetStatus === 'READY') {
+          if (itemObj.status !== 'DELIVERED') {
+            itemObj.status = 'READY';
+            itemObj.isReady = true;
+            itemsUpdatedCount++;
+          }
+        } else if (targetStatus === 'PREPARING') {
+          if (itemObj.status !== 'DELIVERED') {
+            itemObj.status = 'PREPARING';
+            itemObj.isReady = false;
+            itemsUpdatedCount++;
+          }
+        }
+      }
+      return itemObj;
+    });
+
+    // Derive Order Status (Req #7)
+    const totalCount = updatedItems.length;
+    const deliveredCount = updatedItems.filter(i => i.status === 'DELIVERED' || i.isDelivered).length;
+    const readyCount = updatedItems.filter(i => (i.status === 'READY' || i.isReady) && (i.status !== 'DELIVERED' && !i.isDelivered)).length;
+
+    let derivedOrderStatus = order.status;
+    if (totalCount > 0 && deliveredCount === totalCount) {
+      derivedOrderStatus = 'Served'; // Fully Delivered
+    } else if (deliveredCount > 0) {
+      derivedOrderStatus = 'PARTIALLY DELIVERED';
+    } else if (readyCount > 0) {
+      derivedOrderStatus = 'Ready';
+    } else {
+      derivedOrderStatus = 'Preparing';
+    }
+
+    const updatedOrder = await orderRepository.updateStatus(id, derivedOrderStatus, {
+      items: updatedItems,
+      status: derivedOrderStatus
+    });
+
     return updatedOrder;
   }
 }

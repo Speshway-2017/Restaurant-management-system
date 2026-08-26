@@ -65,16 +65,25 @@ export const api = {
   // Orders API
   getOrders: () => request('/orders'),
   createOrder: (data) => request('/orders', { method: 'POST', body: JSON.stringify(data) }),
-  updateOrderStatus: (id, status, fullData = {}) => request(`/orders/${id}/status`, {
+  updateOrderStatus: (id, status, extra = {}) => request(`/orders/${id}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status, ...fullData })
+    body: JSON.stringify({ status, ...extra })
   }),
+  updateOrderItemStatus: (id, itemIds, status = 'DELIVERED') => request(`/orders/${id}/items/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ itemIds, status })
+  }),
+  clearAllOrders: () => request('/orders/all', { method: 'DELETE' }),
 
   // Tables API
   getTables: () => request('/tables'),
   updateTableStatus: (id, status, currentOrder = '') => request(`/tables/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ status, currentOrder })
+  }),
+  clearTable: (id) => request(`/tables/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status: 'Available', currentOrder: '' })
   }),
 
   // Reservations API

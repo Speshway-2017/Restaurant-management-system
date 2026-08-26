@@ -10,20 +10,12 @@ export default function ManagerStaffPage() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
-  const defaultStaff = [
-    { id: 1, empId: 'RMSW-01', name: 'Waiter 1', role: 'Waiter', email: 'waiter1@flavora.in', phone: '9876543210', shift: 'Morning (09:00 AM - 05:00 PM)', status: 'On Shift' },
-    { id: 2, empId: 'RMSR-01', name: 'Receptionist 1', role: 'Receptionist', email: 'receptionist1@flavora.in', phone: '9812345678', shift: 'Full Day (11:00 AM - 10:00 PM)', status: 'On Shift' },
-    { id: 3, empId: 'RMSC-01', name: 'Chef 1', role: 'Chef', email: 'chef1@flavora.in', phone: '9765432109', shift: 'Evening (02:00 PM - 11:00 PM)', status: 'On Shift' },
-    { id: 4, empId: 'RMSW-02', name: 'Waiter 2', role: 'Waiter', email: 'waiter2@flavora.in', phone: '9543210987', shift: 'Evening (02:00 PM - 11:00 PM)', status: 'On Shift' },
-    { id: 5, empId: 'RMSR-02', name: 'Receptionist 2', role: 'Receptionist', email: 'receptionist2@flavora.in', phone: '9654321098', shift: 'Morning (09:00 AM - 05:00 PM)', status: 'Off Duty' }
-  ];
-
   const [staffList, setStaffList] = useState([]);
 
   const fetchBackendStaff = async () => {
     try {
       const data = await api.getStaff();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         const mapped = data.map((stf, idx) => ({
           id: stf._id || stf.id || idx + 1,
           empId: stf.empId || `RMSW-0${idx + 1}`,
@@ -35,9 +27,6 @@ export default function ManagerStaffPage() {
           status: stf.status || 'On Shift'
         }));
         setStaffList(mapped);
-        try {
-          localStorage.setItem('flavora_staff_list', JSON.stringify(mapped));
-        } catch (e) {}
       }
     } catch (err) {
       console.warn("Backend staff fetch notice:", err.message);

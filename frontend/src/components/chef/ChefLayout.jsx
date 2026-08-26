@@ -74,11 +74,14 @@ export default function ChefLayout({ setActivePage }) {
   const previousOrderCountRef = useRef(0);
 
   const [chefProfile, setChefProfile] = useState(() => {
-    const saved = localStorage.getItem('flavora_profile_chef');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
-    }
-  
+    try {
+      const saved = localStorage.getItem('flavora_profile_chef');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+   
   });
 
   useEffect(() => {
@@ -175,21 +178,6 @@ export default function ChefLayout({ setActivePage }) {
 
       let combined = Array.isArray(backendData) ? [...backendData] : [];
 
-      try {
-        const localSaved = localStorage.getItem('flavora_manager_orders');
-        if (localSaved) {
-          const parsed = JSON.parse(localSaved);
-          if (Array.isArray(parsed)) {
-            const existingIds = new Set(combined.map(o => o.orderId || o._id || o.id));
-            parsed.forEach(lo => {
-              if (lo && !existingIds.has(lo.id || lo._id || lo.orderId)) {
-                combined.push(lo);
-              }
-            });
-          }
-        }
-      } catch (e) {}
-
       const mappedOrders = combined.map((o, idx) => {
         const idStr = o.orderId || o.id || o._id || `KDS-${6000 + idx}`;
         const createdDate = o.createdAt ? new Date(o.createdAt) : new Date();
@@ -269,17 +257,71 @@ export default function ChefLayout({ setActivePage }) {
     }
   };
 
-  const handleToggleItemCheck = (orderId, itemIdx) => {
+  const handleToggleItemCheck = async (orderId, itemIdx) => {
+    let nextCheckedState = false;
     setCheckedDishItems(prev => {
       const orderChecked = prev[orderId] || {};
+      nextCheckedState = !orderChecked[itemIdx];
       return {
         ...prev,
         [orderId]: {
           ...orderChecked,
-          [itemIdx]: !orderChecked[itemIdx]
+          [itemIdx]: nextCheckedState
         }
       };
     });
+
+    const cleanOrderId = String(orderId).replace(/^#/i, '');
+    const targetOrder = ordersList.find(o => 
+      o.id === orderId || o.orderId === orderId || o._id === orderId ||
+      o.id === cleanOrderId || o.orderId === cleanOrderId || o.id === `#${cleanOrderId}` || o.orderId === `#${cleanOrderId}`
+    );
+
+    if (targetOrder && Array.isArray(targetOrder.items)) {
+      const targetItem = targetOrder.items[itemIdx];
+      const targetItemId = targetItem ? (targetItem._id || targetItem.id || itemIdx) : itemIdx;
+      const targetItemName = targetItem ? targetItem.name : '';
+      const newStatus = nextCheckedState ? 'READY' : 'PREPARING';
+
+      const updatedItems = targetOrder.items.map((it, idx) => {
+        if (idx === itemIdx) {
+          return {
+            ...it,
+            status: newStatus,
+            isReady: nextCheckedState
+          };
+        }
+        return it;
+      });
+
+      const allCheckedNow = updatedItems.length > 0 && updatedItems.every(i => i.status === 'READY' || i.isReady || i.status === 'DELIVERED' || i.isDelivered);
+      const newOrderStatus = allCheckedNow ? 'Ready' : (targetOrder.status === 'Ready' ? 'Preparing' : targetOrder.status);
+
+      const updatedOrderList = ordersList.map(o => {
+        const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
+                        o.id === cleanOrderId || o.orderId === cleanOrderId;
+        if (matches) {
+          return {
+            ...o,
+            status: newOrderStatus,
+            items: updatedItems
+          };
+        }
+        return o;
+      });
+
+      setOrdersList(updatedOrderList);
+
+      try {
+        localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedOrderList));
+        window.dispatchEvent(new Event('flavora_orders_updated'));
+      } catch (e) {}
+
+      try {
+        const apiOrderId = targetOrder._id || targetOrder.id || targetOrder.orderId || cleanOrderId;
+        await api.updateOrderItemStatus(apiOrderId, [targetItemId, itemIdx, targetItemName], newStatus);
+      } catch (e) {}
+    }
   };
 
   const handleToggleOutOfStock = async (itemId, itemName) => {
@@ -328,11 +370,11 @@ export default function ChefLayout({ setActivePage }) {
   });
 
   const navigationItems = [
-    { id: 'chef-kds', label: 'Kitchen Tickets (KDS)', icon: Flame, badge: activeKdsOrders.length },
-    { id: 'chef-inventory', label: "86'd Stock Manager", icon: Utensils, badge: outOfStockItems.length },
-    { id: 'chef-history', label: 'Served History', icon: CheckCircle2 },
-    { id: 'chef-analytics', label: 'Kitchen Analytics', icon: BarChart3 },
-    { id: 'chef-settings', label: 'Kitchen Settings', icon: Settings },
+    { id: 'chef-kds', label: 'Live Kitchen Orders', icon: Flame, badge: activeKdsOrders.length },
+    { id: 'chef-inventory', label: "Stock Manager", icon: Utensils, badge: outOfStockItems.length },
+    { id: 'chef-history', label: 'Orders History', icon: CheckCircle2 },
+    { id: 'chef-analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'chef-settings', label: 'Settings', icon: Settings },
   ];
 
   const renderActiveView = () => {
@@ -591,95 +633,23 @@ export default function ChefLayout({ setActivePage }) {
             </h2>
           </div>
 
-          <div className="admin-header-right" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            
-            {/* Live Clock Badge */}
+          <div className="admin-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {/* Live Clock Display */}
             <div style={{
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: '8px',
+              backgroundColor: '#FFF3EB',
+              border: '1px solid #FDBA74',
+              color: '#C2410C',
               padding: '0.35rem 0.75rem',
+              borderRadius: '8px',
+              fontSize: '0.8rem',
+              fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
-              fontSize: '0.82rem',
-              fontWeight: 800,
-              color: '#0F2A1D',
-              fontFamily: 'monospace'
+              gap: '0.4rem'
             }}>
-              <Clock size={15} color="#E07A3C" />
+              <Clock size={14} color="#E07A3C" />
               <span>{currentTime.toLocaleTimeString()}</span>
             </div>
-
-            {/* Chef Duty Status Toggle Button */}
-            <button
-              type="button"
-              onClick={handleToggleChefDuty}
-              style={{
-                backgroundColor: chefDutyStatus === 'LOGGED_IN' ? '#DCFCE7' : '#FEF2F2',
-                border: `1px solid ${chefDutyStatus === 'LOGGED_IN' ? '#86EFAC' : '#FCA5A5'}`,
-                color: chefDutyStatus === 'LOGGED_IN' ? '#166534' : '#991B1B',
-                borderRadius: '8px',
-                padding: '0.35rem 0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              title="Toggle Chef Duty Status (Logged In / Logged Out)"
-            >
-              <span>{chefDutyStatus === 'LOGGED_IN' ? '🟢 Chef Logged In' : '🔴 Chef Logged Out'}</span>
-            </button>
-
-            {/* Audio Chime Bell Toggle */}
-            <button
-              type="button"
-              onClick={() => {
-                setSoundEnabled(!soundEnabled);
-                showToast(soundEnabled ? '🔇 Kitchen Audio Alert Muted' : '🔔 Kitchen Audio Alert Enabled!');
-              }}
-              style={{
-                backgroundColor: soundEnabled ? '#DCFCE7' : '#F1F5F9',
-                border: `1px solid ${soundEnabled ? '#86EFAC' : '#CBD5E1'}`,
-                color: soundEnabled ? '#166534' : '#64748B',
-                borderRadius: '8px',
-                padding: '0.35rem 0.7rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer'
-              }}
-            >
-              {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-              <span>{soundEnabled ? 'Chime ON' : 'Muted'}</span>
-            </button>
-
-            {/* Kitchen Status Toggle */}
-            <button
-              type="button"
-              onClick={() => {
-                const nextStatus = kitchenStatus === 'active' ? 'busy' : 'active';
-                setKitchenStatus(nextStatus);
-                showToast(nextStatus === 'busy' ? '🔥 Rush Hour Mode Activated!' : '🟢 Normal Pass Mode Active');
-              }}
-              style={{
-                backgroundColor: kitchenStatus === 'active' ? '#DCFCE7' : '#FEF3C7',
-                border: `1px solid ${kitchenStatus === 'active' ? '#86EFAC' : '#FDE68A'}`,
-                color: kitchenStatus === 'active' ? '#166534' : '#D97706',
-                borderRadius: '8px',
-                padding: '0.35rem 0.7rem',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer'
-              }}
-            >
-              {kitchenStatus === 'active' ? '🟢 Normal Pass' : '🔥 Rush Hour'}
-            </button>
 
             {/* Chef User Profile Card */}
             <div className="admin-user-profile-wrapper" ref={profileMenuRef} style={{ position: 'relative' }}>
@@ -688,15 +658,15 @@ export default function ChefLayout({ setActivePage }) {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
               >
                 <div className="admin-user-avatar" style={{ overflow: 'hidden' }}>
-                  {chefProfile.avatarUrl ? (
+                  {chefProfile?.avatarUrl ? (
                     <img src={chefProfile.avatarUrl} alt="Chef Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    getInitials(chefProfile.name)
+                    getInitials(chefProfile?.name || 'Chef')
                   )}
                 </div>
                 <div className="admin-user-info-text">
-                  <div className="admin-user-name">{chefProfile.name}</div>
-                  <div className="admin-user-role">{chefProfile.empId || 'CHEF-01'} • {chefProfile.role || 'Executive Chef'}</div>
+                  <div className="admin-user-name">{chefProfile?.name || 'Chef Vikrant'}</div>
+                  <div className="admin-user-role">{chefProfile?.empId || 'CHEF-01'} • {chefProfile?.role || 'Executive Chef'}</div>
                 </div>
                 <ChevronDown size={14} color="#5C5C5C" />
               </div>
@@ -705,8 +675,8 @@ export default function ChefLayout({ setActivePage }) {
               {userMenuOpen && (
                 <div className="admin-profile-dropdown-menu">
                   <div className="admin-dropdown-user-info">
-                    <div className="user-info-name">{chefProfile.name}</div>
-                    <div className="user-info-email">{chefProfile.email || 'chef@flavorakitchen.in'}</div>
+                    <div className="user-info-name">{chefProfile?.name || 'Chef Vikrant'}</div>
+                    <div className="user-info-email">{chefProfile?.email || 'chef@flavorakitchen.in'}</div>
                   </div>
                   <button
                     className="admin-dropdown-item"

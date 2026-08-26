@@ -34,6 +34,7 @@ export default function AdminTablesPage() {
   const sanitizeTableItem = (tbl) => {
     const isMockCustomer = ['Deepak J.', 'Priya P.', 'Ananya R.', 'Dr. Mehta', 'Amitabh S.', 'Kapoor Party', 'Rahul S.'].includes(tbl.customer);
     const isMockOrder = typeof tbl.orderId === 'string' && (tbl.orderId.startsWith('ORD-89') || tbl.orderId.startsWith('RES-1'));
+    const isQrPlaced = tbl.qrPlaced !== undefined ? Boolean(tbl.qrPlaced) : true;
     if (isMockCustomer || isMockOrder) {
       return {
         ...tbl,
@@ -41,10 +42,14 @@ export default function AdminTablesPage() {
         customer: '-',
         orderId: null,
         amount: '-',
-        elapsed: '-'
+        elapsed: '-',
+        qrPlaced: isQrPlaced
       };
     }
-    return tbl;
+    return {
+      ...tbl,
+      qrPlaced: isQrPlaced
+    };
   };
 
   const syncTableOrdersWithLocalStorage = (rawTables) => {

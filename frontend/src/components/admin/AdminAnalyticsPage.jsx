@@ -36,103 +36,44 @@ export default function AdminAnalyticsPage({ setActiveTab }) {
     fetchBranches();
   }, []);
 
-  // Helper fallback generator for offline / un-restarted backend server states
+  // Return zero data when backend data is missing or empty
   const generateFallbackData = (range, branch) => {
-    let mult = range === 'Today' ? 0.04 : range === 'Yesterday' ? 0.04 : range === 'This Week' ? 0.25 : range === 'Last Month' ? 0.92 : range === 'Last 3 Months' ? 2.8 : range === 'This Year' ? 9.5 : 1;
-    if (branch !== 'All Restaurant Branches' && branch !== 'All') mult *= 0.35;
-
-    const grossRevenue = Math.round(1482000 * mult);
-    const totalOrders = Math.round(18642 * mult);
-    const totalTax = Math.round(grossRevenue * 0.18);
-    const totalDiscounts = Math.round(grossRevenue * 0.055);
-    const netRevenue = grossRevenue - totalDiscounts;
-    const aov = totalOrders > 0 ? Math.round(grossRevenue / totalOrders) : 795;
-
     return {
       kpis: {
-        totalRevenue: grossRevenue,
-        revenueGrowth: 18.4,
-        totalOrders,
-        orderGrowth: 12.8,
-        averageOrderValue: aov,
-        aovGrowth: 5.2,
-        totalTax,
-        totalDiscounts,
-        netRevenue
+        totalRevenue: 0,
+        revenueGrowth: 0,
+        totalOrders: 0,
+        orderGrowth: 0,
+        averageOrderValue: 0,
+        aovGrowth: 0,
+        totalTax: 0,
+        totalDiscounts: 0,
+        netRevenue: 0
       },
       salesTrend: [
-        { period: 'Jan', revenue: Math.round(grossRevenue * 0.58), orders: Math.round(totalOrders * 0.56) },
-        { period: 'Feb', revenue: Math.round(grossRevenue * 0.64), orders: Math.round(totalOrders * 0.63) },
-        { period: 'Mar', revenue: Math.round(grossRevenue * 0.72), orders: Math.round(totalOrders * 0.71) },
-        { period: 'Apr', revenue: Math.round(grossRevenue * 0.76), orders: Math.round(totalOrders * 0.75) },
-        { period: 'May', revenue: Math.round(grossRevenue * 0.84), orders: Math.round(totalOrders * 0.83) },
-        { period: 'Jun', revenue: Math.round(grossRevenue * 0.88), orders: Math.round(totalOrders * 0.87) },
-        { period: 'Jul', revenue: Math.round(grossRevenue * 0.94), orders: Math.round(totalOrders * 0.93) },
-        { period: 'Aug (Current)', revenue: grossRevenue, orders: totalOrders, isCurrent: true }
+        { period: 'Today', revenue: 0, orders: 0 }
       ],
       branchPerformance: [
-        { name: 'Jubilee Hills (Main Branch)', revenue: Math.round(grossRevenue * 0.38), orders: Math.round(totalOrders * 0.35), aov: 1024, discounts: Math.round(totalDiscounts * 0.38), netRevenue: Math.round((grossRevenue - totalDiscounts) * 0.38), growth: 18.2 },
-        { name: 'Banjara Hills Outlet', revenue: Math.round(grossRevenue * 0.28), orders: Math.round(totalOrders * 0.28), aov: 978, discounts: Math.round(totalDiscounts * 0.28), netRevenue: Math.round((grossRevenue - totalDiscounts) * 0.28), growth: 14.6 },
-        { name: 'Madhapur Tech Branch', revenue: Math.round(grossRevenue * 0.20), orders: Math.round(totalOrders * 0.22), aov: 930, discounts: Math.round(totalDiscounts * 0.20), netRevenue: Math.round((grossRevenue - totalDiscounts) * 0.20), growth: 11.8 },
-        { name: 'Gachibowli Outlet', revenue: Math.round(grossRevenue * 0.14), orders: Math.round(totalOrders * 0.15), aov: 910, discounts: Math.round(totalDiscounts * 0.14), netRevenue: Math.round((grossRevenue - totalDiscounts) * 0.14), growth: 9.4 }
-      ].filter(b => branch === 'All Restaurant Branches' || branch === 'All' || b.name.toLowerCase().includes(branch.toLowerCase()) || branch.toLowerCase().includes(b.name.toLowerCase())),
-      topSellingItems: [
-        { item: 'Hyderabadi Chicken Biryani', category: 'Biryani', quantitySold: Math.round(1284 * mult), revenue: Math.round(487000 * mult), salesPercent: 18.4, img: '/hero_dish_2.png' },
-        { item: 'Paneer Tikka Angara', category: 'Starters', quantitySold: Math.round(980 * mult), revenue: Math.round(333000 * mult), salesPercent: 12.6, img: '/hero_dish_1.png' },
-        { item: 'Dal Makhani Gold', category: 'Curries', quantitySold: Math.round(840 * mult), revenue: Math.round(319000 * mult), salesPercent: 12.1, img: '/carousel_1.png' },
-        { item: 'Butter Naan Basket', category: 'Breads', quantitySold: Math.round(1450 * mult), revenue: Math.round(145000 * mult), salesPercent: 5.5, img: '/hero_dish_2.png' },
-        { item: 'Royal Non-Veg Thali', category: 'Thalis', quantitySold: Math.round(520 * mult), revenue: Math.round(234000 * mult), salesPercent: 8.8, img: '/carousel_2.png' },
-        { item: 'Murgh Malai Kabab', category: 'Starters', quantitySold: Math.round(720 * mult), revenue: Math.round(302000 * mult), salesPercent: 11.4, img: '/carousel_2.png' },
-        { item: 'Special Mutton Dum Biryani', category: 'Biryani', quantitySold: Math.round(410 * mult), revenue: Math.round(225500 * mult), salesPercent: 8.5, img: '/hero_dish_2.png' },
-        { item: 'Mango Lassi Delight', category: 'Beverages', quantitySold: Math.round(650 * mult), revenue: Math.round(117000 * mult), salesPercent: 4.4, img: '/carousel_3.png' },
-        { item: 'Gulab Jamun with Ice Cream', category: 'Desserts', quantitySold: Math.round(580 * mult), revenue: Math.round(92800 * mult), salesPercent: 3.5, img: '/carousel_3.png' },
-        { item: 'Garlic Roti', category: 'Breads', quantitySold: Math.round(890 * mult), revenue: Math.round(71200 * mult), salesPercent: 2.7, img: '/hero_dish_1.png' }
+        { name: 'Jubilee Hills (Main Branch)', revenue: 0, orders: 0, aov: 0, discounts: 0, netRevenue: 0, growth: 0 }
       ],
-      categoryPerformance: [
-        { category: 'Biryani', orders: Math.round(1694 * mult), revenue: Math.round(712500 * mult), contribution: 38.5, color: '#1E4636' },
-        { category: 'Starters', orders: Math.round(1700 * mult), revenue: Math.round(635000 * mult), contribution: 34.3, color: '#E07A3C' },
-        { category: 'Curries', orders: Math.round(1120 * mult), revenue: Math.round(358000 * mult), contribution: 19.3, color: '#FF8A00' },
-        { category: 'Breads', orders: Math.round(2340 * mult), revenue: Math.round(216200 * mult), contribution: 11.6, color: '#3F8F5B' },
-        { category: 'Thalis', orders: Math.round(520 * mult), revenue: Math.round(234000 * mult), contribution: 12.6, color: '#8B5CF6' },
-        { category: 'Beverages', orders: Math.round(980 * mult), revenue: Math.round(156800 * mult), contribution: 8.4, color: '#2563EB' },
-        { category: 'Desserts', orders: Math.round(740 * mult), revenue: Math.round(118400 * mult), contribution: 6.4, color: '#DB2777' }
-      ],
+      topSellingItems: [],
+      categoryPerformance: [],
       inventorySummary: {
-        totalValue: Math.round(grossRevenue * 0.28),
-        lowStockItems: 2,
-        outOfStockItems: 1,
-        totalStockItems: 5,
-        items: [
-          { _id: '1', name: 'Basmati Rice Premium (50kg)', category: 'Grains', stockQuantity: 42, unit: 'bags', reorderLevel: 15, status: 'In Stock' },
-          { _id: '2', name: 'Refined Sunflower Oil (15L)', category: 'Oils', stockQuantity: 8, unit: 'tins', reorderLevel: 10, status: 'Low Stock' },
-          { _id: '3', name: 'Tandoori Chicken Masala', category: 'Spices', stockQuantity: 24, unit: 'kg', reorderLevel: 5, status: 'In Stock' },
-          { _id: '4', name: 'Amul Butter Blocks', category: 'Dairy', stockQuantity: 2, unit: 'cases', reorderLevel: 5, status: 'Low Stock' },
-          { _id: '5', name: 'Fresh Paneer Cubes', category: 'Dairy', stockQuantity: 0, unit: 'kg', reorderLevel: 8, status: 'Out of Stock' }
-        ]
+        totalValue: 0,
+        lowStockItems: 0,
+        outOfStockItems: 0,
+        totalStockItems: 0,
+        items: []
       },
-      staffPerformance: [
-        { name: 'Rajesh Kumar', role: 'Head Waiter', branch: 'Jubilee Hills (Main Branch)', ordersHandled: Math.round(482 * mult), salesHandled: Math.round(385000 * mult), attendance: '98%', performance: 'Exemplary ⭐' },
-        { name: 'Priya Sharma', role: 'Billing Cashier', branch: 'Jubilee Hills (Main Branch)', ordersHandled: Math.round(766 * mult), salesHandled: Math.round(612000 * mult), attendance: '100%', performance: 'Outstanding ⭐' },
-        { name: 'Chef Suresh Reddy', role: 'Head Chef', branch: 'Jubilee Hills (Main Branch)', ordersHandled: Math.round(1248 * mult), salesHandled: Math.round(998000 * mult), attendance: '96%', performance: 'Exemplary ⭐' },
-        { name: 'Vikram Singh', role: 'Resto Manager', branch: 'Banjara Hills Outlet', ordersHandled: Math.round(640 * mult), salesHandled: Math.round(512000 * mult), attendance: '97%', performance: 'Great ⭐' },
-        { name: 'Ananya Verma', role: 'Senior Waiter', branch: 'Madhapur Tech Branch', ordersHandled: Math.round(395 * mult), salesHandled: Math.round(298000 * mult), attendance: '95%', performance: 'Good ⭐' }
-      ].filter(s => branch === 'All Restaurant Branches' || branch === 'All' || s.branch.toLowerCase().includes(branch.toLowerCase()) || branch.toLowerCase().includes(s.branch.toLowerCase())),
+      staffPerformance: [],
       customerFeedback: {
-        avgRating: 4.8,
-        totalReviews: Math.round(642 * mult),
-        starSplit: { star5: 78, star4: 16, star3: 4, star2: 1, star1: 1 },
-        recentFeedback: [
-          { customer: 'Rohan Mehta', rating: 5, comment: 'Authentic Hyderabadi Biryani flavor! Excellent service by Rajesh.', date: '2026-08-19', branch: 'Jubilee Hills (Main Branch)' },
-          { customer: 'Kavita Reddy', rating: 5, comment: 'Paneer Tikka was smoky and tender. Highly recommended!', date: '2026-08-18', branch: 'Banjara Hills Outlet' },
-          { customer: 'Siddharth Rao', rating: 4, comment: 'Great ambience and quick billing service.', date: '2026-08-17', branch: 'Madhapur Tech Branch' },
-          { customer: 'Amit Patel', rating: 5, comment: 'Best Dal Makhani in town. Will definitely visit again.', date: '2026-08-16', branch: 'Jubilee Hills (Main Branch)' }
-        ]
+        avgRating: 0,
+        totalReviews: 0,
+        starSplit: { star5: 0, star4: 0, star3: 0, star2: 0, star1: 0 },
+        recentFeedback: []
       },
       businessInsights: [
-        `Revenue increased by 18.4% compared with the previous billing period.`,
-        `Jubilee Hills (Main Branch) is the highest-performing restaurant branch with ₹${((grossRevenue * 0.38) / 100000).toFixed(2)} L gross sales.`,
-        `Hyderabadi Chicken Biryani generated the highest single menu item revenue (₹${((487000 * mult) / 100000).toFixed(2)} L).`,
-        `3 inventory items require immediate restocking attention.`
+        'Awaiting live restaurant orders and revenue data.'
       ]
     };
   };

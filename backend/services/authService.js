@@ -5,7 +5,7 @@ class AuthService {
   async login(email, password) {
     const User = require('../models/User');
     let user = await userRepository.findByEmail(email);
-
+    
     if (!user) {
       const lower = (email || '').toLowerCase();
       if (lower.includes('chef')) {
@@ -17,6 +17,16 @@ class AuthService {
           phone: '+91 98765 43212',
           branch: 'Jubilee Hills (Main Branch)',
           empId: 'CHEF-01'
+        });
+      } else if (lower.includes('waiter')) {
+        user = await User.create({
+          name: 'Suresh Kumar',
+          email: lower,
+          password: password || 'waiter123',
+          role: 'Waiter',
+          phone: '+91 98765 88990',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSW-01'
         });
       } else if (lower.includes('manager')) {
         user = await User.create({

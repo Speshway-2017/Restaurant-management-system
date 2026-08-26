@@ -28,4 +28,26 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
-module.exports = { getOrders, createOrder, updateOrderStatus };
+const updateOrderItemStatus = async (req, res) => {
+  try {
+    const { itemIds, status } = req.body;
+    const updated = await orderService.updateOrderItemStatus(req.params.id, itemIds, status || 'DELIVERED');
+    return successResponse(res, updated, 'Order item status updated');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+const clearAllOrders = async (req, res) => {
+  try {
+    const OrderModel = require('../models/Order');
+    const TableModel = require('../models/Table');
+    await OrderModel.deleteMany({});
+    await TableModel.updateMany({}, { status: 'Available', currentOrder: '', cleaningUntil: null });
+    return successResponse(res, null, 'All orders deleted and tables reset to Available');
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+module.exports = { getOrders, createOrder, updateOrderStatus, updateOrderItemStatus, clearAllOrders };

@@ -26,11 +26,17 @@ export default function ManagerDashboardHome({ setActiveTab }) {
 
 
 
+  // Manager Live Orders & Tables State
+  const [activeOrders, setActiveOrders] = useState([]);
+  const [tablesList, setTablesList] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [staffShiftLogs, setStaffShiftLogs] = useState([]);
+
   const allQuickActions = [
     {
       id: 'qa_orders',
       title: 'Live Floor Orders',
-      desc: '18 Active • KDS Status',
+      desc: `${(activeOrders || []).length} Active • KDS Status`,
       category: 'Floor & Orders',
       targetTab: 'manager-orders',
       icon: ShoppingBag,
@@ -56,7 +62,7 @@ export default function ManagerDashboardHome({ setActiveTab }) {
     {
       id: 'qa_staff',
       title: 'Staff Attendance Logs',
-      desc: '12 Logged On Duty',
+      desc: 'Staff Logged On Duty',
       category: 'Staff & Offers',
       targetTab: 'manager-staff',
       icon: UserCheck,
@@ -69,7 +75,7 @@ export default function ManagerDashboardHome({ setActiveTab }) {
     {
       id: 'qa_coupons',
       title: 'Approve Coupons',
-      desc: '14 Redeemed Today',
+      desc: 'Active Coupons & Offers',
       category: 'Staff & Offers',
       targetTab: 'manager-coupons',
       icon: Ticket,
@@ -82,7 +88,7 @@ export default function ManagerDashboardHome({ setActiveTab }) {
     {
       id: 'qa_menu',
       title: 'Menu & Item Stock',
-      desc: '42 Active Dishes & Prices',
+      desc: 'Active Dishes & Prices',
       category: 'Menu & Setup',
       targetTab: 'manager-menu',
       icon: Utensils,
@@ -146,11 +152,7 @@ export default function ManagerDashboardHome({ setActiveTab }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Manager Live Orders & Tables State (Initialized strictly from dynamic backend/customer orders)
-  const [activeOrders, setActiveOrders] = useState([]);
-  const [tablesList, setTablesList] = useState([]);
-  const [recentActivities, setRecentActivities] = useState([]);
-  const [staffShiftLogs, setStaffShiftLogs] = useState([]);
+
 
   const filteredActivities = recentActivities.filter(a => {
     if (activityFilter === 'All') return true;
@@ -166,13 +168,11 @@ export default function ManagerDashboardHome({ setActiveTab }) {
     return sum + (isNaN(p) ? 0 : p);
   }, 0);
 
-  const formattedShiftRevenue = totalShiftRevenueNum > 0
-    ? `₹${totalShiftRevenueNum.toLocaleString('en-IN')}`
-    : '₹0';
+  const formattedShiftRevenue = `₹${totalShiftRevenueNum.toLocaleString('en-IN')}`;
 
   const occupiedTablesCount = tablesList.filter(t => t.status === 'Occupied').length;
-  const totalTablesCount = Math.max(tablesList.length, 12);
-  const occupancyPercentage = Math.round((occupiedTablesCount / totalTablesCount) * 100);
+  const totalTablesCount = tablesList.length;
+  const occupancyPercentage = totalTablesCount > 0 ? Math.round((occupiedTablesCount / totalTablesCount) * 100) : 0;
 
   const totalStaffCount = staffShiftLogs.length;
   const onDutyStaffCount = staffShiftLogs.filter(s => 
@@ -183,13 +183,8 @@ export default function ManagerDashboardHome({ setActiveTab }) {
     ? Math.round((onDutyStaffCount / totalStaffCount) * 100)
     : 0;
 
-  const staffDisplayValue = totalStaffCount > 0 
-    ? `${onDutyStaffCount} / ${totalStaffCount}`
-    : "0 Staff";
-
-  const staffDisplayChange = totalStaffCount > 0 
-    ? `${staffPresentPct}% Present`
-    : "0 On Duty";
+  const staffDisplayValue = `${onDutyStaffCount} / ${totalStaffCount}`;
+  const staffDisplayChange = `${staffPresentPct}% Present`;
 
   const managerKpis = [
     {
@@ -245,25 +240,9 @@ export default function ManagerDashboardHome({ setActiveTab }) {
   // Sync Live Backend Tables & Real Customer Orders
   useEffect(() => {
     const syncDashboardData = () => {
-      // Default 12-table floor plan
-      const defaultFloorTables = Array.from({ length: 12 }, (_, i) => {
-        const numStr = `T-${String(i + 1).padStart(2, '0')}`;
-        return {
-          num: numStr,
-          cap: 4,
-          status: 'Available',
-          guest: '-',
-          customer: '-',
-          orderId: null,
-          amount: '-',
-          zone: 'Main Dining'
-        };
-      });
-
-      // Helper for clean table display label
       const resolveTableLabel = (ord) => {
         const raw = ord.table || ord.tableNumber || ord.tableId;
-        if (!raw) return 'Table 02';
+        if (!raw) return 'Table 01';
         const str = String(raw).trim();
         if (str.toLowerCase().startsWith('table')) return str;
         const digits = str.replace(/[^0-9]/g, '');
@@ -276,7 +255,7 @@ export default function ManagerDashboardHome({ setActiveTab }) {
         return d ? String(parseInt(d, 10)) : '';
       };
 
-      // Fetch live tables and orders together
+      // Fetch live tables and orders strictly from DB
       Promise.all([
         api.getTables().catch(() => []),
         api.getOrders().catch(() => [])
@@ -296,79 +275,12 @@ export default function ManagerDashboardHome({ setActiveTab }) {
           }));
         }
 
-        // Merge local storage table orders
-        const localOrders = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('flavora_table_orders_')) {
-            try {
-              const parsed = JSON.parse(localStorage.getItem(key));
-              if (Array.isArray(parsed)) {
-                parsed.forEach(ord => {
-                  if (ord && !mergedOrdersList.some(ex => ex.id === ord.orderId) && !localOrders.some(ex => ex.id === ord.orderId)) {
-                    localOrders.push({
-                      id: ord.orderId,
-                      table: resolveTableLabel(ord),
-                      zone: 'Patio Outdoor',
-                      customer: ord.customer || ord.guestName || 'Guest Diner',
-                      items: (ord.items || []).map(item => `${item.name} (x${item.quantity || item.qty || 1})`).join(', '),
-                      total: `₹${ord.total !== undefined ? ord.total : (ord.totalAmount || 0)}`,
-                      status: ord.status || 'Placed',
-                      time: 'Just Now',
-                      waiter: 'QR Self-Order'
-                    });
-                  }
-                });
-              }
-            } catch (e) {}
-          }
-        }
+        setActiveOrders(mergedOrdersList);
 
-        let managerOrdersList = [];
-        try {
-          const savedMgr = localStorage.getItem('flavora_manager_orders');
-          if (savedMgr) {
-            const parsed = JSON.parse(savedMgr);
-            if (Array.isArray(parsed)) managerOrdersList = parsed;
-          }
-        } catch (e) {}
+        const activeOrdersOnly = mergedOrdersList.filter(o => o && o.status !== 'Completed' && o.status !== 'Cancelled' && o.status !== 'Paid');
 
-        const combined = [...localOrders, ...mergedOrdersList];
-        managerOrdersList.forEach(mOrd => {
-          const idx = combined.findIndex(o => (o.id || o.orderId) === mOrd.id);
-          if (idx !== -1) {
-            combined[idx] = { ...combined[idx], status: mOrd.status };
-          }
-        });
-
-        setActiveOrders(combined);
-
-        // Filter strictly for ACTIVE orders (ignore completed and cancelled orders)
-        const activeOrdersOnly = combined.filter(o => o && o.status !== 'Completed' && o.status !== 'Cancelled');
-
-        // Read saved local tables for cleaning timestamps
-        let savedTablesMap = {};
-        try {
-          const savedT = localStorage.getItem('flavora_tables');
-          if (savedT) {
-            const p = JSON.parse(savedT);
-            if (Array.isArray(p)) {
-              p.forEach(st => {
-                const d = extractDigits(st.num || st.number);
-                if (d) savedTablesMap[d] = st;
-              });
-            }
-          }
-        } catch (e) {}
-
-        const baseTables = defaultFloorTables.map(defaultTbl => {
-          const cleanT = extractDigits(defaultTbl.num);
-          const savedT = savedTablesMap[cleanT];
-          const matchedDb = Array.isArray(dbTables) ? dbTables.find(t => {
-            const dbClean = extractDigits(t.number || t.name);
-            return dbClean && cleanT && dbClean === cleanT;
-          }) : null;
-
+        const baseTables = (dbTables || []).map(dbT => {
+          const cleanT = extractDigits(dbT.number || dbT.name);
           const activeOrd = activeOrdersOnly.find(o => {
             const oTableClean = extractDigits(o.table || o.tableNumber);
             return oTableClean && cleanT && oTableClean === cleanT;
@@ -378,62 +290,33 @@ export default function ManagerDashboardHome({ setActiveTab }) {
             const guestNameVal = activeOrd.customer || activeOrd.guestName || 'Guest Diner';
             const amtVal = (activeOrd.total !== undefined && activeOrd.total !== null) ? `₹${activeOrd.total}` : (activeOrd.totalAmount ? `₹${activeOrd.totalAmount}` : '₹0');
             return {
-              ...defaultTbl,
-              cap: matchedDb?.seats || defaultTbl.cap,
-              status: 'Occupied',
+              num: dbT.number || dbT.name || `T-${cleanT}`,
+              cap: dbT.seats || 4,
+              status: (activeOrd.status === 'Bill Generated' || activeOrd.payment === 'Awaiting Payment') ? 'Bill Generated' : 'Occupied',
               guest: guestNameVal,
               customer: guestNameVal,
               amount: amtVal,
-              orderId: activeOrd.id || activeOrd.orderId || 'ORD-ACTIVE'
+              orderId: activeOrd.id || activeOrd.orderId || 'ORD-ACTIVE',
+              zone: dbT.section || 'Main Dining'
             };
           }
 
-          // No active order exists for this table
-          const cleaningUntilTime = savedT?.cleaningUntil || (matchedDb?.cleaningUntil ? new Date(matchedDb.cleaningUntil).getTime() : null);
-          const isCleaningState = savedT?.status === 'Cleaning' || matchedDb?.status === 'Cleaning';
-
-          if (isCleaningState || cleaningUntilTime) {
-            const now = Date.now();
-            if (cleaningUntilTime && now >= cleaningUntilTime) {
-              return {
-                ...defaultTbl,
-                cap: matchedDb?.seats || defaultTbl.cap,
-                status: 'Available',
-                cleaningUntil: null,
-                guest: '-',
-                customer: '-',
-                orderId: null,
-                amount: '-'
-              };
-            } else {
-              return {
-                ...defaultTbl,
-                cap: matchedDb?.seats || defaultTbl.cap,
-                status: 'Cleaning',
-                cleaningUntil: cleaningUntilTime || (Date.now() + 10 * 60 * 1000),
-                guest: '-',
-                customer: '-',
-                orderId: null,
-                amount: '-'
-              };
-            }
-          }
-
           return {
-            ...defaultTbl,
-            cap: matchedDb?.seats || defaultTbl.cap,
-            status: (matchedDb && matchedDb.status !== 'Occupied') ? matchedDb.status : 'Available',
+            num: dbT.number || dbT.name || `T-${cleanT}`,
+            cap: dbT.seats || 4,
+            status: dbT.status || 'Available',
             guest: '-',
             customer: '-',
+            amount: '-',
             orderId: null,
-            amount: '-'
+            zone: dbT.section || 'Main Dining'
           };
         });
 
         setTablesList(baseTables);
 
         // Generate dynamic activity feed from orders
-        const generatedActivities = combined.map((ord, idx) => ({
+        const generatedActivities = mergedOrdersList.map((ord, idx) => ({
           id: `act-live-${idx}`,
           orderId: ord.id,
           type: ord.status === 'Completed' ? 'table_clean' : 'order_placed',
@@ -509,10 +392,10 @@ export default function ManagerDashboardHome({ setActiveTab }) {
       {/* ================= 1. BREADCRUMBS & PAGE HEADER ================= */}
       <div className="admin-dashboard-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <div style={{ fontSize: '0.90rem', fontWeight: 700, color: '#64748B', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <div className="page-breadcrumb-bar">
             <span>Manager</span>
-            <span style={{ color: '#CBD5E1' }}>›</span>
-            <span style={{ color: '#E07A3C', fontWeight: 800 }}>Dashboard Overview</span>
+            <span className="crumb-sep">›</span>
+            <span className="crumb-current">Dashboard Overview</span>
           </div>
           <h1 className="admin-page-title" style={{ margin: 0 }}>
             Dashboard Overview
