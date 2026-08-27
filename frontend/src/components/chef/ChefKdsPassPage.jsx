@@ -128,45 +128,66 @@ export default function ChefKdsPassPage({
                 DISHES TO PREPARE ({ord.items.length})
               </div>
 
-              {/* Dish List with Checkbox Strikeout */}
+              {/* Dish List with Checkbox Strikeout & Status Badges */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 {ord.items.map((item, idx) => {
-                  const isChecked = checkedDishItems[ord.id]?.[idx] || item.status === 'READY' || item.isReady || item.status === 'DELIVERED' || item.isDelivered;
+                  const isDelivered = item.isDelivered || item.status === 'SERVED' || item.status === 'DELIVERED';
+                  const isReady = !isDelivered && (item.isReady || item.status === 'READY' || checkedDishItems[ord.id]?.[idx]);
+                  
                   return (
                     <div
                       key={idx}
-                      onClick={() => handleToggleItemCheck(ord.id, idx)}
+                      onClick={() => !isDelivered && handleToggleItemCheck(ord.id, idx)}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '0.55rem 0.75rem',
-                        backgroundColor: isChecked ? '#F1F5F9' : '#F8FAFC',
+                        backgroundColor: isDelivered ? '#F1F5F9' : (isReady ? '#F0FDF4' : '#F8FAFC'),
                         borderRadius: '8px',
-                        border: '1px solid #E2E8F0',
-                        cursor: 'pointer',
-                        opacity: isChecked ? 0.55 : 1,
+                        border: isDelivered ? '1px solid #CBD5E1' : (isReady ? '1.5px solid #86EFAC' : '1px solid #E2E8F0'),
+                        cursor: isDelivered ? 'default' : 'pointer',
+                        opacity: isDelivered ? 0.65 : 1,
                         transition: 'all 0.2s ease'
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                        {isChecked ? <CheckSquare size={17} color="#166534" /> : <Square size={17} color="#94A3B8" />}
+                        {isDelivered ? (
+                          <CheckCircle2 size={17} color="#64748B" />
+                        ) : isReady ? (
+                          <CheckSquare size={17} color="#166534" />
+                        ) : (
+                          <Square size={17} color="#94A3B8" />
+                        )}
                         <span style={{
                           fontSize: '0.9rem',
                           fontWeight: 800,
-                          color: isChecked ? '#64748B' : '#0F2A1D',
-                          textDecoration: isChecked ? 'line-through' : 'none'
+                          color: isDelivered ? '#64748B' : (isReady ? '#166534' : '#0F2A1D'),
+                          textDecoration: isDelivered ? 'line-through' : 'none'
                         }}>
-                          <strong style={{ color: '#E07A3C', marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
+                          <strong style={{ color: isDelivered ? '#64748B' : '#E07A3C', marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
                           {item.name}
                         </span>
                       </div>
 
-                      {item.price && (
-                        <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
-                          ₹{item.price * (item.quantity || 1)}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 900,
+                          backgroundColor: isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : '#FFEDD5'),
+                          color: isDelivered ? '#475569' : (isReady ? '#166534' : '#C2410C'),
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '5px'
+                        }}>
+                          {isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : 'PREPARING')}
                         </span>
-                      )}
+
+                        {item.price && (
+                          <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
+                            ₹{item.price * (item.quantity || 1)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -201,7 +222,7 @@ export default function ChefKdsPassPage({
                 </button>
               )}
 
-              {ord.status === 'Preparing' && (
+              {(ord.status === 'Preparing' || ord.status === 'Placed' || ord.status === 'PARTIALLY DELIVERED' || ord.status === 'Ready') && (
                 <button
                   type="button"
                   onClick={() => handleUpdateStatus(ord.id, 'Ready')}
@@ -224,31 +245,6 @@ export default function ChefKdsPassPage({
                 >
                   <CheckCircle2 size={16} />
                   <span>✅ Mark Ready for Pass</span>
-                </button>
-              )}
-
-              {ord.status === 'Ready' && (
-                <button
-                  type="button"
-                  onClick={() => handleUpdateStatus(ord.id, 'Served')}
-                  style={{
-                    flex: 1,
-                    padding: '0.65rem',
-                    borderRadius: '10px',
-                    border: '1px solid #86EFAC',
-                    backgroundColor: '#DCFCE7',
-                    color: '#166534',
-                    fontSize: '0.84rem',
-                    fontWeight: 900,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.4rem'
-                  }}
-                >
-                  <Check size={16} />
-                  <span>Dispatched / Served</span>
                 </button>
               )}
 

@@ -66,8 +66,19 @@ export default function ManagerLayout({ setActivePage }) {
   const [activeTab, setActiveTab] = useState(() => getManagerTabFromCurrentPath());
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [navbarClockStr, setNavbarClockStr] = useState('');
   const contentViewportRef = useRef(null);
   const profileMenuRef = useRef(null);
+
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      setNavbarClockStr(now.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    };
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Click outside listener to automatically close user profile dropdown
   useEffect(() => {
@@ -347,6 +358,37 @@ export default function ManagerLayout({ setActivePage }) {
           </div>
 
           <div className="admin-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+
+            {/* 24-Hour Navbar Clock */}
+            {navbarClockStr && (() => {
+              const segs = navbarClockStr.split(':');
+              const hh = segs[0] || '00';
+              const mm = segs[1] || '00';
+              const ss = segs[2] || '00';
+              return (
+                <div 
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    backgroundColor: '#FFFFFF',
+                    background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
+                    border: '1.5px solid #E2E8F0',
+                    borderRadius: '12px',
+                    padding: '0.35rem 0.75rem',
+                    boxShadow: '0 2px 8px rgba(15, 42, 29, 0.04), 0 1px 2px rgba(0,0,0,0.02)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.15rem' }}>
+                    <span style={{ fontSize: '0.98rem', fontWeight: 900, color: '#0F2A1D', fontFamily: 'var(--font-heading, sans-serif)', letterSpacing: '0.02em' }}>
+                      {hh}:{mm}
+                    </span>
+                    <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#E07A3C', fontFamily: 'monospace' }}>
+                      :{ss}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Notifications Bell */}
             <div className="admin-header-icon-btn-wrapper">

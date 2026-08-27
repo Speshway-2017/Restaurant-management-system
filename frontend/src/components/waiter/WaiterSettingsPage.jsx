@@ -1,17 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Settings, Bell, Volume2, RefreshCw, CheckCircle2, Sliders, Shield,
   Sparkles, Clock, Smartphone, CreditCard, LayoutGrid, Sun, Lock,
-  Printer, VolumeX, Check, RotateCcw, Monitor, Utensils, Hash, Camera, Trash2, User, Upload
+  Printer, VolumeX, Check, RotateCcw, Monitor, Utensils, Hash, Trash2
 } from 'lucide-react';
 
 export default function WaiterSettingsPage() {
-  const avatarInputRef = useRef(null);
-
-  const [waiterAvatar, setWaiterAvatar] = useState(() => {
-    return localStorage.getItem('flavora_waiter_avatar') || '';
-  });
-
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('flavora_waiter_settings');
@@ -69,57 +63,10 @@ export default function WaiterSettingsPage() {
   const [successMsg, setSuccessMsg] = useState(null);
   const [playingTestAudio, setPlayingTestAudio] = useState(false);
 
-  const handleAvatarUpload = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Please select an image smaller than 5MB.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64Image = event.target.result;
-        setWaiterAvatar(base64Image);
-        try {
-          localStorage.setItem('flavora_waiter_avatar', base64Image);
-          const rawProfile = localStorage.getItem('flavora_waiter_profile');
-          if (rawProfile) {
-            const parsed = JSON.parse(rawProfile);
-            parsed.avatarUrl = base64Image;
-            localStorage.setItem('flavora_waiter_profile', JSON.stringify(parsed));
-          }
-          window.dispatchEvent(new Event('flavora_waiter_profile_updated'));
-        } catch (err) {}
-        setSuccessMsg('Profile photo updated successfully!');
-        setTimeout(() => setSuccessMsg(null), 3500);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleRemoveAvatar = () => {
-    setWaiterAvatar('');
-    try {
-      localStorage.removeItem('flavora_waiter_avatar');
-      const rawProfile = localStorage.getItem('flavora_waiter_profile');
-      if (rawProfile) {
-        const parsed = JSON.parse(rawProfile);
-        parsed.avatarUrl = '';
-        localStorage.setItem('flavora_waiter_profile', JSON.stringify(parsed));
-      }
-      window.dispatchEvent(new Event('flavora_waiter_profile_updated'));
-    } catch (err) {}
-    setSuccessMsg('Profile photo removed.');
-    setTimeout(() => setSuccessMsg(null), 3500);
-  };
-
   const handleSave = (e) => {
     if (e) e.preventDefault();
     try {
       localStorage.setItem('flavora_waiter_settings', JSON.stringify(settings));
-      if (waiterAvatar) {
-        localStorage.setItem('flavora_waiter_avatar', waiterAvatar);
-      }
       setSuccessMsg('Waiter Station preferences saved & applied live!');
       setTimeout(() => setSuccessMsg(null), 3500);
     } catch (err) {
@@ -173,15 +120,6 @@ export default function WaiterSettingsPage() {
   return (
     <div className="admin-dashboard-container" style={{ width: '100%', boxSizing: 'border-box', paddingBottom: '3rem' }}>
       
-      {/* Hidden File Input */}
-      <input
-        type="file"
-        ref={avatarInputRef}
-        onChange={handleAvatarUpload}
-        accept="image/*"
-        style={{ display: 'none' }}
-      />
-
       {/* ================= 1. PAGE HEADER ================= */}
       <div className="admin-dashboard-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -194,7 +132,7 @@ export default function WaiterSettingsPage() {
             Station Settings
           </h1>
           <p className="admin-page-subtitle" style={{ margin: '0.2rem 0 0 0' }}>
-            Configure Profile Photo, Audio Chimes, Table Lifecycle Alerts, POS Sync & Station Preferences
+            Configure Audio Chimes, Table Lifecycle Alerts, POS Sync & Station Preferences
           </p>
         </div>
 
@@ -253,105 +191,6 @@ export default function WaiterSettingsPage() {
 
       {/* ================= 2. MAIN SETTINGS GRID ================= */}
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-        {/* SECTION 0: PROFILE PHOTO UPLOAD */}
-        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '18px', padding: '1.5rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.75rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <User size={18} color="#E07A3C" />
-              <span>Staff Profile & Photo Upload</span>
-            </h3>
-            <span style={{ fontSize: '0.74rem', backgroundColor: '#FFF3EB', color: '#E07A3C', fontWeight: 800, padding: '0.2rem 0.65rem', borderRadius: '6px' }}>
-              Identity & Header Avatar
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.25rem', backgroundColor: '#F8FAFC', padding: '1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              {/* Profile Image Circle */}
-              <div 
-                onClick={() => avatarInputRef.current && avatarInputRef.current.click()}
-                title="Click to Upload Profile Photo"
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  backgroundColor: '#1E4636',
-                  color: '#FFFFFF',
-                  fontSize: '1.4rem',
-                  fontWeight: 900,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  border: '2px solid #FFFFFF',
-                  boxShadow: '0 4px 14px rgba(30, 70, 54, 0.2)'
-                }}
-              >
-                {waiterAvatar ? (
-                  <img src={waiterAvatar} alt="Waiter Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  'WV'
-                )}
-              </div>
-
-              <div>
-                <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0F2A1D' }}>Waiter Profile Picture</div>
-                <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '0.15rem' }}>
-                  Upload photo to display on header bar and staff roster. (PNG, JPG, WEBP)
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.6rem' }}>
-              <button
-                type="button"
-                onClick={() => avatarInputRef.current && avatarInputRef.current.click()}
-                style={{
-                  backgroundColor: '#0F2A1D',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  padding: '0.55rem 1.1rem',
-                  borderRadius: '9px',
-                  fontSize: '0.8rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  boxShadow: '0 4px 12px rgba(15, 42, 29, 0.15)'
-                }}
-              >
-                <Camera size={15} />
-                <span>Upload New Photo</span>
-              </button>
-
-              {waiterAvatar && (
-                <button
-                  type="button"
-                  onClick={handleRemoveAvatar}
-                  style={{
-                    backgroundColor: '#FEF2F2',
-                    color: '#DC2626',
-                    border: '1px solid #FCA5A5',
-                    padding: '0.55rem 0.9rem',
-                    borderRadius: '9px',
-                    fontSize: '0.8rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem'
-                  }}
-                >
-                  <Trash2 size={15} />
-                  <span>Remove Photo</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* SECTION A: AUDIO & NOTIFICATIONS */}
         <div style={{ backgroundColor: '#FFFFFF', borderRadius: '18px', padding: '1.5rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>

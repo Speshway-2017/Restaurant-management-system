@@ -404,25 +404,6 @@ export default function ManagerDashboardHome({ setActiveTab }) {
             Real-time platform performance and business insights.
           </p>
         </div>
-
-        {/* Live Clock Showcase */}
-        {currentTimeStr && (
-          <div style={{
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            padding: '0.45rem 0.85rem',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)'
-          }}>
-            <Clock size={15} color="#E07A3C" />
-            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace' }}>
-              {currentTimeStr}
-            </span>
-          </div>
-        )}
       </div>
 
 
