@@ -159,13 +159,15 @@ class OrderService {
       delete fullOrderData.tipAmount;
     }
 
-    const isPaid = status === 'Paid' || status === 'Completed' || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid';
+    const isPaid = status === 'Paid' || status === 'Completed' || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid' || fullOrderData.paymentStatus === 'Paid';
     const isBillGenerated = status === 'Bill Generated' || status === 'Awaiting Payment' || fullOrderData.payment === 'Bill Generated' || fullOrderData.payment === 'Awaiting Payment';
 
     const updatePayload = {
       ...fullOrderData,
       status: isPaid ? 'Completed' : (status || 'Placed'),
-      payment: isPaid ? 'Completed' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.payment || 'Pending'))
+      orderStatus: isPaid ? 'Completed' : (status || 'Placed'),
+      payment: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.payment || 'Pending')),
+      paymentStatus: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.paymentStatus || 'Pending'))
     };
 
     const updatedOrder = await orderRepository.updateStatus(id, updatePayload.status, updatePayload);

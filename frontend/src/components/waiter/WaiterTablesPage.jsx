@@ -157,7 +157,7 @@ export default function WaiterTablesPage() {
       await api.updateOrderStatus(orderId, 'Bill Generated', {
         status: 'Bill Generated',
         payment: 'Awaiting Payment'
-      }).catch(() => {});
+      }).catch(() => { });
 
       setOrders(prev => prev.map(o => (o._id === orderId || o.id === orderId) ? { ...o, status: 'Bill Generated', payment: 'Awaiting Payment' } : o));
       setBillingOrder({ ...order, status: 'Bill Generated', payment: 'Awaiting Payment' });
@@ -179,7 +179,7 @@ export default function WaiterTablesPage() {
         payment: 'Completed',
         paymentMethod: paymentMethod,
         total: Number(order.total || 0) // Revenue Rule: Exact bill total ONLY
-      }).catch(() => {});
+      }).catch(() => { });
 
       setOrders(prev => prev.map(o => (o._id === orderId || o.id === orderId) ? { ...o, status: 'Completed', payment: 'Completed' } : o));
 
@@ -209,7 +209,7 @@ export default function WaiterTablesPage() {
     try {
       const raw = localStorage.getItem('flavora_tables');
       if (raw) savedTables = JSON.parse(raw);
-    } catch (e) {}
+    } catch (e) { }
 
     let updated = false;
     const baseList = savedTables.length > 0 ? savedTables : BASE_DEFAULT_TABLES;
@@ -231,7 +231,7 @@ export default function WaiterTablesPage() {
 
     const dbTable = tables.find(t => t.num === tableNum);
     if (dbTable && dbTable.id) {
-      await api.updateTableStatus(dbTable.id, 'Cleaning').catch(() => {});
+      await api.updateTableStatus(dbTable.id, 'Cleaning').catch(() => { });
     }
   };
 
@@ -248,7 +248,7 @@ export default function WaiterTablesPage() {
     try {
       const raw = localStorage.getItem('flavora_tables');
       if (raw) savedTables = JSON.parse(raw);
-    } catch (e) {}
+    } catch (e) { }
 
     const updatedList = savedTables.map(t => {
       const tNum = t.num || t.number || `T-${String(t.id || 1).padStart(2, '0')}`;
@@ -263,7 +263,7 @@ export default function WaiterTablesPage() {
 
     const dbTable = tables.find(t => t.num === tableNum);
     if (dbTable && dbTable.id) {
-      await api.updateTableStatus(dbTable.id, 'Available').catch(() => {});
+      await api.updateTableStatus(dbTable.id, 'Available').catch(() => { });
     }
 
     if (selectedTable && selectedTable.num === tableNum) {
@@ -274,7 +274,7 @@ export default function WaiterTablesPage() {
 
   return (
     <div className="admin-dashboard-container" style={{ width: '100%', boxSizing: 'border-box' }}>
-      
+
       {/* Toast Notification */}
       {toastMsg && (
         <div style={{
@@ -334,7 +334,7 @@ export default function WaiterTablesPage() {
 
           {/* Separate Payment Main Card */}
           <div style={{ backgroundColor: '#FFFFFF', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '2.25rem', boxShadow: '0 12px 40px rgba(0,0,0,0.06)' }}>
-            
+
             {/* Header Lockup */}
             <div style={{ borderBottom: '1px solid #F1F5F9', paddingBottom: '1.25rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
@@ -496,581 +496,587 @@ export default function WaiterTablesPage() {
       {/* Main Floor Plan Container (Hidden when in Payment Settlement mode) */}
       {!paymentModalOrder && (
         <>
-      <div className="admin-dashboard-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <div className="page-breadcrumb-bar">
-            <span>Waiter</span>
-            <span className="crumb-sep">›</span>
-            <span className="crumb-current">My Tables</span>
+          <div className="admin-dashboard-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div className="page-breadcrumb-bar">
+                <span>Waiter</span>
+                <span className="crumb-sep">›</span>
+                <span className="crumb-current">My Tables</span>
+              </div>
+              <h1 className="admin-page-title" style={{ margin: 0 }}>
+                My Tables
+              </h1>
+            </div>
           </div>
-          <h1 className="admin-page-title" style={{ margin: 0 }}>
-            My Tables
-          </h1>
-        </div>
 
-        {currentTimeStr && (
+          {/* ================= 2. KPI COUNTERS STRIP ================= */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.95rem 1.15rem', borderRadius: '14px', border: '1.5px solid #285A46', boxShadow: '0 6px 20px rgba(15,42,29,0.12)' }}>
+              <div style={{ fontSize: '0.74rem', color: '#A7F3D0', fontWeight: 800, textTransform: 'uppercase' }}>Occupied / Billing</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFFFFF', marginTop: '0.1rem', fontFamily: 'var(--font-heading)' }}>{occupiedCount} / {tables.length}</div>
+            </div>
+
+            <div style={{ backgroundColor: '#FFFFFF', padding: '0.95rem 1.15rem', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+              <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Dishes Ready</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#283593', marginTop: '0.1rem', fontFamily: 'var(--font-heading)' }}>{readyCount} Tables</div>
+            </div>
+
+            <div style={{ backgroundColor: '#FFFFFF', padding: '0.95rem 1.15rem', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+              <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Available Seating</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#166534', marginTop: '0.1rem', fontFamily: 'var(--font-heading)' }}>{availableCount} Tables</div>
+            </div>
+
+            <div style={{ backgroundColor: '#FFFFFF', padding: '0.95rem 1.15rem', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+              <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>In Cleaning State</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#D97706', marginTop: '0.1rem', fontFamily: 'var(--font-heading)' }}>{cleaningCount} Tables</div>
+            </div>
+          </div>
+
+          {/* ================= 3. FILTER TOOLBAR ================= */}
           <div style={{
             backgroundColor: '#FFFFFF',
+            borderRadius: '14px',
+            padding: '0.85rem 1.25rem',
             border: '1px solid #E2E8F0',
-            padding: '0.45rem 0.85rem',
-            borderRadius: '10px',
+            marginBottom: '1.5rem',
             display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            gap: '0.5rem',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)'
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
           }}>
-            <Clock size={15} color="#E07A3C" />
-            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace' }}>
-              {currentTimeStr}
-            </span>
-          </div>
-        )}
-      </div>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {[
+                { id: 'ALL', label: `All Tables (${tables.length})` },
+                { id: 'OCCUPIED', label: `Occupied / Billing (${occupiedCount})` },
+                { id: 'READY', label: `Ready for Service (${readyCount})` },
+                { id: 'AVAILABLE', label: `Available (${availableCount})` },
+                { id: 'CLEANING', label: `Cleaning (${cleaningCount})` }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setActiveFilter(f.id)}
+                  style={{
+                    backgroundColor: activeFilter === f.id ? '#0F2A1D' : '#F8FAFC',
+                    color: activeFilter === f.id ? '#FFFFFF' : '#475569',
+                    border: '1px solid',
+                    borderColor: activeFilter === f.id ? '#0F2A1D' : '#E2E8F0',
+                    padding: '0.4rem 0.85rem',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-      {/* ================= 2. KPI COUNTERS STRIP ================= */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div style={{ backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.95rem 1.15rem', borderRadius: '14px', border: '1.5px solid #285A46', boxShadow: '0 6px 20px rgba(15,42,29,0.12)' }}>
-          <div style={{ fontSize: '0.74rem', color: '#A7F3D0', fontWeight: 800, textTransform: 'uppercase' }}>Occupied / Billing</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#FFFFFF', marginTop: '0.1rem', fontFamily: 'var(--font-heading)' }}>{occupiedCount} / {tables.length}</div>
-        </div>
-
-        <div style={{ backgroundColor: '#FFFFFF', padding: '0.95rem 1.15rem', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
-          <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Dishes Ready</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#283593', marginTop: '0.1rem', fontFamily: 'var(--font-heading)' }}>{readyCount} Tables</div>
-        </div>
-
-        <div style={{ backgroundColor: '#FFFFFF', padding: '0.95rem 1.15rem', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
-          <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Available Seating</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#166534', marginTop: '0.1rem', fontFamily: 'var(--font-heading)' }}>{availableCount} Tables</div>
-        </div>
-
-        <div style={{ backgroundColor: '#FFFFFF', padding: '0.95rem 1.15rem', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
-          <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>In Cleaning State</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#D97706', marginTop: '0.1rem', fontFamily: 'var(--font-heading)' }}>{cleaningCount} Tables</div>
-        </div>
-      </div>
-
-      {/* ================= 3. FILTER TOOLBAR ================= */}
-      <div style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: '14px',
-        padding: '0.85rem 1.25rem',
-        border: '1px solid #E2E8F0',
-        marginBottom: '1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '0.75rem',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
-      }}>
-        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-          {[
-            { id: 'ALL', label: `All Tables (${tables.length})` },
-            { id: 'OCCUPIED', label: `Occupied / Billing (${occupiedCount})` },
-            { id: 'READY', label: `Ready for Service (${readyCount})` },
-            { id: 'AVAILABLE', label: `Available (${availableCount})` },
-            { id: 'CLEANING', label: `Cleaning (${cleaningCount})` }
-          ].map(f => (
             <button
-              key={f.id}
-              onClick={() => setActiveFilter(f.id)}
+              onClick={fetchTablesAndOrders}
               style={{
-                backgroundColor: activeFilter === f.id ? '#0F2A1D' : '#F8FAFC',
-                color: activeFilter === f.id ? '#FFFFFF' : '#475569',
-                border: '1px solid',
-                borderColor: activeFilter === f.id ? '#0F2A1D' : '#E2E8F0',
-                padding: '0.4rem 0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                backgroundColor: '#F1F5F9',
+                color: '#0F2A1D',
+                border: '1px solid #CBD5E1',
+                padding: '0.45rem 0.85rem',
                 borderRadius: '8px',
                 fontSize: '0.78rem',
                 fontWeight: 800,
                 cursor: 'pointer'
               }}
             >
-              {f.label}
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span>Refresh</span>
             </button>
-          ))}
-        </div>
+          </div>
 
-        <button
-          onClick={fetchTablesAndOrders}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            backgroundColor: '#F1F5F9',
-            color: '#0F2A1D',
-            border: '1px solid #CBD5E1',
-            padding: '0.45rem 0.85rem',
-            borderRadius: '8px',
-            fontSize: '0.78rem',
-            fontWeight: 800,
-            cursor: 'pointer'
-          }}
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh</span>
-        </button>
-      </div>
+          {/* ================= 4. FLOOR TABLES GRID ================= */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
+            {filteredTables.map(tb => {
+              const realStatus = getTableRealStatus(tb);
+              const activeOrder = findTableOrder(tb);
 
-      {/* ================= 4. FLOOR TABLES GRID ================= */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
-        {filteredTables.map(tb => {
-          const realStatus = getTableRealStatus(tb);
-          const activeOrder = findTableOrder(tb);
+              let statusBg = '#F0FDF4';
+              let statusColor = '#166534';
+              let statusText = '🟢 Available';
 
-          let statusBg = '#F0FDF4';
-          let statusColor = '#166534';
-          let statusText = '🟢 Available';
+              if (realStatus === 'Occupied') {
+                statusBg = '#FFF3EB';
+                statusColor = '#E07A3C';
+                statusText = '🔴 Occupied';
+              } else if (realStatus === 'Ready') {
+                statusBg = '#EEF2FF';
+                statusColor = '#283593';
+                statusText = '🔔 Dish Ready!';
+              } else if (realStatus === 'Bill Generated') {
+                statusBg = '#FEF3C7';
+                statusColor = '#92400E';
+                statusText = '📄 Bill Generated (Occupied)';
+              } else if (realStatus === 'Cleaning') {
+                statusBg = '#FEFCE8';
+                statusColor = '#B45309';
+                statusText = '🧹 Cleaning';
+              }
 
-          if (realStatus === 'Occupied') {
-            statusBg = '#FFF3EB';
-            statusColor = '#E07A3C';
-            statusText = '🔴 Occupied';
-          } else if (realStatus === 'Ready') {
-            statusBg = '#EEF2FF';
-            statusColor = '#283593';
-            statusText = '🔔 Dish Ready!';
-          } else if (realStatus === 'Bill Generated') {
-            statusBg = '#FEF3C7';
-            statusColor = '#92400E';
-            statusText = '📄 Bill Generated (Occupied)';
-          } else if (realStatus === 'Cleaning') {
-            statusBg = '#FEFCE8';
-            statusColor = '#B45309';
-            statusText = '🧹 Cleaning';
-          }
-
-          return (
-            <div
-              key={tb.num}
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: '16px',
-                padding: '1.25rem',
-                border: realStatus === 'Ready' ? '2px solid #283593' : realStatus === 'Bill Generated' ? '2px solid #D97706' : '1px solid #E2E8F0',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between'
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              return (
+                <div
+                  key={tb.num}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '16px',
+                    padding: '1.25rem',
+                    border: realStatus === 'Ready' ? '2px solid #283593' : realStatus === 'Bill Generated' ? '2px solid #D97706' : '1px solid #E2E8F0',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between'
+                  }}
+                >
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
-                      Table {tb.num}
-                    </h3>
-                    <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700 }}>
-                      📍 {tb.zone} • 👥 {tb.cap} Seats
-                    </span>
-                  </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
+                          Table {tb.num}
+                        </h3>
+                        <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700 }}>
+                          📍 {tb.zone} • 👥 {tb.cap} Seats
+                        </span>
+                      </div>
 
-                  <span style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 800,
-                    backgroundColor: statusBg,
-                    color: statusColor,
-                    padding: '0.3rem 0.65rem',
-                    borderRadius: '8px'
-                  }}>
-                    {statusText}
-                  </span>
-                </div>
+                      <span style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        backgroundColor: statusBg,
+                        color: statusColor,
+                        padding: '0.3rem 0.65rem',
+                        borderRadius: '8px'
+                      }}>
+                        {statusText}
+                      </span>
+                    </div>
 
-                {activeOrder ? (
-                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem', borderRadius: '10px', border: '1px solid #E2E8F0', marginBottom: '0.85rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.25rem' }}>
-                      <span>👤 {activeOrder.customer || activeOrder.guestName || 'Guest'}</span>
-                      <span style={{ color: '#166534', fontWeight: 900 }}>₹{activeOrder.total || 0}</span>
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
-                      🍲 {Array.isArray(activeOrder.items) ? activeOrder.items.length : 1} Items • Order #{getOrderId(activeOrder)}
-                    </div>
-                    {activeOrder.status === 'Bill Generated' && (
-                      <div style={{ marginTop: '0.35rem', fontSize: '0.72rem', color: '#B45309', fontWeight: 800, backgroundColor: '#FEF3C7', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
-                        ⏳ Bill Presented • Awaiting Payment
+                    {activeOrder ? (
+                      <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem', borderRadius: '10px', border: '1px solid #E2E8F0', marginBottom: '0.85rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.25rem' }}>
+                          <span>👤 {activeOrder.customer || activeOrder.guestName || 'Guest'}</span>
+                          <span style={{ color: '#166534', fontWeight: 900 }}>₹{activeOrder.total || 0}</span>
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
+                          🍲 {Array.isArray(activeOrder.items) ? activeOrder.items.length : 1} Items • Order #{getOrderId(activeOrder)}
+                        </div>
+                        {activeOrder.status === 'Bill Generated' && (
+                          <div style={{ marginTop: '0.35rem', fontSize: '0.72rem', color: '#B45309', fontWeight: 800, backgroundColor: '#FEF3C7', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
+                            ⏳ Bill Presented • Awaiting Payment
+                          </div>
+                        )}
+                      </div>
+                    ) : realStatus === 'Cleaning' ? (
+                      <div style={{ backgroundColor: '#FEFCE8', padding: '0.75rem', borderRadius: '10px', border: '1px solid #FDE047', marginBottom: '0.85rem', color: '#B45309', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center' }}>
+                        🧹 Table Cleaning in Progress (Unavailable for new orders)
+                      </div>
+                    ) : (
+                      <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem', borderRadius: '10px', border: '1px border-dashed #CBD5E1', marginBottom: '0.85rem', color: '#94A3B8', fontSize: '0.78rem', fontWeight: 600, textAlign: 'center' }}>
+                        No active table orders • Ready for guests
                       </div>
                     )}
                   </div>
-                ) : realStatus === 'Cleaning' ? (
-                  <div style={{ backgroundColor: '#FEFCE8', padding: '0.75rem', borderRadius: '10px', border: '1px solid #FDE047', marginBottom: '0.85rem', color: '#B45309', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center' }}>
-                    🧹 Table Cleaning in Progress (Unavailable for new orders)
-                  </div>
-                ) : (
-                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem', borderRadius: '10px', border: '1px border-dashed #CBD5E1', marginBottom: '0.85rem', color: '#94A3B8', fontSize: '0.78rem', fontWeight: 600, textAlign: 'center' }}>
-                    No active table orders • Ready for guests
-                  </div>
-                )}
-              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  <button
-                    onClick={() => setSelectedTable({ ...tb, activeOrder })}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#0F2A1D',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      padding: '0.5rem',
-                      borderRadius: '8px',
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.3rem'
-                    }}
-                  >
-                    <Eye size={14} />
-                    <span>Details</span>
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        onClick={() => setSelectedTable({ ...tb, activeOrder })}
+                        style={{
+                          flex: 1,
+                          backgroundColor: '#0F2A1D',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          padding: '0.5rem',
+                          borderRadius: '8px',
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.3rem'
+                        }}
+                      >
+                        <Eye size={14} />
+                        <span>Details</span>
+                      </button>
 
-                  {activeOrder && (
-                    <button
-                      onClick={() => {
-                        handleGenerateBill(activeOrder);
-                        setBillingOrder(activeOrder);
-                      }}
-                      style={{
-                        backgroundColor: '#FFF3EB',
-                        color: '#E07A3C',
-                        border: '1px solid #FDBA74',
-                        padding: '0.5rem 0.65rem',
-                        borderRadius: '8px',
-                        fontSize: '0.76rem',
-                        fontWeight: 800,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.3rem'
-                      }}
-                    >
-                      <Receipt size={14} />
-                      <span>Generate Bill</span>
-                    </button>
-                  )}
-                </div>
+                      {activeOrder && activeOrder.status !== 'Bill Generated' && activeOrder.payment !== 'Awaiting Payment' && (() => {
+                        const items = Array.isArray(activeOrder.items) ? activeOrder.items : [];
+                        const totalCount = items.length;
+                        const deliveredCount = items.filter(i => i && (i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED')).length;
+                        const isFullyServed = activeOrder.status === 'Served' || (totalCount > 0 && deliveredCount === totalCount);
 
-                {activeOrder && (
-                  <button
-                    onClick={() => setPaymentModalOrder(activeOrder)}
-                    style={{
-                      backgroundColor: '#1E4636',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      padding: '0.5rem',
-                      borderRadius: '8px',
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.4rem'
-                    }}
-                  >
-                    <CreditCard size={14} />
-                    <span>Confirm Payment Received</span>
-                  </button>
-                )}
+                        if (!isFullyServed) return null;
 
-                {realStatus === 'Cleaning' && (
-                  <button
-                    onClick={() => handleMarkCleanedAvailable(tb.num)}
-                    style={{
-                      backgroundColor: '#F0FDF4',
-                      color: '#166534',
-                      border: '1.5px solid #86EFAC',
-                      padding: '0.55rem',
-                      borderRadius: '8px',
-                      fontSize: '0.78rem',
-                      fontWeight: 900,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.4rem'
-                    }}
-                  >
-                    <CheckCircle2 size={16} />
-                    <span>Mark Cleaned & Available</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                        return (
+                          <button
+                            onClick={() => {
+                              handleGenerateBill(activeOrder);
+                              setBillingOrder(activeOrder);
+                            }}
+                            style={{
+                              backgroundColor: '#FFF3EB',
+                              color: '#E07A3C',
+                              border: '1px solid #FDBA74',
+                              padding: '0.5rem 0.65rem',
+                              borderRadius: '8px',
+                              fontSize: '0.76rem',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.3rem'
+                            }}
+                          >
+                            <Receipt size={14} />
+                            <span>Generate Bill</span>
+                          </button>
+                        );
+                      })()}
+                    </div>
 
-      {/* ================= 5. BILL & ITEM BREAKDOWN MODAL ================= */}
-      {billingOrder && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
-          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '440px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
-                  📄 Restaurant Tax Invoice
-                </h3>
-                <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>
-                  Table {billingOrder.table} • Order #{getOrderId(billingOrder)}
-                </span>
-              </div>
-              <button onClick={() => setBillingOrder(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                <X size={20} />
-              </button>
-            </div>
+                    {activeOrder && (activeOrder.status === 'Bill Generated' || activeOrder.payment === 'Awaiting Payment') && (
+                      <button
+                        onClick={() => setPaymentModalOrder(activeOrder)}
+                        style={{
+                          backgroundColor: '#1E4636',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          padding: '0.5rem',
+                          borderRadius: '8px',
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <CreditCard size={14} />
+                        <span>Confirm Payment Received</span>
+                      </button>
+                    )}
 
-            <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', marginBottom: '1rem', border: '1px solid #E2E8F0' }}>
-              <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Customer: <b>{billingOrder.customer || 'Guest Diner'}</b></div>
-              <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Table Status: <b style={{ color: '#E07A3C' }}>Occupied (Bill Presented)</b></div>
-            </div>
-
-            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D' }}>Bill Summary</h4>
-            <div style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem', marginBottom: '1rem', maxHeight: '160px', overflowY: 'auto' }}>
-              {Array.isArray(billingOrder.items) ? (
-                billingOrder.items.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.3rem 0', borderBottom: i === billingOrder.items.length - 1 ? 'none' : '1px solid #F1F5F9' }}>
-                    <span>{item.name} (x{item.quantity || 1})</span>
-                    <span style={{ fontWeight: 800, color: '#0F2A1D' }}>₹{(item.price || 150) * (item.quantity || 1)}</span>
-                  </div>
-                ))
-              ) : (
-                <div style={{ fontSize: '0.82rem', color: '#475569' }}>{String(billingOrder.items)}</div>
-              )}
-            </div>
-
-            <div style={{ backgroundColor: '#F0FDF4', padding: '0.85rem', borderRadius: '12px', border: '1px solid #86EFAC', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 900, color: '#166534' }}>
-                <span>Grand Total:</span>
-                <span>₹{billingOrder.total || 0}</span>
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 600, marginTop: '0.2rem' }}>
-                *Includes all applicable GST Taxes. Exact bill amount strictly recorded.
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={() => {
-                  setPaymentModalOrder(billingOrder);
-                  setBillingOrder(null);
-                }}
-                style={{ flex: 1, backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
-              >
-                💳 Process Customer Payment
-              </button>
-              <button
-                onClick={() => setBillingOrder(null)}
-                style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.65rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= 6. PAYMENT CONFIRMATION MODAL ================= */}
-      {paymentModalOrder && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
-          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '440px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
-                  💳 Confirm Customer Payment
-                </h3>
-                <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>
-                  Table {paymentModalOrder.table} • Order #{getOrderId(paymentModalOrder)}
-                </span>
-              </div>
-              <button onClick={() => setPaymentModalOrder(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ textAlign: 'center', backgroundColor: '#F8FAFC', padding: '1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Food Bill Amount (Restaurant Revenue)</div>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: '#166534', fontFamily: 'var(--font-heading)', margin: '0.2rem 0' }}>
-                ₹{paymentModalOrder.total || 0}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
-                Customer: <b>{paymentModalOrder.customer || 'Guest Diner'}</b>
-              </div>
-            </div>
-
-            {/* Optional Customer Tip Entry */}
-            <div style={{ marginBottom: '1.15rem', backgroundColor: '#FFFFFF', padding: '0.85rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
-                🪙 Optional Customer Tip (Manual Entry)
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <span style={{ fontSize: '1rem', fontWeight: 900, color: '#0F2A1D' }}>₹</span>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Enter tip (e.g. 50, 100)"
-                  value={tipInput}
-                  onChange={e => setTipInput(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '0.5rem 0.75rem',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '0.9rem',
-                    fontWeight: 700,
-                    outline: 'none'
-                  }}
-                />
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, marginTop: '0.35rem' }}>
-                💡 Total Paid by Customer: <b>₹{(Number(paymentModalOrder.total || 0) + Number(tipInput || 0))}</b>
-                <br />
-                <span style={{ color: '#166534', fontWeight: 800 }}>✓ Revenue Added: ₹{paymentModalOrder.total || 0} ONLY</span> (Tip excluded from revenue).
-              </div>
-            </div>
-
-            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D' }}>Select Payment Method</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.25rem' }}>
-              {[
-                { id: 'UPI', label: 'UPI / QR', icon: QrCode },
-                { id: 'Card', label: 'Card Swipe', icon: CreditCard },
-                { id: 'Cash', label: 'Cash Paid', icon: DollarSign }
-              ].map(pm => (
-                <button
-                  key={pm.id}
-                  onClick={() => setPaymentMethod(pm.id)}
-                  style={{
-                    backgroundColor: paymentMethod === pm.id ? '#0F2A1D' : '#F8FAFC',
-                    color: paymentMethod === pm.id ? '#FFFFFF' : '#475569',
-                    border: paymentMethod === pm.id ? '1.5px solid #0F2A1D' : '1px solid #CBD5E1',
-                    borderRadius: '10px',
-                    padding: '0.65rem 0.3rem',
-                    fontSize: '0.78rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.25rem'
-                  }}
-                >
-                  <pm.icon size={18} />
-                  <span>{pm.label}</span>
-                </button>
-              ))}
-            </div>
-
-            <div style={{ backgroundColor: '#FEFCE8', padding: '0.75rem', borderRadius: '10px', border: '1px solid #FDE047', marginBottom: '1.25rem', fontSize: '0.74rem', color: '#B45309', fontWeight: 700 }}>
-              ⚠️ Upon payment success confirmation:
-              <br />
-              1. Order Status ➔ <b>PAID / COMPLETED</b>
-              <br />
-              2. Table Status ➔ <b>AUTOMATICALLY CHANGES TO CLEANING</b>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={() => handleConfirmPayment(paymentModalOrder)}
-                style={{ flex: 1, backgroundColor: '#166534', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 900, cursor: 'pointer' }}
-              >
-                ✓ Confirm Successful Payment
-              </button>
-              <button
-                onClick={() => {
-                  setPaymentModalOrder(null);
-                  setTipInput('');
-                }}
-                style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.65rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= 7. VIEW TABLE DETAILS MODAL ================= */}
-      {selectedTable && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
-          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '480px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0F2A1D' }}>
-                  Table {selectedTable.num} Breakdown
-                </h3>
-                <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>
-                  Zone: {selectedTable.zone} • {selectedTable.cap} Guests Seating
-                </span>
-              </div>
-              <button onClick={() => setSelectedTable(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            {selectedTable.activeOrder ? (
-              <div>
-                <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', marginBottom: '1rem', border: '1px solid #E2E8F0' }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.2rem' }}>
-                    Order ID: #{getOrderId(selectedTable.activeOrder)}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
-                    Customer: {selectedTable.activeOrder.customer || 'Dine-in Guest'}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
-                    Status: <span style={{ color: '#E07A3C', fontWeight: 800 }}>{selectedTable.activeOrder.status}</span>
+                    {realStatus === 'Cleaning' && (
+                      <button
+                        onClick={() => handleMarkCleanedAvailable(tb.num)}
+                        style={{
+                          backgroundColor: '#F0FDF4',
+                          color: '#166534',
+                          border: '1.5px solid #86EFAC',
+                          padding: '0.55rem',
+                          borderRadius: '8px',
+                          fontSize: '0.78rem',
+                          fontWeight: 900,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <CheckCircle2 size={16} />
+                        <span>Mark Cleaned & Available</span>
+                      </button>
+                    )}
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 800, color: '#0F2A1D' }}>Ordered Items:</h4>
-                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem', marginBottom: '1.25rem', maxHeight: '180px', overflowY: 'auto' }}>
-                  {Array.isArray(selectedTable.activeOrder.items) ? (
-                    selectedTable.activeOrder.items.map((item, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.3rem 0', borderBottom: i === selectedTable.activeOrder.items.length - 1 ? 'none' : '1px solid #F1F5F9' }}>
-                        <span>{typeof item === 'string' ? item : `${item.name} (x${item.quantity || 1})`}</span>
-                        <span style={{ fontWeight: 800, color: '#0F2A1D' }}>₹{item.price || 150}</span>
+          {/* ================= 5. BILL & ITEM BREAKDOWN MODAL ================= */}
+          {billingOrder && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '440px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
+                      📄 Restaurant Tax Invoice
+                    </h3>
+                    <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>
+                      Table {billingOrder.table} • Order #{getOrderId(billingOrder)}
+                    </span>
+                  </div>
+                  <button onClick={() => setBillingOrder(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', marginBottom: '1rem', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Customer: <b>{billingOrder.customer || 'Guest Diner'}</b></div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Table Status: <b style={{ color: '#E07A3C' }}>Occupied (Bill Presented)</b></div>
+                </div>
+
+                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D' }}>Bill Summary</h4>
+                <div style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem', marginBottom: '1rem', maxHeight: '160px', overflowY: 'auto' }}>
+                  {Array.isArray(billingOrder.items) ? (
+                    billingOrder.items.map((item, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.3rem 0', borderBottom: i === billingOrder.items.length - 1 ? 'none' : '1px solid #F1F5F9' }}>
+                        <span>{item.name} (x{item.quantity || 1})</span>
+                        <span style={{ fontWeight: 800, color: '#0F2A1D' }}>₹{(item.price || 150) * (item.quantity || 1)}</span>
                       </div>
                     ))
                   ) : (
-                    <div style={{ fontSize: '0.82rem', color: '#475569' }}>{String(selectedTable.activeOrder.items)}</div>
+                    <div style={{ fontSize: '0.82rem', color: '#475569' }}>{String(billingOrder.items)}</div>
                   )}
                 </div>
-              </div>
-            ) : getTableRealStatus(selectedTable) === 'Cleaning' ? (
-              <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#B45309' }}>
-                <Sparkles size={32} color="#D97706" style={{ marginBottom: '0.5rem' }} />
-                <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800 }}>This table is currently being cleaned and prepared for the next guests.</p>
-              </div>
-            ) : (
-              <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748B' }}>
-                <Sparkles size={32} color="#CBD5E1" style={{ marginBottom: '0.5rem' }} />
-                <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700 }}>This table is currently available for guest seating.</p>
-              </div>
-            )}
 
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-              {getTableRealStatus(selectedTable) === 'Cleaning' && (
-                <button
-                  onClick={() => handleMarkCleanedAvailable(selectedTable.num)}
-                  style={{ flex: 1, backgroundColor: '#F0FDF4', color: '#166534', border: '1px solid #86EFAC', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 900, cursor: 'pointer' }}
-                >
-                  🟢 Mark Cleaned & Available
-                </button>
-              )}
+                <div style={{ backgroundColor: '#F0FDF4', padding: '0.85rem', borderRadius: '12px', border: '1px solid #86EFAC', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 900, color: '#166534' }}>
+                    <span>Food Bill Total:</span>
+                    <span>₹{billingOrder.total || 0}</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 600, marginTop: '0.2rem' }}>
+                    *Includes all applicable GST Taxes. Food bill recorded as restaurant revenue.
+                  </div>
+                </div>
 
-              <button
-                onClick={() => setSelectedTable(null)}
-                style={{ flex: 1, backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
-              >
-                Close Window
-              </button>
+                {/* Manual Customer Tip Entry Section (Req: Tip excluded from revenue) */}
+                <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '1.25rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
+                    🪙 Optional Customer Tip (Manual Entry)
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '1rem', fontWeight: 900, color: '#0F2A1D' }}>₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Enter tip (e.g. 50, 100)"
+                      value={tipInput}
+                      onChange={e => setTipInput(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '0.9rem',
+                        fontWeight: 700,
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, marginTop: '0.35rem' }}>
+                    💡 Total to Collect from Diner: <b>₹{(Number(billingOrder.total || 0) + Number(tipInput || 0))}</b>
+                    <br />
+                    <span style={{ color: '#166534', fontWeight: 800 }}>✓ Restaurant Revenue: ₹{billingOrder.total || 0} ONLY</span> (Tip amount is excluded from revenue).
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => {
+                      setPaymentModalOrder(billingOrder);
+                      setBillingOrder(null);
+                    }}
+                    style={{ flex: 1, backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    💳 Process Customer Payment (₹{(Number(billingOrder.total || 0) + Number(tipInput || 0))})
+                  </button>
+                  <button
+                    onClick={() => setBillingOrder(null)}
+                    style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.65rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
-      </>
+          )}
+
+          {/* ================= 6. PAYMENT CONFIRMATION MODAL ================= */}
+          {paymentModalOrder && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '440px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
+                      💳 Confirm Customer Payment
+                    </h3>
+                    <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>
+                      Table {paymentModalOrder.table} • Order #{getOrderId(paymentModalOrder)}
+                    </span>
+                  </div>
+                  <button onClick={() => setPaymentModalOrder(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div style={{ textAlign: 'center', backgroundColor: '#F8FAFC', padding: '1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0', marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Food Bill Amount (Restaurant Revenue)</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 900, color: '#166534', fontFamily: 'var(--font-heading)', margin: '0.2rem 0' }}>
+                    ₹{paymentModalOrder.total || 0}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
+                    Customer: <b>{paymentModalOrder.customer || 'Guest Diner'}</b>
+                  </div>
+                </div>
+
+                {/* Tip Summary Badge (No duplicate editable input box in payment confirmation modal) */}
+                <div style={{ marginBottom: '1.15rem', backgroundColor: '#F8FAFC', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                  {Number(tipInput || 0) > 0 ? (
+                    <div style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: 800, marginBottom: '0.25rem' }}>
+                      🪙 Customer Tip Included: <b>+₹{tipInput}</b>
+                    </div>
+                  ) : null}
+                  <div style={{ fontSize: '0.82rem', color: '#0F2A1D', fontWeight: 800 }}>
+                    💡 Total to Collect from Diner: <b style={{ color: '#166534', fontSize: '0.95rem' }}>₹{(Number(paymentModalOrder.total || 0) + Number(tipInput || 0))}</b>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600, marginTop: '0.2rem' }}>
+                    ✓ Restaurant Revenue: ₹{paymentModalOrder.total || 0} ONLY (Tip excluded from revenue).
+                  </div>
+                </div>
+
+                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D' }}>Select Payment Method</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                  {[
+                    { id: 'UPI', label: 'UPI / QR', icon: QrCode },
+                    { id: 'Card', label: 'Card Swipe', icon: CreditCard },
+                    { id: 'Cash', label: 'Cash Paid', icon: DollarSign }
+                  ].map(pm => (
+                    <button
+                      key={pm.id}
+                      onClick={() => setPaymentMethod(pm.id)}
+                      style={{
+                        backgroundColor: paymentMethod === pm.id ? '#0F2A1D' : '#F8FAFC',
+                        color: paymentMethod === pm.id ? '#FFFFFF' : '#475569',
+                        border: paymentMethod === pm.id ? '1.5px solid #0F2A1D' : '1px solid #CBD5E1',
+                        borderRadius: '10px',
+                        padding: '0.65rem 0.3rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '0.25rem'
+                      }}
+                    >
+                      <pm.icon size={18} />
+                      <span>{pm.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ backgroundColor: '#FEFCE8', padding: '0.75rem', borderRadius: '10px', border: '1px solid #FDE047', marginBottom: '1.25rem', fontSize: '0.74rem', color: '#B45309', fontWeight: 700 }}>
+                  ⚠️ Upon payment success confirmation:
+                  <br />
+                  1. Order Status ➔ <b>PAID / COMPLETED</b>
+                  <br />
+                  2. Table Status ➔ <b>AUTOMATICALLY CHANGES TO CLEANING</b>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => handleConfirmPayment(paymentModalOrder)}
+                    style={{ flex: 1, backgroundColor: '#166534', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 900, cursor: 'pointer' }}
+                  >
+                    ✓ Confirm Successful Payment
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPaymentModalOrder(null);
+                      setTipInput('');
+                    }}
+                    style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.65rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================= 7. VIEW TABLE DETAILS MODAL ================= */}
+          {selectedTable && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '480px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0F2A1D' }}>
+                      Table {selectedTable.num} Breakdown
+                    </h3>
+                    <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>
+                      Zone: {selectedTable.zone} • {selectedTable.cap} Guests Seating
+                    </span>
+                  </div>
+                  <button onClick={() => setSelectedTable(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {selectedTable.activeOrder ? (
+                  <div>
+                    <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', marginBottom: '1rem', border: '1px solid #E2E8F0' }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.2rem' }}>
+                        Order ID: #{getOrderId(selectedTable.activeOrder)}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
+                        Customer: {selectedTable.activeOrder.customer || 'Dine-in Guest'}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
+                        Status: <span style={{ color: '#E07A3C', fontWeight: 800 }}>{selectedTable.activeOrder.status}</span>
+                      </div>
+                    </div>
+
+                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 800, color: '#0F2A1D' }}>Ordered Items:</h4>
+                    <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem', marginBottom: '1.25rem', maxHeight: '180px', overflowY: 'auto' }}>
+                      {Array.isArray(selectedTable.activeOrder.items) ? (
+                        selectedTable.activeOrder.items.map((item, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.3rem 0', borderBottom: i === selectedTable.activeOrder.items.length - 1 ? 'none' : '1px solid #F1F5F9' }}>
+                            <span>{typeof item === 'string' ? item : `${item.name} (x${item.quantity || 1})`}</span>
+                            <span style={{ fontWeight: 800, color: '#0F2A1D' }}>₹{item.price || 150}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ fontSize: '0.82rem', color: '#475569' }}>{String(selectedTable.activeOrder.items)}</div>
+                      )}
+                    </div>
+                  </div>
+                ) : getTableRealStatus(selectedTable) === 'Cleaning' ? (
+                  <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#B45309' }}>
+                    <Sparkles size={32} color="#D97706" style={{ marginBottom: '0.5rem' }} />
+                    <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800 }}>This table is currently being cleaned and prepared for the next guests.</p>
+                  </div>
+                ) : (
+                  <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748B' }}>
+                    <Sparkles size={32} color="#CBD5E1" style={{ marginBottom: '0.5rem' }} />
+                    <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700 }}>This table is currently available for guest seating.</p>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {getTableRealStatus(selectedTable) === 'Cleaning' && (
+                    <button
+                      onClick={() => handleMarkCleanedAvailable(selectedTable.num)}
+                      style={{ flex: 1, backgroundColor: '#F0FDF4', color: '#166534', border: '1px solid #86EFAC', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 900, cursor: 'pointer' }}
+                    >
+                      🟢 Mark Cleaned & Available
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setSelectedTable(null)}
+                    style={{ flex: 1, backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Close Window
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

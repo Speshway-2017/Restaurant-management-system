@@ -80,8 +80,8 @@ export default function ChefLayout({ setActivePage }) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') return parsed;
       }
-    } catch (e) {}
-   
+    } catch (e) { }
+
   });
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function ChefLayout({ setActivePage }) {
             localStorage.setItem('flavora_profile_chef', JSON.stringify(fetched));
           }
         }
-      } catch (err) {}
+      } catch (err) { }
     };
     fetchChefFromDb();
   }, []);
@@ -148,7 +148,7 @@ export default function ChefLayout({ setActivePage }) {
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.5);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   // Live Clock Interval
@@ -174,7 +174,7 @@ export default function ChefLayout({ setActivePage }) {
       let backendData = [];
       try {
         backendData = await api.getOrders();
-      } catch (e) {}
+      } catch (e) { }
 
       let combined = Array.isArray(backendData) ? [...backendData] : [];
 
@@ -206,12 +206,27 @@ export default function ChefLayout({ setActivePage }) {
 
       setOrdersList(mappedOrders);
 
+      // Sync checkedDishItems state map with actual item status (READY or DELIVERED)
+      const syncedCheckedMap = {};
+      mappedOrders.forEach(ord => {
+        const itemMap = {};
+        (ord.items || []).forEach((it, idx) => {
+          const isChecked = Boolean(it.isReady || it.status === 'READY' || it.status === 'DELIVERED' || it.status === 'SERVED' || it.isDelivered);
+          itemMap[idx] = isChecked;
+        });
+        syncedCheckedMap[ord.id] = itemMap;
+      });
+      setCheckedDishItems(prev => ({
+        ...syncedCheckedMap,
+        ...prev
+      }));
+
       try {
         const menuData = await api.getMenuItems();
         if (Array.isArray(menuData) && menuData.length > 0) {
           setMenuItems(menuData);
         }
-      } catch (e) {}
+      } catch (e) { }
 
     } catch (err) {
       console.warn("Chef fetch warning:", err.message);
@@ -234,26 +249,80 @@ export default function ChefLayout({ setActivePage }) {
   }, [soundEnabled]);
 
   const handleUpdateStatus = async (orderId, newStatus) => {
-    try {
-      await api.updateOrderStatus(orderId, newStatus);
-    } catch (e) {}
+    const cleanOrderId = String(orderId).replace(/^#/i, '');
+    const targetOrder = ordersList.find(o => 
+      o.id === orderId || o.orderId === orderId || o._id === orderId ||
+      o.id === cleanOrderId || o.orderId === cleanOrderId || o.id === `#${cleanOrderId}` || o.orderId === `#${cleanOrderId}`
+    );
 
-    const updated = ordersList.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
+    let updatedItems = targetOrder && Array.isArray(targetOrder.items) ? [...targetOrder.items] : [];
+    const orderCheckedMap = checkedDishItems[orderId] || checkedDishItems[cleanOrderId] || checkedDishItems[`#${cleanOrderId}`] || {};
+    const hasCheckedItems = Object.keys(orderCheckedMap).length > 0 && Object.values(orderCheckedMap).some(Boolean);
+
+    if (newStatus === 'Ready' && updatedItems.length > 0) {
+      if (hasCheckedItems) {
+        // Chef explicitly checked specific dish checkboxes! Mark ONLY checked items as READY!
+        updatedItems = updatedItems.map((it, idx) => {
+          const isDelivered = it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED';
+          if (isDelivered) {
+            return { ...it, status: 'SERVED', isDelivered: true, isReady: true };
+          }
+          const isChecked = Boolean(orderCheckedMap[idx] || it.isReady || it.status === 'READY');
+          return {
+            ...it,
+            status: isChecked ? 'READY' : 'PREPARING',
+            isReady: isChecked
+          };
+        });
+      } else {
+        // If Chef did not check any individual checkboxes, mark all non-delivered items as ready
+        updatedItems = updatedItems.map(it => {
+          const isDelivered = it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED';
+          if (isDelivered) {
+            return { ...it, status: 'SERVED', isDelivered: true, isReady: true };
+          }
+          return { ...it, status: 'READY', isReady: true };
+        });
+      }
+    }
+
+    // Determine accurate overall order status using deriveOrderStatus
+    const effectiveOrderStatus = (newStatus === 'Ready') 
+      ? deriveOrderStatus(updatedItems, 'Ready')
+      : newStatus;
+
+    const updated = ordersList.map(o => {
+      const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
+                      o.id === cleanOrderId || o.orderId === cleanOrderId;
+      if (matches) {
+        return {
+          ...o,
+          status: effectiveOrderStatus,
+          items: updatedItems
+        };
+      }
+      return o;
+    });
+
     setOrdersList(updated);
 
     try {
       localStorage.setItem('flavora_manager_orders', JSON.stringify(updated));
       window.dispatchEvent(new Event('flavora_orders_updated'));
-    } catch (e) {}
+    } catch (e) { }
+
+    try {
+      const apiOrderId = targetOrder ? (targetOrder._id || targetOrder.id || targetOrder.orderId || cleanOrderId) : orderId;
+      await api.updateOrderStatus(apiOrderId, effectiveOrderStatus, { items: updatedItems });
+    } catch (e) { }
 
     if (newStatus === 'Preparing') {
       showToast(`🔥 Order ${orderId} is COOKING!`);
     } else if (newStatus === 'Ready') {
-      showToast(`✅ Order ${orderId} is READY FOR PASS!`);
-      playNewOrderChime();
+      showToast(`✅ Order ${orderId} dish status updated!`);
     }
     if (selectedTicketModal && selectedTicketModal.id === orderId) {
-      setSelectedTicketModal({ ...selectedTicketModal, status: newStatus });
+      setSelectedTicketModal({ ...selectedTicketModal, status: effectiveOrderStatus, items: updatedItems });
     }
   };
 
@@ -272,7 +341,7 @@ export default function ChefLayout({ setActivePage }) {
     });
 
     const cleanOrderId = String(orderId).replace(/^#/i, '');
-    const targetOrder = ordersList.find(o => 
+    const targetOrder = ordersList.find(o =>
       o.id === orderId || o.orderId === orderId || o._id === orderId ||
       o.id === cleanOrderId || o.orderId === cleanOrderId || o.id === `#${cleanOrderId}` || o.orderId === `#${cleanOrderId}`
     );
@@ -299,7 +368,7 @@ export default function ChefLayout({ setActivePage }) {
 
       const updatedOrderList = ordersList.map(o => {
         const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
-                        o.id === cleanOrderId || o.orderId === cleanOrderId;
+          o.id === cleanOrderId || o.orderId === cleanOrderId;
         if (matches) {
           return {
             ...o,
@@ -315,12 +384,12 @@ export default function ChefLayout({ setActivePage }) {
       try {
         localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedOrderList));
         window.dispatchEvent(new Event('flavora_orders_updated'));
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const apiOrderId = targetOrder._id || targetOrder.id || targetOrder.orderId || cleanOrderId;
         await api.updateOrderItemStatus(apiOrderId, [targetItemId, itemIdx, targetItemName], newStatus);
-      } catch (e) {}
+      } catch (e) { }
     }
   };
 
@@ -332,17 +401,17 @@ export default function ChefLayout({ setActivePage }) {
       showToast(`🟢 ${itemName} is BACK IN STOCK!`);
     } else {
       nextList = [...outOfStockItems, itemId, itemName];
-      showToast(`🔴 86'D: ${itemName} marked OUT OF STOCK!`);
+      showToast(`🔴 ${itemName} marked OUT OF STOCK!`);
     }
     setOutOfStockItems(nextList);
     try {
       localStorage.setItem('flavora_out_of_stock_items', JSON.stringify(nextList));
       window.dispatchEvent(new Event('flavora_menu_updated'));
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       await api.updateMenuItem(itemId, { isAvailable: isCurrentlyOut });
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const getElapsedMins = (createdAt) => {
@@ -351,22 +420,32 @@ export default function ChefLayout({ setActivePage }) {
     return Math.max(0, Math.floor(diffMs / 60000));
   };
 
-  const activeKdsOrders = ordersList.filter(o => {
-    if (statusFilter === 'active') {
-      return o.status === 'Placed' || o.status === 'Preparing' || o.status === 'Ready';
+  const isOrderCompletedInKitchen = (ord) => {
+    if (ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled') {
+      return true;
     }
-    if (statusFilter === 'placed') return o.status === 'Placed';
-    if (statusFilter === 'preparing') return o.status === 'Preparing';
-    if (statusFilter === 'ready') return o.status === 'Ready';
-    if (statusFilter === 'history') return o.status === 'Served' || o.status === 'Completed';
-    return true;
+    const items = Array.isArray(ord.items) ? ord.items : [];
+    if (items.length === 0) return false;
+    return items.every(i => i && (i.isReady || i.status === 'READY' || i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED'));
+  };
+
+  const activeKdsOrders = ordersList.filter(o => {
+    const isKitchenDone = isOrderCompletedInKitchen(o);
+    if (statusFilter === 'active') {
+      return !isKitchenDone && o.status !== 'Cancelled';
+    }
+    if (statusFilter === 'placed') return !isKitchenDone && o.status === 'Placed';
+    if (statusFilter === 'preparing') return !isKitchenDone && o.status === 'Preparing';
+    if (statusFilter === 'ready') return o.status === 'Ready' || isKitchenDone;
+    if (statusFilter === 'history') return isKitchenDone || o.status === 'Completed' || o.status === 'Cancelled';
+    return !isKitchenDone;
   }).filter(o => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    return o.id.toLowerCase().includes(q) || 
-           o.table.toLowerCase().includes(q) || 
-           o.customer.toLowerCase().includes(q) ||
-           o.items.some(i => (i.name || '').toLowerCase().includes(q));
+    return o.id.toLowerCase().includes(q) ||
+      o.table.toLowerCase().includes(q) ||
+      o.customer.toLowerCase().includes(q) ||
+      o.items.some(i => (i.name || '').toLowerCase().includes(q));
   });
 
   const navigationItems = [
@@ -387,7 +466,7 @@ export default function ChefLayout({ setActivePage }) {
                 <div className="page-breadcrumb-bar">
                   <span>Dashboard</span>
                   <span className="crumb-sep">›</span>
-                  <span className="crumb-current">Live KDS Kitchen Pass</span>
+                  <span className="crumb-current">Live Kitchen Orders</span>
                 </div>
                 <h1 className="admin-page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <span>Live Kitchen Display System (KDS)</span>
@@ -395,7 +474,7 @@ export default function ChefLayout({ setActivePage }) {
                     🟢 Pass Active
                   </span>
                 </h1>
-                <p className="admin-page-subtitle">Real-time order tickets, cooking timers, itemized strikeout checkboxes, and waiter dispatch alerts.</p>
+                <p className="admin-page-subtitle">Real-time orders, cooking timers, itemized strikeout checkboxes, and waiter dispatch alerts.</p>
               </div>
 
               {/* Status Filter & Search */}
@@ -519,7 +598,7 @@ export default function ChefLayout({ setActivePage }) {
       )}
 
       {/* ================= SIDEBAR NAVIGATION (MATCHING ADMIN/MANAGER THEME) ================= */}
-      <aside 
+      <aside
         className={`admin-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''} ${mobileSidebarOpen ? 'is-open is-mobile-open' : ''}`}
         onWheel={(e) => e.preventDefault()}
       >
@@ -634,22 +713,37 @@ export default function ChefLayout({ setActivePage }) {
           </div>
 
           <div className="admin-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {/* Live Clock Display */}
-            <div style={{
-              backgroundColor: '#FFF3EB',
-              border: '1px solid #FDBA74',
-              color: '#C2410C',
-              padding: '0.35rem 0.75rem',
-              borderRadius: '8px',
-              fontSize: '0.8rem',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem'
-            }}>
-              <Clock size={14} color="#E07A3C" />
-              <span>{currentTime.toLocaleTimeString()}</span>
-            </div>
+            {/* 24-Hour Navbar Clock */}
+            {(() => {
+              const timeStr = currentTime.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              const segs = timeStr.split(':');
+              const hh = segs[0] || '00';
+              const mm = segs[1] || '00';
+              const ss = segs[2] || '00';
+              return (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    backgroundColor: '#FFFFFF',
+                    background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
+                    border: '1.5px solid #E2E8F0',
+                    borderRadius: '12px',
+                    padding: '0.35rem 0.75rem',
+                    boxShadow: '0 2px 8px rgba(15, 42, 29, 0.04), 0 1px 2px rgba(0,0,0,0.02)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.15rem' }}>
+                    <span style={{ fontSize: '0.98rem', fontWeight: 900, color: '#0F2A1D', fontFamily: 'var(--font-heading, sans-serif)', letterSpacing: '0.02em' }}>
+                      {hh}:{mm}
+                    </span>
+                    <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#E07A3C', fontFamily: 'monospace' }}>
+                      :{ss}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Chef User Profile Card */}
             <div className="admin-user-profile-wrapper" ref={profileMenuRef} style={{ position: 'relative' }}>

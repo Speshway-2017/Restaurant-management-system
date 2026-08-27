@@ -28,7 +28,7 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
       try {
         const raw = localStorage.getItem('flavora_tables');
         if (raw) savedTables = JSON.parse(raw);
-      } catch (e) {}
+      } catch (e) { }
 
       let updated = false;
       const updatedList = savedTables.map(t => {
@@ -49,7 +49,7 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
 
       const dbTable = tablesList.find(t => (t.num || t.number) === tableNum);
       if (dbTable && dbTable.id) {
-        await api.updateTableStatus(dbTable.id, newStatus).catch(() => {});
+        await api.updateTableStatus(dbTable.id, newStatus).catch(() => { });
       }
     } catch (e) {
       console.error('Failed to change table status', e);
@@ -96,6 +96,50 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
       window.removeEventListener('storage', fetchWaiterData);
     };
   }, []);
+
+  const handleDeliverReadyDishes = async (order) => {
+    const rawItems = Array.isArray(order.items) ? order.items : [];
+    const itemsToDeliver = rawItems.filter(i => (i.status === 'READY' || i.isReady) && i.status !== 'DELIVERED' && !i.isDelivered);
+    if (itemsToDeliver.length === 0) return;
+
+    const targetItemIds = itemsToDeliver.map((i, idx) => i._id || i.id || i.itemId || idx);
+    const targetOrderId = order._id || order.id || order.orderId;
+
+    try {
+      await api.updateOrderItemStatus(targetOrderId, targetItemIds, 'DELIVERED');
+    } catch (e) { }
+
+    const updatedOrders = activeOrders.map(o => {
+      if (o.id === order.id || o._id === order._id || o.orderId === order.orderId) {
+        const newItems = (o.items || []).map((it, idx) => {
+          const itId = it._id || it.id || it.itemId || idx;
+          const isTarget = targetItemIds.includes(itId) || targetItemIds.includes(idx);
+          if (isTarget) {
+            return { ...it, status: 'DELIVERED', isDelivered: true, isReady: true };
+          }
+          return it;
+        });
+
+        const totalCount = newItems.length;
+        const deliveredCount = newItems.filter(i => i.status === 'DELIVERED' || i.isDelivered).length;
+        const newStatus = (totalCount > 0 && deliveredCount === totalCount) ? 'Served' : (deliveredCount > 0 ? 'PARTIALLY DELIVERED' : o.status);
+
+        return {
+          ...o,
+          items: newItems,
+          status: newStatus
+        };
+      }
+      return o;
+    });
+
+    setActiveOrders(updatedOrders);
+    try {
+      localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedOrders));
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+      window.dispatchEvent(new Event('flavora_tables_updated'));
+    } catch (e) { }
+  };
 
   // Calculations for Waiter KPIs
   const liveOrders = activeOrders.filter(o => o.status !== 'Completed' && o.status !== 'Cancelled');
@@ -156,6 +200,11 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
 
   const filteredOrdersList = liveOrders.filter(o => {
     if (activeOrderFilter === 'All') return true;
+    if (activeOrderFilter === 'Ready') {
+      const itemsList = Array.isArray(o.items) ? o.items : [];
+      const readyCount = itemsList.filter(i => (i.status === 'READY' || i.isReady) && i.status !== 'DELIVERED' && !i.isDelivered).length;
+      return o.status === 'Ready' || readyCount > 0;
+    }
     return o.status === activeOrderFilter;
   });
 
@@ -177,34 +226,15 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
             Manage your assigned tables, orders, and service activities.
           </p>
         </div>
-
-        {/* Live Clock Showcase */}
-        {currentTimeStr && (
-          <div style={{
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            padding: '0.45rem 0.85rem',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)'
-          }}>
-            <Clock size={15} color="#E07A3C" />
-            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace' }}>
-              {currentTimeStr}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* ================= 2. FOUR KPI CARDS IN EXACTLY ONE ROW (STRICT 4-COLUMN GRID) ================= */}
-      <div 
-        style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', 
-          gap: '1rem', 
-          marginBottom: '1.5rem' 
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: '1rem',
+          marginBottom: '1.5rem'
         }}
       >
         {waiterKpis.map((kpi) => {
@@ -212,18 +242,18 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
           const isPrimary = kpi.isHighlighted;
 
           return (
-            <div 
-              key={kpi.id} 
+            <div
+              key={kpi.id}
               style={{
                 backgroundColor: isPrimary ? '#0F2A1D' : '#FFFFFF',
-                background: isPrimary 
-                  ? 'linear-gradient(135deg, #0F2A1D 0%, #1E4636 100%)' 
+                background: isPrimary
+                  ? 'linear-gradient(135deg, #0F2A1D 0%, #1E4636 100%)'
                   : '#FFFFFF',
                 borderRadius: '14px',
                 padding: '0.95rem 1.15rem',
                 border: isPrimary ? '1.5px solid #285A46' : '1px solid #E2E8F0',
-                boxShadow: isPrimary 
-                  ? '0 6px 20px rgba(15, 42, 29, 0.15)' 
+                boxShadow: isPrimary
+                  ? '0 6px 20px rgba(15, 42, 29, 0.15)'
                   : '0 2px 10px rgba(0, 0, 0, 0.03)',
                 display: 'flex',
                 flexDirection: 'column',
@@ -235,8 +265,8 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
                   {kpi.label}
                 </span>
 
-                <div style={{ 
-                  backgroundColor: isPrimary ? '#E07A3C' : kpi.accentBg, 
+                <div style={{
+                  backgroundColor: isPrimary ? '#E07A3C' : kpi.accentBg,
                   color: isPrimary ? '#FFFFFF' : kpi.badgeColor,
                   width: '32px',
                   height: '32px',
@@ -256,9 +286,9 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
               </div>
 
               <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ 
-                  fontSize: '0.72rem', 
-                  fontWeight: 800, 
+                <span style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
                   color: isPrimary ? '#A7F3D0' : '#166534',
                   backgroundColor: isPrimary ? 'rgba(255, 255, 255, 0.12)' : '#F0FDF4',
                   padding: '0.2rem 0.55rem',
@@ -357,8 +387,8 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem' }}>
-          {liveOrders.length > 0 ? (
-            liveOrders.map((ord, idx) => {
+          {filteredOrdersList.length > 0 ? (
+            filteredOrdersList.map((ord, idx) => {
               const rawTable = ord.table || ord.tableNumber || '01';
               const cleanTableNum = String(rawTable).replace(/^Table\s+/i, '');
               const itemsList = Array.isArray(ord.items) ? ord.items : [];
@@ -411,8 +441,52 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
                       👤 {ord.customer || 'Guest Diner'}
                     </div>
                     <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 600, marginBottom: '0.4rem' }}>
-                      🍲 {itemsCount} Items
+                      🍲 {totalCount} Items {readyCount > 0 ? `(${readyCount} Ready to Serve)` : ''}
                     </div>
+
+                    {readyCount > 0 && (
+                      <div style={{ backgroundColor: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: '10px', padding: '0.6rem 0.75rem', marginBottom: '0.65rem' }}>
+                        <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#166534', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <Bell size={13} color="#166534" />
+                          <span>PREPARED TO SERVE ({readyCount}):</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '110px', overflowY: 'auto' }}>
+                          {readyItems.map((item, iIdx) => (
+                            <div key={iIdx} style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
+                              <span><strong style={{ color: '#166534', marginRight: '0.3rem' }}>{item.quantity || item.qty || 1}x</strong> {item.name || item.dishId}</span>
+                              <span style={{ fontSize: '0.65rem', backgroundColor: '#166534', color: '#FFFFFF', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 900 }}>
+                                READY
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeliverReadyDishes(ord)}
+                          style={{
+                            marginTop: '0.5rem',
+                            width: '100%',
+                            backgroundColor: '#166534',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            padding: '0.45rem',
+                            borderRadius: '7px',
+                            fontSize: '0.76rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.3rem',
+                            boxShadow: '0 2px 6px rgba(22, 101, 52, 0.2)'
+                          }}
+                        >
+                          <Check size={13} />
+                          <span>Serve {readyCount} Prepared Dish{readyCount > 1 ? 'es' : ''}</span>
+                        </button>
+                      </div>
+                    )}
+
                     <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#166534', fontFamily: 'var(--font-heading)' }}>
                       ₹{ord.total || 0}
                     </div>
