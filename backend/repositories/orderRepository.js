@@ -47,6 +47,7 @@ class OrderRepository {
 
     const idStr = String(id).trim();
     const cleanNum = idStr.replace(/[^0-9]/g, '');
+    const cleanId = idStr.replace(/^#/i, '').trim();
 
     // Find existing order document in MongoDB
     let doc = await this.findById(idStr);

@@ -43,15 +43,28 @@ const getTables = async (req, res) => {
 
 const updateTableStatus = async (req, res) => {
   try {
-    const { status, currentOrder } = req.body;
+    let status = req.body?.status;
+    let currentOrder = req.body?.currentOrder || '';
+    if (typeof req.body === 'string') {
+      try {
+        const parsed = JSON.parse(req.body);
+        status = parsed.status || parsed;
+        currentOrder = parsed.currentOrder || '';
+      } catch (e) {
+        status = req.body;
+      }
+    }
+
+    status = status || 'Available';
     const id = req.params.id;
 
-    let updateData = { status, currentOrder };
+    let updateData = { status, currentOrder: status === 'Available' ? '' : currentOrder };
     if (status === 'Cleaning') {
       // Set cleaning expiration to 10 minutes from now
       updateData.cleaningUntil = new Date(Date.now() + 10 * 60 * 1000);
     } else if (status === 'Available') {
       updateData.cleaningUntil = null;
+      updateData.currentOrder = '';
     }
 
     let updated;
@@ -66,6 +79,19 @@ const updateTableStatus = async (req, res) => {
         { new: true }
       );
     }
+
+    if (!updated) {
+      const cleanNum = String(id).replace(/[^0-9]/g, '') || '01';
+      updated = await Table.create({
+        number: `T-${cleanNum.padStart(2, '0')}`,
+        name: `Table ${cleanNum}`,
+        section: 'Main Dining',
+        seats: 4,
+        status: status,
+        currentOrder: status === 'Available' ? '' : currentOrder
+      });
+    }
+
     res.json(updated || { message: 'Table status updated' });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -74,16 +100,29 @@ const updateTableStatus = async (req, res) => {
 
 const updateTableByNumber = async (req, res) => {
   try {
-    const { status, currentOrder } = req.body;
+    let status = req.body?.status;
+    let currentOrder = req.body?.currentOrder || '';
+    if (typeof req.body === 'string') {
+      try {
+        const parsed = JSON.parse(req.body);
+        status = parsed.status || parsed;
+        currentOrder = parsed.currentOrder || '';
+      } catch (e) {
+        status = req.body;
+      }
+    }
+
+    status = status || 'Available';
     const rawNum = req.params.tableNum || '';
     const cleanNum = rawNum.toUpperCase().replace('TABLE', '').replace('T-', '').trim();
     const exactRegex = cleanNum ? new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i') : new RegExp(rawNum, 'i');
 
-    let updateData = { status, currentOrder };
+    let updateData = { status, currentOrder: status === 'Available' ? '' : currentOrder };
     if (status === 'Cleaning') {
       updateData.cleaningUntil = new Date(Date.now() + 10 * 60 * 1000);
     } else if (status === 'Available') {
       updateData.cleaningUntil = null;
+      updateData.currentOrder = '';
     }
 
     let updated = await Table.findOneAndUpdate(
@@ -94,10 +133,12 @@ const updateTableByNumber = async (req, res) => {
 
     if (!updated) {
       updated = await Table.create({
+        number: `T-${cleanNum.padStart(2, '0')}`,
         name: `Table ${cleanNum || rawNum}`,
-        capacity: 4,
-        status: status || 'Occupied',
-        currentOrder
+        section: 'Main Dining',
+        seats: 4,
+        status: status,
+        currentOrder: status === 'Available' ? '' : currentOrder
       });
     }
 

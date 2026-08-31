@@ -59,23 +59,6 @@ export default function App() {
 
   const [demoModalOpen, setDemoModalOpen] = useState(false);
 
-  // Clean legacy mock order keys and wipe database orders from MongoDB Atlas
-  useEffect(() => {
-    try {
-      localStorage.removeItem('flavora_manager_orders');
-      localStorage.removeItem('flavora_tables');
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('flavora_table_orders_')) {
-          localStorage.removeItem(key);
-        }
-      });
-      // Purge all orders from MongoDB Atlas
-      import('./services/api').then(({ api }) => {
-        api.clearAllOrders().catch(() => {});
-      });
-    } catch (e) {}
-  }, []);
-
   const setActivePage = (newPage) => {
     setActivePageState(newPage);
     localStorage.setItem('flavora_active_page', newPage);
