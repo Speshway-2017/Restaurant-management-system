@@ -1,19 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, Image as ImageIcon, Sparkles, Utensils, Flame, UserCheck } from 'lucide-react';
 import InfiniteSlider from '../components/InfiniteSlider';
 
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
+
 export default function GalleryPage({ onOpenDemoModal }) {
+  const { branding, brandName, fetchBranding } = useRestaurantBranding();
   const [activeCategory, setActiveCategory] = useState('all');
 
-  const savedGallery = (() => {
-    try {
-      const s = localStorage.getItem('flavora_gallery');
-      if (s) return JSON.parse(s);
-    } catch(e) {}
-    return null;
-  })();
+  useEffect(() => {
+    fetchBranding();
+    const handleSync = () => {
+      fetchBranding();
+    };
+    window.addEventListener('flavora_gallery_updated', handleSync);
+    return () => window.removeEventListener('flavora_gallery_updated', handleSync);
+  }, [fetchBranding]);
 
-  const galleryItems = savedGallery || [
+  const defaultItems = [
     { id: 1, category: 'ambience', src: '/carousel_1.png', title: 'Luxury Dining Hall', desc: 'Warm ambient lighting & royal seating setup' },
     { id: 2, category: 'dishes', src: '/carousel_2.png', title: 'Gourmet Indian Feast', desc: 'Authentic curry spread with butter naan' },
     { id: 3, category: 'kitchen', src: '/carousel_3.png', title: 'Kitchen Pass Station', desc: 'Chefs plating fresh tandoori appetizers' },
@@ -24,6 +28,19 @@ export default function GalleryPage({ onOpenDemoModal }) {
     { id: 8, category: 'dishes', src: '/carousel_2.png', title: 'Hyderabadi Dum Biryani', desc: 'Fragrant basmati rice cooked on dum' },
     { id: 9, category: 'ambience', src: '/carousel_1.png', title: 'Private Dining Section', desc: 'Exclusive booth seating for families' },
   ];
+
+  const galleryItems = (branding && Array.isArray(branding.gallery) && branding.gallery.length > 0)
+    ? branding.gallery
+    : (() => {
+        try {
+          const s = localStorage.getItem('flavora_gallery');
+          if (s) {
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch(e) {}
+        return defaultItems;
+      })();
 
   const filteredItems = activeCategory === 'all' 
     ? galleryItems 
@@ -44,7 +61,7 @@ export default function GalleryPage({ onOpenDemoModal }) {
           </h1>
 
           <p className="page-hero-subtitle-unified">
-            Immerse yourself in the culinary artistry, clay tandoori craftsmanship, and royal dining atmosphere of Flavora Kitchen.
+            Immerse yourself in the culinary artistry, clay tandoori craftsmanship, and royal dining atmosphere of {brandName}.
           </p>
         </div>
       </section>

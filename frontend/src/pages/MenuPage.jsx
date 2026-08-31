@@ -4,8 +4,10 @@ import { api } from '../services/api';
 import MenuDishStrip from '../components/MenuDishStrip';
 import ExposureSlider from '../components/ExposureSlider';
 import { findItemInCatalog, calculateCartTotal, resolveDishImageUrl } from '../utils/menuRegistry';
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 
 export default function MenuPage({ onOpenDemoModal }) {
+  const { brandName } = useRestaurantBranding();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -982,7 +984,7 @@ export default function MenuPage({ onOpenDemoModal }) {
               <Sparkles size={18} color="#1E4636" />
             </div>
             <h2 style={{ fontSize: '2.2rem', fontFamily: "var(--font-heading), 'Poppins', 'Inter', sans-serif", fontWeight: 800, color: '#1E4636', margin: 0 }}>
-              Flavora Culinary Special Menu
+              {brandName} Culinary Special Menu
             </h2>
             <p style={{ color: '#64748B', fontSize: '0.92rem', marginTop: '0.3rem' }}>
               Hand-crafted gourmet recipes, clay-roasted kebabs, and authentic royal flavors.

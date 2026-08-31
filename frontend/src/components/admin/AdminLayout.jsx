@@ -3,9 +3,11 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Table2, CalendarDays,
   Users, Clock, Boxes, Ticket, BarChart3, Receipt, Settings, ShieldCheck,
   Building2, FileText, Search, Bell, ChevronDown, LogOut, Menu, X, ArrowLeft,
-  CheckCircle2, Plus, Sparkles, Filter, RefreshCw, User, ChevronRight, Camera
+  CheckCircle2, Plus, Sparkles, Filter, RefreshCw, User, ChevronRight, Camera,
+  Globe
 } from 'lucide-react';
 import PowerOffSlide from '../PowerOffSlide';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 // Import Admin Sub-pages
 import AdminDashboardHome from './AdminDashboardHome';
@@ -21,6 +23,7 @@ import AdminSettingsPage from './AdminSettingsPage';
 import AdminProfilePage from './AdminProfilePage';
 import AdminBlogsPage from './AdminBlogsPage';
 import AdminGalleryPage from './AdminGalleryPage';
+import AdminPublicPagesPage from './AdminPublicPagesPage';
 
 const PATH_TO_TAB_MAP = {
   '/admin': 'dashboard',
@@ -38,6 +41,9 @@ const PATH_TO_TAB_MAP = {
   '/admin/reports': 'analytics',
   '/admin/payments': 'payments',
   '/admin/settlements': 'payments',
+  '/admin/public-pages': 'public-pages',
+  '/admin/public': 'public-pages',
+  '/admin/pages': 'public-pages',
   '/admin/settings': 'settings',
   '/admin/tables': 'tables',
   '/admin/reservations': 'reservations',
@@ -54,6 +60,7 @@ const TAB_TO_PATH_MAP = {
   'coupons': '/admin/coupons',
   'analytics': '/admin/analytics',
   'payments': '/admin/payments',
+  'public-pages': '/admin/public-pages',
   'settings': '/admin/settings',
   'tables': '/admin/tables',
   'reservations': '/admin/reservations',
@@ -72,6 +79,11 @@ const getTabFromCurrentPath = () => {
 };
 
 export default function AdminLayout({ setActivePage }) {
+  const { brandName, brandLogo } = useRestaurantBranding();
+  const nameParts = brandName.trim().split(' ');
+  const firstNamePart = nameParts[0] || 'Flavora';
+  const restNamePart = nameParts.slice(1).join(' ');
+
   const [activeTab, setActiveTab] = useState(() => getTabFromCurrentPath());
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -250,6 +262,7 @@ export default function AdminLayout({ setActivePage }) {
     { id: 'coupons', label: 'Loyalty & Coupons', icon: Ticket },
     { id: 'analytics', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'payments', label: 'Payments & Settlements', icon: Receipt },
+    { id: 'public-pages', label: 'Public Pages', icon: Globe },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -260,6 +273,7 @@ export default function AdminLayout({ setActivePage }) {
       case 'inventory': return 'Inventory Management';
       case 'blogs': return 'Blog Management';
       case 'gallery': return 'Gallery Management';
+      case 'public-pages': return 'Public Pages & Website';
       case 'tables': return 'Table Management';
       case 'staff-accounts': return 'Staff Management';
       case 'staff-shifts': return 'Shifts & Attendance';
@@ -282,6 +296,8 @@ export default function AdminLayout({ setActivePage }) {
         return <AdminDashboardHome setActiveTab={setActiveTab} />;
       case 'menu-mgmt':
         return <AdminMenuPage />;
+      case 'public-pages':
+        return <AdminPublicPagesPage setActivePage={setActivePage} setActiveTab={setActiveTab} />;
       case 'blogs':
         return <AdminBlogsPage />;
       case 'gallery':
@@ -326,14 +342,15 @@ export default function AdminLayout({ setActivePage }) {
         <div className="admin-sidebar-header">
           <div className="admin-brand-lockup">
             <img
-              src="/logo.png"
-              alt="Flavora Kitchen Logo"
+              src={brandLogo}
+              alt={`${brandName} Logo`}
+              onError={(e) => { e.target.src = '/logo.png'; }}
               className="admin-brand-logo-img"
             />
             <div className="admin-brand-text">
               <div className="admin-brand-title" style={{ display: 'flex', gap: '0.3rem' }}>
-                <span className="brand-favora">Flavora</span>
-                <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>Kitchen</span>
+                <span className="brand-favora">{firstNamePart}</span>
+                {restNamePart && <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>{restNamePart}</span>}
               </div>
               <div className="admin-brand-subtitle">RESTO PLATFORM ADMIN</div>
             </div>
@@ -385,7 +402,7 @@ export default function AdminLayout({ setActivePage }) {
         {/* Sidebar Footer */}
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-version" style={{ marginTop: 0 }}>
-            Flavora RestoOS v3.4 • India
+            {brandName} RestoOS v3.4 • India
           </div>
         </div>
 
@@ -421,7 +438,7 @@ export default function AdminLayout({ setActivePage }) {
             </button>
 
             <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E4636', fontFamily: 'var(--font-heading)' }}>
-              Flavora Resto Admin
+              {brandName} Resto Admin
             </h2>
           </div>
 

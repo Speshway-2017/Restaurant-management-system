@@ -5,7 +5,10 @@ import {
   Handshake, MessageCircle, ExternalLink, Shield, Sparkles, Check
 } from 'lucide-react';
 
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
+
 export default function ContactUsPage({ onOpenDemoModal }) {
+  const { brandName } = useRestaurantBranding();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -248,7 +251,7 @@ export default function ContactUsPage({ onOpenDemoModal }) {
               <div className="contact-map-header">
                 <Building2 size={22} style={{ color: 'var(--color-primary)', flexShrink: 0, marginTop: '2px' }} />
                 <div>
-                  <div className="contact-map-title">Flavora Kitchen Head Office</div>
+                  <div className="contact-map-title">{brandName} Head Office</div>
                   <div className="contact-map-sub">Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033, India</div>
                 </div>
               </div>

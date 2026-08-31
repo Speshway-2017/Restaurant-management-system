@@ -4,8 +4,10 @@ import {
   CheckCircle2, ArrowRight, Utensils, Flame, Sparkles, MapPin, Layers, Heart
 } from 'lucide-react';
 import MagneticButton from '../components/MagneticButton';
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 
 export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
+  const { brandName } = useRestaurantBranding();
   const evolutionTimeline = [
     {
       year: '2017',
@@ -60,11 +62,11 @@ export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
           </div>
 
           <h1 className="page-hero-title-unified">
-            About Flavora Kitchen
+            About {brandName}
           </h1>
 
           <p className="page-hero-subtitle-unified">
-            From our founding roots in Jubilee Hills to powering 500+ restaurants across India, discover how Flavora Kitchen evolved into an industry-leading restaurant management ecosystem.
+            From our founding roots in Jubilee Hills to powering 500+ restaurants across India, discover how {brandName} evolved into an industry-leading restaurant management ecosystem.
           </p>
         </div>
       </section>
@@ -82,7 +84,7 @@ export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
               </h2>
 
               <p className="text-body" style={{ color: 'var(--color-neutral-700)', fontSize: '1.05rem', lineHeight: '1.8', marginBottom: '1.25rem' }}>
-                Flavora Kitchen was founded in <strong>2017 in Jubilee Hills, Hyderabad</strong> by a team of passionate restaurateurs and software engineers who recognized a crucial challenge in the F&B industry: the disconnect between authentic culinary heritage and modern restaurant technology.
+                {brandName} was founded in <strong>2017 in Jubilee Hills, Hyderabad</strong> by a team of passionate restaurateurs and software engineers who recognized a crucial challenge in the F&B industry: the disconnect between authentic culinary heritage and modern restaurant technology.
               </p>
 
               <p className="text-body" style={{ color: 'var(--color-neutral-700)', fontSize: '1.05rem', lineHeight: '1.8', marginBottom: '1.75rem' }}>
@@ -108,7 +110,7 @@ export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
             <div style={{ textAlign: 'center' }}>
               <img 
                 src="/tandoor_oven.png" 
-                alt="Flavora Kitchen Foundation" 
+                alt={`${brandName} Foundation`} 
                 style={{ 
                   width: '100%', 
                   maxHeight: '440px', 

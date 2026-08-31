@@ -11,8 +11,10 @@ import InfiniteSlider from '../components/InfiniteSlider';
 import KineticCenterBuild from '../components/KineticCenterBuild';
 import Cta2 from '../components/Cta2';
 import { findItemInCatalog, calculateCartTotal } from '../utils/menuRegistry';
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 
 export default function HomePage({ setActivePage, onOpenDemoModal }) {
+  const { brandName } = useRestaurantBranding();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeCategory, setActiveCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
@@ -599,7 +601,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
               </h2>
 
               <p className="text-body" style={{ color: '#4A5568', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.25rem' }}>
-                Flavora Kitchen brings the rich, authentic culinary traditions of India to your dining table. Founded in <strong>Jubilee Hills, Hyderabad in 2017</strong>, our master chefs infuse age-old recipes with Kashmiri spices, clay-tandoor roasting, and modern digital dining convenience.
+                {brandName} brings the rich, authentic culinary traditions of India to your dining table. Founded in <strong>Jubilee Hills, Hyderabad in 2017</strong>, our master chefs infuse age-old recipes with Kashmiri spices, clay-tandoor roasting, and modern digital dining convenience.
               </p>
 
               <p className="text-body" style={{ color: '#4A5568', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>

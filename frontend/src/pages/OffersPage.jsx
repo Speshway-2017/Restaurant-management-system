@@ -3,8 +3,19 @@ import { Tag, Sparkles, Flame, Clock, Gift, CheckCircle2, ArrowRight, Search, Sh
 import ProductCard from '../components/ProductCard';
 import MagneticButton from '../components/MagneticButton';
 import { findItemInCatalog, calculateCartTotal } from '../utils/menuRegistry';
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 
-export default function OffersPage({ onOpenDemoModal }) {
+export default function OffersPage({ onOpenDemoModal, setActivePage }) {
+  const { branding, brandName } = useRestaurantBranding();
+
+  const isBannerVisible = branding && branding.announcementEnabled !== false && Boolean(branding.announcementMessage || branding.announcementBadge);
+  const bannerBg = branding?.announcementBg || branding?.backgroundColor || '#1E4636';
+  const bannerTextColor = branding?.announcementTextColor || branding?.textColor || '#FFFFFF';
+  const bannerBadge = branding?.announcementBadge || branding?.badgeText || 'PROMO OFFER';
+  const bannerMsg = branding?.announcementMessage || branding?.message || '';
+  const bannerBtn = branding?.announcementButtonText || branding?.buttonLabel || '';
+  const bannerTarget = branding?.announcementTarget || branding?.buttonTargetTab || '';
+
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -193,7 +204,7 @@ export default function OffersPage({ onOpenDemoModal }) {
           </h1>
 
           <p className="page-hero-subtitle-unified">
-            Enjoy handcrafted chef combo feasts, weekend thali specials, and exclusive discounts at Flavora Kitchen.
+            Enjoy handcrafted chef combo feasts, weekend thali specials, and exclusive discounts at {brandName}.
           </p>
         </div>
       </section>

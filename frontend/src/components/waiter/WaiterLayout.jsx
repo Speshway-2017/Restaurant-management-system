@@ -40,6 +40,11 @@ const BREADCRUMB_MAP = {
 };
 
 export default function WaiterLayout({ setActivePage }) {
+  const { brandName, brandLogo } = useRestaurantBranding();
+  const nameParts = brandName.trim().split(' ');
+  const firstNamePart = nameParts[0] || 'Flavora';
+  const restNamePart = nameParts.slice(1).join(' ');
+
   const [currentTab, setCurrentTab] = useState(() => {
     const rawPath = (window.location.pathname || '').toLowerCase().trim();
     return WAITER_PATH_TO_TAB[rawPath] || 'waiter-dashboard';
@@ -234,14 +239,15 @@ export default function WaiterLayout({ setActivePage }) {
         <div className="admin-sidebar-header">
           <div className="admin-brand-lockup" onClick={() => handleTabChange('waiter-dashboard')} style={{ cursor: 'pointer' }}>
             <img
-              src="/logo.png"
-              alt="Flavora Kitchen Logo"
+              src={brandLogo}
+              alt={`${brandName} Logo`}
+              onError={(e) => { e.target.src = '/logo.png'; }}
               className="admin-brand-logo-img"
             />
             <div className="admin-brand-text">
               <div className="admin-brand-title" style={{ display: 'flex', gap: '0.3rem' }}>
-                <span className="brand-favora">Flavora</span>
-                <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>Kitchen</span>
+                <span className="brand-favora">{firstNamePart}</span>
+                {restNamePart && <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>{restNamePart}</span>}
               </div>
               <div className="admin-brand-subtitle">RESTO WAITER PORTAL</div>
             </div>
@@ -284,7 +290,7 @@ export default function WaiterLayout({ setActivePage }) {
         {/* Sidebar Footer */}
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-version" style={{ marginTop: 0 }}>
-            Resto Waiter • v3.4
+            {brandName} Waiter • v3.4
           </div>
         </div>
 
@@ -312,7 +318,7 @@ export default function WaiterLayout({ setActivePage }) {
             </button>
 
             <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E4636', fontFamily: 'var(--font-heading)' }}>
-              Flavora Resto Waiter
+              {brandName} Resto Waiter
             </h2>
           </div>
 
