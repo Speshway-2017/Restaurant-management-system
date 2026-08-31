@@ -641,7 +641,7 @@ export default function WaiterTablesPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                       <div>
                         <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
-                          Table {tb.num}
+                          {tb.num}
                         </h3>
                         <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700 }}>
                           📍 {tb.zone} • 👥 {tb.cap} Seats
@@ -676,8 +676,17 @@ export default function WaiterTablesPage() {
                         )}
                       </div>
                     ) : realStatus === 'Cleaning' ? (
-                      <div style={{ backgroundColor: '#FEFCE8', padding: '0.75rem', borderRadius: '10px', border: '1px solid #FDE047', marginBottom: '0.85rem', color: '#B45309', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center' }}>
-                        🧹 Table Cleaning in Progress (Unavailable for new orders)
+                      <div 
+                        onClick={async () => {
+                          try {
+                            await api.updateTableStatus(tb.id || tb._id, 'Available');
+                            window.dispatchEvent(new Event('flavora_tables_updated'));
+                          } catch (e) { }
+                        }}
+                        title="Click to finish cleaning and mark table as Available"
+                        style={{ backgroundColor: '#FEFCE8', padding: '0.75rem', borderRadius: '10px', border: '1px solid #FDE047', marginBottom: '0.85rem', color: '#B45309', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
+                      >
+                        🧹 Cleaning in Progress • Click to Finish ✨
                       </div>
                     ) : (
                       <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem', borderRadius: '10px', border: '1px border-dashed #CBD5E1', marginBottom: '0.85rem', color: '#94A3B8', fontSize: '0.78rem', fontWeight: 600, textAlign: 'center' }}>

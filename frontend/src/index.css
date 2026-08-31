@@ -1,6 +1,14 @@
 /* Flavora Kitchen — Design System & Global Stylesheet */
 /* Based on docs/design.md requirements and Exact UI Mockup */
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 :root {
   /* Core Brand Colors */
   --color-primary: #1E4636;

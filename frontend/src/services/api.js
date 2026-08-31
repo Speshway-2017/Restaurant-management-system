@@ -65,22 +65,37 @@ export const api = {
   // Orders API
   getOrders: () => request('/orders'),
   createOrder: (data) => request('/orders', { method: 'POST', body: JSON.stringify(data) }),
-  updateOrderStatus: (id, status, extra = {}) => request(`/orders/${id}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status, ...extra })
-  }),
-  updateOrderItemStatus: (id, itemIds, status = 'DELIVERED') => request(`/orders/${id}/items/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ itemIds, status })
-  }),
+  updateOrderStatus: (id, status, extra = {}) => {
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/orders/${cleanId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, ...extra })
+    });
+  },
+  updateOrderItemStatus: (id, itemIds, status = 'DELIVERED') => {
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/orders/${cleanId}/items/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ itemIds, status })
+    });
+  },
   clearAllOrders: () => request('/orders/all', { method: 'DELETE' }),
 
   // Tables API
   getTables: () => request('/tables'),
-  updateTableStatus: (id, status, currentOrder = '') => request(`/tables/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify({ status, currentOrder })
-  }),
+  updateTableStatus: (id, statusData, currentOrder = '') => {
+    let payload = {};
+    if (typeof statusData === 'object' && statusData !== null) {
+      payload = statusData;
+    } else {
+      payload = { status: String(statusData || 'Available'), currentOrder };
+    }
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/tables/${cleanId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
   clearTable: (id) => request(`/tables/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ status: 'Available', currentOrder: '' })

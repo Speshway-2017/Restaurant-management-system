@@ -178,7 +178,53 @@ export default function ManagerLayout({ setActivePage }) {
     'Hitech City Branch'
   ];
   const [selectedBranch, setSelectedBranch] = useState('Jubilee Hills (Main Branch)');
-  const [unreadNotifications, setUnreadNotifications] = useState(3);
+  const [managerNotifications, setManagerNotifications] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_manager_notifications');
+      return saved ? JSON.parse(saved) : [
+        { id: 'NOTIF-1', title: '🟢 System Online', message: 'Resto Manager KDS Terminal is synchronized.', time: '09:00 AM', read: true }
+      ];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [notifMenuOpen, setNotifMenuOpen] = useState(false);
+  const [activeToast, setActiveToast] = useState(null);
+  const notifMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleNotifUpdate = () => {
+      try {
+        const saved = localStorage.getItem('flavora_manager_notifications');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setManagerNotifications(parsed);
+          if (parsed.length > 0 && !parsed[0].read) {
+            setActiveToast(parsed[0]);
+            setTimeout(() => setActiveToast(null), 6000);
+          }
+        }
+      } catch (e) { }
+    };
+    handleNotifUpdate();
+    window.addEventListener('flavora_notification_created', handleNotifUpdate);
+    window.addEventListener('storage', handleNotifUpdate);
+    return () => {
+      window.removeEventListener('flavora_notification_created', handleNotifUpdate);
+      window.removeEventListener('storage', handleNotifUpdate);
+    };
+  }, []);
+
+  const unreadCount = managerNotifications.filter(n => !n.read).length;
+
+  const handleMarkAllNotifsRead = () => {
+    const readList = managerNotifications.map(n => ({ ...n, read: true }));
+    setManagerNotifications(readList);
+    try {
+      localStorage.setItem('flavora_manager_notifications', JSON.stringify(readList));
+    } catch (e) { }
+  };
+
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [chefDutyStatus, setChefDutyStatus] = useState(() => {
     return localStorage.getItem('flavora_chef_duty_status') || 'LOGGED_IN';
@@ -390,18 +436,80 @@ export default function ManagerLayout({ setActivePage }) {
               );
             })()}
 
-            {/* Notifications Bell */}
-            <div className="admin-header-icon-btn-wrapper">
+            {/* Notifications Bell Dropdown */}
+            <div className="admin-header-icon-btn-wrapper" ref={notifMenuRef} style={{ position: 'relative' }}>
               <button 
                 className="admin-header-icon-btn" 
                 aria-label="Notifications"
-                onClick={() => setUnreadNotifications(0)}
+                onClick={() => setNotifMenuOpen(!notifMenuOpen)}
+                style={{ position: 'relative' }}
               >
                 <Bell size={19} color="#1E4636" />
-                {unreadNotifications > 0 && (
-                  <span className="admin-notif-dot">{unreadNotifications}</span>
+                {unreadCount > 0 && (
+                  <span className="admin-notif-dot" style={{ backgroundColor: '#EF4444', color: '#FFFFFF', fontSize: '0.65rem', fontWeight: 900, padding: '0.1rem 0.35rem', borderRadius: '9999px', position: 'absolute', top: '-4px', right: '-4px' }}>
+                    {unreadCount}
+                  </span>
                 )}
               </button>
+
+              {/* Notification Dropdown Box */}
+              {notifMenuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '120%',
+                  right: 0,
+                  width: '320px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+                  zIndex: 9999,
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0F2A1D' }}>Manager Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllNotifsRead}
+                        style={{ border: 'none', background: 'none', color: '#2563EB', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                    {managerNotifications.length === 0 ? (
+                      <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.82rem' }}>
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      managerNotifications.map((n, idx) => (
+                        <div
+                          key={n.id || idx}
+                          style={{
+                            padding: '0.75rem 1rem',
+                            borderBottom: '1px solid #F1F5F9',
+                            backgroundColor: n.read ? '#FFFFFF' : '#FEF2F2',
+                            transition: 'background-color 0.15s ease'
+                          }}
+                        >
+                          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: n.read ? '#0F2A1D' : '#DC2626' }}>
+                            {n.title}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.15rem', lineHeight: '1.35' }}>
+                            {n.message}
+                          </div>
+                          <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '0.25rem', fontWeight: 700 }}>
+                            {n.time}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Manager User Profile Card */}
@@ -452,6 +560,9 @@ export default function ManagerLayout({ setActivePage }) {
                       label="Logout"
                       onPowerOff={() => {
                         setUserMenuOpen(false);
+                        sessionStorage.removeItem('flavora_auth_token');
+                        sessionStorage.removeItem('flavora_logged_in');
+                        sessionStorage.removeItem('flavora_user_role');
                         localStorage.removeItem('flavora_auth_token');
                         localStorage.removeItem('flavora_logged_in');
                         localStorage.removeItem('flavora_user_role');
@@ -474,6 +585,49 @@ export default function ManagerLayout({ setActivePage }) {
         </div>
 
       </div>
+
+      {/* Floating Live Notification Toast Banner for Manager */}
+      {activeToast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            backgroundColor: '#FEF2F2',
+            border: '2px solid #FCA5A5',
+            borderRadius: '16px',
+            padding: '1rem 1.25rem',
+            boxShadow: '0 10px 30px rgba(220, 38, 38, 0.25)',
+            zIndex: 999999,
+            maxWidth: '380px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.85rem'
+          }}
+        >
+          <div style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '0.5rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Bell size={20} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#991B1B', marginBottom: '0.2rem' }}>
+              {activeToast.title}
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#7F1D1D', fontWeight: 600, lineHeight: '1.35' }}>
+              {activeToast.message}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#991B1B', marginTop: '0.3rem', fontWeight: 700 }}>
+              {activeToast.time}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveToast(null)}
+            style={{ background: 'none', border: 'none', color: '#991B1B', cursor: 'pointer', padding: '0.2rem' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
     </div>
   );

@@ -555,6 +555,9 @@ export default function AdminLayout({ setActivePage }) {
                         label="Logout"
                         onPowerOff={() => {
                           setUserMenuOpen(false);
+                          sessionStorage.removeItem('flavora_auth_token');
+                          sessionStorage.removeItem('flavora_logged_in');
+                          sessionStorage.removeItem('flavora_user_role');
                           localStorage.removeItem('flavora_auth_token');
                           localStorage.removeItem('flavora_logged_in');
                           localStorage.removeItem('flavora_user_role');

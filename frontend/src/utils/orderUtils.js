@@ -88,8 +88,24 @@ export const deriveOrderStatus = (items = [], currentOrderStatus = 'Placed') => 
   if (servedCount > 0) {
     return 'PARTIALLY DELIVERED'; // Partial items served -> INCOMPLETE
   }
+  if (readyCount === totalCount || (readyCount > 0 && readyCount + servedCount === totalCount)) {
+    return 'Ready'; // All remaining items ready!
+  }
   if (readyCount > 0) {
-    return 'Ready'; // Some items ready -> INCOMPLETE
+    return 'Preparing'; // Partial items ready -> Order remains in Preparing with partial items ready
   }
   return currentOrderStatus === 'Placed' ? 'Placed' : 'Preparing';
+};
+
+/**
+ * Consistently formats any table string or number into standard "T-01" format.
+ * e.g., "Table 01" -> "T-01", "Table T-03" -> "T-03", "2" -> "T-02", "T-08" -> "T-08".
+ */
+export const formatTableNumber = (rawTable) => {
+  if (!rawTable) return 'T-01';
+  const str = String(rawTable).trim();
+  const digits = str.replace(/[^0-9]/g, '');
+  if (!digits) return 'T-01';
+  const num = parseInt(digits, 10);
+  return `T-${String(num).padStart(2, '0')}`;
 };

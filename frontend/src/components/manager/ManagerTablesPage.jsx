@@ -624,29 +624,52 @@ export default function ManagerTablesPage() {
                 )}
               </div>
 
-              {/* Cleaning State Timer Box */}
+              {/* Cleaning State Live Ticking Countdown Box */}
               {tbl.status === 'Cleaning' && (
-                <div style={{
-                  backgroundColor: '#FEF3C7',
-                  borderRadius: '12px',
-                  padding: '0.65rem 0.85rem',
-                  border: '1px solid #FDE68A',
-                  marginTop: '0.65rem',
-                  textAlign: 'center'
-                }}>
+                <div 
+                  onClick={async () => {
+                    try {
+                      await api.updateTableStatus(tbl.id, 'Available');
+                      showToast(`✨ Table ${tbl.num} marked as Available / Cleaned!`);
+                      window.dispatchEvent(new Event('flavora_tables_updated'));
+                    } catch (e) { }
+                  }}
+                  title="Click to finish cleaning early and mark table as Available"
+                  style={{
+                    backgroundColor: '#FEF3C7',
+                    borderRadius: '12px',
+                    padding: '0.65rem 0.85rem',
+                    border: '1px solid #FDE68A',
+                    marginTop: '0.65rem',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
                   <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
                     <span>🧹 Cleaning & Sanitize</span>
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#D97706', fontWeight: 700, marginTop: '0.15rem', fontFamily: 'monospace' }}>
-                    {tbl.cleaningUntil ? (
-                      (() => {
-                        const remMs = new Date(tbl.cleaningUntil).getTime() - Date.now();
-                        if (remMs <= 0) return 'Cleaning completed';
-                        const mins = Math.floor(remMs / 60000);
-                        const secs = Math.floor((remMs % 60000) / 1000);
-                        return `${mins}m ${secs}s remaining`;
-                      })()
-                    ) : '10:00 remaining'}
+                  <div style={{ fontSize: '0.76rem', color: '#D97706', fontWeight: 800, marginTop: '0.15rem', fontFamily: 'monospace' }}>
+                    {(() => {
+                      let targetTime = tbl.cleaningUntil ? new Date(tbl.cleaningUntil).getTime() : null;
+                      if (!targetTime) {
+                        const localKey = `flavora_cleaning_start_${tbl.num}`;
+                        let startTime = localStorage.getItem(localKey);
+                        if (!startTime) {
+                          startTime = Date.now().toString();
+                          localStorage.setItem(localKey, startTime);
+                        }
+                        targetTime = parseInt(startTime, 10) + (10 * 60 * 1000);
+                      }
+
+                      const remMs = targetTime - Date.now();
+                      if (remMs <= 0) return '✨ Done (Click to Finish)';
+
+                      const totalSecs = Math.floor(remMs / 1000);
+                      const mins = Math.floor(totalSecs / 60);
+                      const secs = totalSecs % 60;
+                      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} remaining`;
+                    })()}
                   </div>
                 </div>
               )}

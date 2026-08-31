@@ -35,13 +35,43 @@ export default function ManagerMenuPage() {
     fetchMenu();
   }, []);
 
-  const handleToggleStockStatus = (id) => {
-    const updated = menuItems.map(item => item.id === id ? { ...item, available: !item.available } : item);
-    setMenuItems(updated);
+  const [outOfStockItems, setOutOfStockItems] = useState(() => {
     try {
-      localStorage.setItem('flavora_dishes', JSON.stringify(updated));
-      window.dispatchEvent(new Event('flavora_dishes_updated'));
-    } catch (e) {}
+      const saved = localStorage.getItem('flavora_out_of_stock_items');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const handleStockUpdate = () => {
+      try {
+        const saved = localStorage.getItem('flavora_out_of_stock_items');
+        if (saved) setOutOfStockItems(JSON.parse(saved));
+      } catch (e) { }
+    };
+    window.addEventListener('flavora_menu_updated', handleStockUpdate);
+    window.addEventListener('storage', handleStockUpdate);
+    return () => {
+      window.removeEventListener('flavora_menu_updated', handleStockUpdate);
+      window.removeEventListener('storage', handleStockUpdate);
+    };
+  }, []);
+
+  const handleToggleStockStatus = (id, name) => {
+    const isCurrentlyOut = outOfStockItems.includes(id) || outOfStockItems.includes(name);
+    let nextList = [];
+    if (isCurrentlyOut) {
+      nextList = outOfStockItems.filter(i => i !== id && i !== name);
+    } else {
+      nextList = [...outOfStockItems, id, name];
+    }
+    setOutOfStockItems(nextList);
+    try {
+      localStorage.setItem('flavora_out_of_stock_items', JSON.stringify(nextList));
+      window.dispatchEvent(new Event('flavora_menu_updated'));
+    } catch (e) { }
   };
 
   const categoriesList = ['All', ...Array.from(new Set(menuItems.map(i => i.category || 'General')))];
@@ -146,7 +176,10 @@ export default function ManagerMenuPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {categoryKeys.map(catName => {
             const dishes = groupedByCategory[catName];
-            const inStockCount = dishes.filter(d => d.available !== false).length;
+            const inStockCount = dishes.filter(d => {
+              const dId = d._id || d.id;
+              return d.available !== false && d.isAvailable !== false && !outOfStockItems.includes(dId) && !outOfStockItems.includes(d.name);
+            }).length;
             const outOfStockCount = dishes.length - inStockCount;
 
             return (
@@ -198,47 +231,53 @@ export default function ManagerMenuPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {dishes.map(dish => (
-                      <tr key={dish.id} style={{ borderBottom: '1px solid #F1F5F9', fontSize: '0.88rem' }}>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#0F2A1D' }}>{dish.name}</td>
-                        <td style={{ padding: '0.85rem 1.25rem' }}>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: dish.isVeg ? '#166534' : '#DC2626', backgroundColor: dish.isVeg ? '#DCFCE7' : '#FEE2E2', padding: '0.2rem 0.55rem', borderRadius: '6px' }}>
-                            {dish.isVeg ? '🌿 Veg' : '🍗 Non-Veg'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 900, color: '#0F2A1D' }}>₹{dish.price}</td>
-                        <td style={{ padding: '0.85rem 1.25rem' }}>
-                          <span style={{
-                            fontSize: '0.75rem',
-                            fontWeight: 800,
-                            backgroundColor: dish.available !== false ? '#DCFCE7' : '#FEE2E2',
-                            color: dish.available !== false ? '#166534' : '#DC2626',
-                            padding: '0.25rem 0.75rem',
-                            borderRadius: '9999px'
-                          }}>
-                            {dish.available !== false ? '🟢 Available' : '🔴 Out of Stock'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.85rem 1.25rem', textAlign: 'right' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleStockStatus(dish.id)}
-                            style={{
-                              padding: '0.35rem 0.85rem',
-                              borderRadius: '8px',
-                              border: '1px solid #CBD5E1',
-                              backgroundColor: dish.available !== false ? '#FEF2F2' : '#ECFDF5',
-                              color: dish.available !== false ? '#DC2626' : '#047857',
+                    {dishes.map(dish => {
+                      const dishId = dish._id || dish.id;
+                      const isOutInStore = outOfStockItems.includes(dishId) || outOfStockItems.includes(dish.name);
+                      const isAvailable = dish.available !== false && dish.isAvailable !== false && !isOutInStore;
+
+                      return (
+                        <tr key={dishId} style={{ borderBottom: '1px solid #F1F5F9', fontSize: '0.88rem' }}>
+                          <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#0F2A1D' }}>{dish.name}</td>
+                          <td style={{ padding: '0.85rem 1.25rem' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: dish.isVeg ? '#166534' : '#DC2626', backgroundColor: dish.isVeg ? '#DCFCE7' : '#FEE2E2', padding: '0.2rem 0.55rem', borderRadius: '6px' }}>
+                              {dish.isVeg ? '🌿 Veg' : '🍗 Non-Veg'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.85rem 1.25rem', fontWeight: 900, color: '#0F2A1D' }}>₹{dish.price}</td>
+                          <td style={{ padding: '0.85rem 1.25rem' }}>
+                            <span style={{
+                              fontSize: '0.75rem',
                               fontWeight: 800,
-                              fontSize: '0.78rem',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {dish.available !== false ? 'Mark Out of Stock' : 'Mark In Stock'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                              backgroundColor: isAvailable ? '#DCFCE7' : '#FEE2E2',
+                              color: isAvailable ? '#166534' : '#DC2626',
+                              padding: '0.25rem 0.75rem',
+                              borderRadius: '9999px'
+                            }}>
+                              {isAvailable ? '🟢 Available' : '🔴 Out of Stock'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.85rem 1.25rem', textAlign: 'right' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStockStatus(dishId, dish.name)}
+                              style={{
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: isAvailable ? '#FEF2F2' : '#F0FDF4',
+                                color: isAvailable ? '#DC2626' : '#166534',
+                                fontWeight: 800,
+                                fontSize: '0.76rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {isAvailable ? 'Mark Out of Stock' : 'Make Available'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

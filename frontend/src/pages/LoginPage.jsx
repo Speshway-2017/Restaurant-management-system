@@ -22,36 +22,42 @@ export default function LoginPage({ setActivePage }) {
     api.login(emailOrPhone || 'admin@flavorakitchen.in', password || 'admin123password')
       .then((res) => {
         if (res.token) {
-          localStorage.setItem('flavora_auth_token', res.token);
+          sessionStorage.setItem('flavora_auth_token', res.token);
         }
-        localStorage.setItem('flavora_logged_in', 'true');
+        sessionStorage.setItem('flavora_logged_in', 'true');
+        localStorage.removeItem('flavora_auth_token');
+        localStorage.removeItem('flavora_logged_in');
+
         if (res.user?.role === 'Chef' || enteredInput.includes('chef')) {
-          localStorage.setItem('flavora_user_role', 'chef');
+          sessionStorage.setItem('flavora_user_role', 'chef');
           setActivePage('chef');
         } else if (res.user?.role === 'Waiter' || enteredInput.includes('waiter')) {
-          localStorage.setItem('flavora_user_role', 'waiter');
+          sessionStorage.setItem('flavora_user_role', 'waiter');
           setActivePage('waiter');
         } else if (res.user?.role === 'Manager' || res.user?.role === 'Resto Manager' || enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
-          localStorage.setItem('flavora_user_role', 'manager');
+          sessionStorage.setItem('flavora_user_role', 'manager');
           setActivePage('manager');
         } else {
-          localStorage.setItem('flavora_user_role', 'admin');
+          sessionStorage.setItem('flavora_user_role', 'admin');
           setActivePage('admin');
         }
       })
       .catch(() => {
-        localStorage.setItem('flavora_logged_in', 'true');
+        sessionStorage.setItem('flavora_logged_in', 'true');
+        localStorage.removeItem('flavora_auth_token');
+        localStorage.removeItem('flavora_logged_in');
+
         if (enteredInput.includes('chef')) {
-          localStorage.setItem('flavora_user_role', 'chef');
+          sessionStorage.setItem('flavora_user_role', 'chef');
           setActivePage('chef');
         } else if (enteredInput.includes('waiter')) {
-          localStorage.setItem('flavora_user_role', 'waiter');
+          sessionStorage.setItem('flavora_user_role', 'waiter');
           setActivePage('waiter');
         } else if (enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
-          localStorage.setItem('flavora_user_role', 'manager');
+          sessionStorage.setItem('flavora_user_role', 'manager');
           setActivePage('manager');
         } else {
-          localStorage.setItem('flavora_user_role', 'admin');
+          sessionStorage.setItem('flavora_user_role', 'admin');
           setActivePage('admin');
         }
       })

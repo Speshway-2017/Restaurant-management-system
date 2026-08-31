@@ -20,10 +20,15 @@ import ChefLayout from './components/chef/ChefLayout';
 import WaiterLayout from './components/waiter/WaiterLayout';
 
 export default function App() {
+  const getIsLoggedIn = () => Boolean(
+    sessionStorage.getItem('flavora_logged_in') === 'true' ||
+    sessionStorage.getItem('flavora_auth_token')
+  );
+
   const [activePage, setActivePageState] = useState(() => {
     const path = window.location.pathname.toLowerCase();
     const search = window.location.search.toLowerCase();
-    const isLoggedIn = Boolean(localStorage.getItem('flavora_logged_in') === 'true' || localStorage.getItem('flavora_auth_token'));
+    const isLoggedIn = getIsLoggedIn();
 
     // If QR code scanned or URL contains /menu or ?table=, open 'menu' directly without login!
     if (path.includes('/menu') || search.includes('table=')) {
@@ -75,7 +80,7 @@ export default function App() {
     setActivePageState(newPage);
     localStorage.setItem('flavora_active_page', newPage);
 
-    const isLoggedIn = Boolean(localStorage.getItem('flavora_logged_in') === 'true' || localStorage.getItem('flavora_auth_token'));
+    const isLoggedIn = getIsLoggedIn();
     if (newPage === 'home') {
       window.history.pushState({}, '', '/');
     } else if (newPage === 'admin' && isLoggedIn) {
@@ -95,7 +100,7 @@ export default function App() {
     const handleUrlRouting = () => {
       const path = window.location.pathname.toLowerCase();
       const search = window.location.search.toLowerCase();
-      const isLoggedIn = Boolean(localStorage.getItem('flavora_logged_in') === 'true' || localStorage.getItem('flavora_auth_token'));
+      const isLoggedIn = getIsLoggedIn();
 
       if (path.includes('/menu') || search.includes('table=')) {
         setActivePageState('menu');

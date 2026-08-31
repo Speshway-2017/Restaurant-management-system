@@ -19,6 +19,30 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
     momentumFrame: null
   });
 
+  const [outOfStockItems, setOutOfStockItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_out_of_stock_items');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem('flavora_out_of_stock_items');
+        if (saved) setOutOfStockItems(JSON.parse(saved));
+      } catch (e) { }
+    };
+    window.addEventListener('flavora_menu_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('flavora_menu_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
+
   // Single Source of Truth menu dishes
   const validDishes = (menuItems || []).filter(item => item && item.name);
 
