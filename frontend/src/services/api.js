@@ -132,16 +132,26 @@ export const api = {
   }),
 
   // Table QR & Management API
-  getTables: () => request('/tables'),
-  updateTableStatus: (id, data) => request(`/tables/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   generateTableQr: (tableNum, targetUrl) => request('/tables/generate-qr', {
     method: 'POST',
     body: JSON.stringify({ tableNum, targetUrl })
   }),
-  updateTableStatusByNum: (tableNum, data) => request(`/tables/number/${tableNum}`, {
-    method: 'PUT',
-    body: JSON.stringify(data)
-  }),
+  updateTableStatusByNum: (tableNum, data) => {
+    const payload = typeof data === 'object' && data !== null ? data : { status: String(data || 'Available') };
+    const cleanNum = encodeURIComponent(String(tableNum || '').replace(/^#/i, '').trim());
+    return request(`/tables/number/${cleanNum}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+  updateTableByNumber: (tableNum, data) => {
+    const payload = typeof data === 'object' && data !== null ? data : { status: String(data || 'Available') };
+    const cleanNum = encodeURIComponent(String(tableNum || '').replace(/^#/i, '').trim());
+    return request(`/tables/number/${cleanNum}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
 
   // Reports & Analytics API
   getReportAnalytics: (params = {}) => {

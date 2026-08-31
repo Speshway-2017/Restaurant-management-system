@@ -236,24 +236,27 @@ export default function WaiterTablesPage() {
   };
 
   const handleMarkCleanedAvailable = async (tableNum) => {
+    // 1. Instant optimistic update for Waiter UI
     setTables(prev => prev.map(t => {
       const tNum = t.num || t.number || `T-${String(t.id || 1).padStart(2, '0')}`;
       if (tNum === tableNum) {
-        return { ...t, status: 'Available' };
+        return { ...t, status: 'Available', cleaningUntil: null, orderId: null, amount: '-', customer: '-' };
       }
       return t;
     }));
 
+    // 2. Update local storage cache
     let savedTables = [];
     try {
       const raw = localStorage.getItem('flavora_tables');
       if (raw) savedTables = JSON.parse(raw);
     } catch (e) { }
 
-    const updatedList = savedTables.map(t => {
+    const baseList = savedTables.length > 0 ? savedTables : BASE_DEFAULT_TABLES;
+    const updatedList = baseList.map(t => {
       const tNum = t.num || t.number || `T-${String(t.id || 1).padStart(2, '0')}`;
       if (tNum === tableNum) {
-        return { ...t, status: 'Available' };
+        return { ...t, status: 'Available', cleaningUntil: null, orderId: null, amount: '-', customer: '-' };
       }
       return t;
     });
@@ -261,9 +264,14 @@ export default function WaiterTablesPage() {
     localStorage.setItem('flavora_tables', JSON.stringify(updatedList));
     window.dispatchEvent(new Event('flavora_tables_updated'));
 
-    const dbTable = tables.find(t => t.num === tableNum);
-    if (dbTable && dbTable.id) {
-      await api.updateTableStatus(dbTable.id, 'Available').catch(() => { });
+    // 3. Persist to MongoDB database
+    try {
+      const dbTable = tables.find(t => (t.num === tableNum || t.number === tableNum || t.name === tableNum));
+      const targetId = dbTable?._id || dbTable?.id || tableNum;
+      await api.updateTableStatus(targetId, { status: 'Available', currentOrder: '' }).catch(() => { });
+      await api.updateTableByNumber(tableNum, { status: 'Available', currentOrder: '' }).catch(() => { });
+    } catch (err) {
+      console.warn("Failed to persist table Available status to DB:", err);
     }
 
     if (selectedTable && selectedTable.num === tableNum) {
@@ -677,12 +685,7 @@ export default function WaiterTablesPage() {
                       </div>
                     ) : realStatus === 'Cleaning' ? (
                       <div 
-                        onClick={async () => {
-                          try {
-                            await api.updateTableStatus(tb.id || tb._id, 'Available');
-                            window.dispatchEvent(new Event('flavora_tables_updated'));
-                          } catch (e) { }
-                        }}
+                        onClick={() => handleMarkCleanedAvailable(tb.num)}
                         title="Click to finish cleaning and mark table as Available"
                         style={{ backgroundColor: '#FEFCE8', padding: '0.75rem', borderRadius: '10px', border: '1px solid #FDE047', marginBottom: '0.85rem', color: '#B45309', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
                       >

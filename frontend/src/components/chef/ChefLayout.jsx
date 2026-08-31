@@ -204,28 +204,8 @@ export default function ChefLayout({ setActivePage }) {
         backendData.forEach((bo, idx) => {
           if (!bo) return;
           const cleanId = getCleanId(bo, idx);
-          const existingLocal = orderMap.get(cleanId);
-          if (existingLocal) {
-            const isReadyInAny = bo.status === 'Ready' || existingLocal.status === 'Ready';
-            const finalStatus = isReadyInAny ? 'Ready' : (bo.status || existingLocal.status || 'Placed');
-
-            const mergedItems = (bo.items && bo.items.length > 0) ? bo.items : existingLocal.items;
-            const finalItems = (Array.isArray(mergedItems) ? mergedItems : []).map(it => {
-              if (isReadyInAny && !it.isDelivered && it.status !== 'SERVED') {
-                return { ...it, status: 'READY', isReady: true };
-              }
-              return it;
-            });
-
-            orderMap.set(cleanId, {
-              ...existingLocal,
-              ...bo,
-              status: finalStatus,
-              items: finalItems
-            });
-          } else {
-            orderMap.set(cleanId, bo);
-          }
+          // Backend is authoritative for items and order state
+          orderMap.set(cleanId, bo);
         });
       }
 
@@ -235,15 +215,33 @@ export default function ChefLayout({ setActivePage }) {
         const cleanId = getCleanId(o, idx);
         const idStr = o.orderId || (typeof o.id === 'string' && o.id.startsWith('ORD-') ? o.id : null) || o.id || o._id || cleanId;
         const createdDate = o.createdAt ? new Date(o.createdAt) : new Date();
-        const items = Array.isArray(o.items) ? o.items : [];
+        const rawItems = Array.isArray(o.items) ? o.items : [];
+
+        // Check if there are any pending dishes in this order that need cooking
+        const hasPendingItems = rawItems.some(it => !it.isDelivered && !it.isReady && it.status !== 'READY' && it.status !== 'DELIVERED' && it.status !== 'SERVED');
+
+        if (hasPendingItems) {
+          // Clear any stale optimistic 'Ready' status for this order because customer added new dishes!
+          delete optimisticStatusesRef.current[cleanId];
+          delete optimisticStatusesRef.current[idStr];
+        }
+
         const overrideStatus = optimisticStatusesRef.current[cleanId] || optimisticStatusesRef.current[idStr];
         const rawStatus = overrideStatus || o.status || 'Placed';
 
-        const finalItems = items.map(it => {
-          if (rawStatus === 'Ready' && !it.isDelivered && it.status !== 'SERVED') {
-            return { ...it, status: 'READY', isReady: true };
-          }
-          return it;
+        const finalItems = rawItems.map((it, itemIdx) => {
+          const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
+          const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || (rawStatus === 'Ready' && !hasPendingItems)));
+          return {
+            ...it,
+            id: it.id || it._id || `item-${itemIdx}`,
+            name: it.name,
+            price: Number(it.price) || 0,
+            quantity: Number(it.quantity || it.qty || 1),
+            status: isDelivered ? 'DELIVERED' : (isReady ? 'READY' : 'PREPARING'),
+            isReady: isReady,
+            isDelivered: isDelivered
+          };
         });
 
         return {
@@ -253,7 +251,7 @@ export default function ChefLayout({ setActivePage }) {
           table: o.table || (o.tableNum ? `Table ${o.tableNum}` : 'Takeaway'),
           type: o.type || 'Dine-In',
           customer: o.customer || o.customerName || 'Guest',
-          status: rawStatus,
+          status: hasPendingItems ? (rawStatus === 'Preparing' || rawStatus === 'Cooking' ? 'Preparing' : 'Placed') : rawStatus,
           items: finalItems,
           notes: o.notes || o.chefNotes || o.instructions || '',
           time: createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -274,10 +272,12 @@ export default function ChefLayout({ setActivePage }) {
       // Sync checkedDishItems state map with authoritative DB item status (READY or DELIVERED)
       const syncedCheckedMap = {};
       mappedOrders.forEach(ord => {
+        const isOrderInCooking = ord.status === 'Preparing' || ord.status === 'Cooking' || ord.status === 'In-Progress' || ord.status === 'Ready';
         const itemMap = {};
         const cleanId = getCleanId(ord);
         (ord.items || []).forEach((it, idx) => {
-          const isChecked = Boolean(it.isReady || it.status === 'READY' || it.status === 'DELIVERED' || it.status === 'SERVED' || it.isDelivered);
+          const isDelivered = it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED';
+          const isChecked = isDelivered || (isOrderInCooking && Boolean(it.isReady || it.status === 'READY'));
           itemMap[idx] = isChecked;
         });
         syncedCheckedMap[ord.id] = itemMap;
@@ -397,6 +397,22 @@ export default function ChefLayout({ setActivePage }) {
   };
 
   const handleToggleItemCheck = async (orderId, itemIdx) => {
+    const cleanOrderId = String(orderId).replace(/^#/i, '');
+    const targetOrder = ordersList.find(o =>
+      o.id === orderId || o.orderId === orderId || o._id === orderId ||
+      o.id === cleanOrderId || o.orderId === cleanOrderId || o.id === `#${cleanOrderId}` || o.orderId === `#${cleanOrderId}`
+    );
+
+    if (!targetOrder) return;
+
+    // Check if order is in cooking state
+    const isCooking = targetOrder.status === 'Preparing' || targetOrder.status === 'Cooking' || targetOrder.status === 'In-Progress' || targetOrder.status === 'Ready';
+
+    if (!isCooking) {
+      showToast('⚠️ Please click "🔥 Start Cooking" first before marking dishes as ready!');
+      return;
+    }
+
     let nextCheckedState = false;
     setCheckedDishItems(prev => {
       const orderChecked = prev[orderId] || {};
@@ -410,13 +426,7 @@ export default function ChefLayout({ setActivePage }) {
       };
     });
 
-    const cleanOrderId = String(orderId).replace(/^#/i, '');
-    const targetOrder = ordersList.find(o =>
-      o.id === orderId || o.orderId === orderId || o._id === orderId ||
-      o.id === cleanOrderId || o.orderId === cleanOrderId || o.id === `#${cleanOrderId}` || o.orderId === `#${cleanOrderId}`
-    );
-
-    if (targetOrder && Array.isArray(targetOrder.items)) {
+    if (Array.isArray(targetOrder.items)) {
       const targetItem = targetOrder.items[itemIdx];
       const targetItemId = targetItem ? (targetItem._id || targetItem.id || itemIdx) : itemIdx;
       const targetItemName = targetItem ? targetItem.name : '';
@@ -507,11 +517,23 @@ export default function ChefLayout({ setActivePage }) {
   };
 
   const isOrderCompletedInKitchen = (ord) => {
-    if (ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled') {
+    if (ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled') {
       return true;
     }
     const items = Array.isArray(ord.items) ? ord.items : [];
     if (items.length === 0) return false;
+
+    // If there are ANY dishes still to be prepared/cooked, the ticket MUST stay visible on Live KDS!
+    const hasPendingDishes = items.some(i => i && !i.isDelivered && !i.isReady && i.status !== 'READY' && i.status !== 'DELIVERED' && i.status !== 'SERVED');
+    if (hasPendingDishes) {
+      return false;
+    }
+
+    // Only if all items are served/ready and status is Ready/Served
+    if (ord.status === 'Ready' || ord.status === 'Served') {
+      return true;
+    }
+
     return items.every(i => i && (i.isReady || i.status === 'READY' || i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED'));
   };
 
