@@ -14,8 +14,14 @@ import ChefHistoryPage from './ChefHistoryPage';
 import ChefAnalyticsPage from './ChefAnalyticsPage';
 import ChefProfilePage from './ChefProfilePage';
 import ChefSettingsPage from './ChefSettingsPage';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 export default function ChefLayout({ setActivePage }) {
+  const { brandName, brandLogo } = useRestaurantBranding();
+  const nameParts = brandName.trim().split(' ');
+  const firstNamePart = nameParts[0] || 'Flavora';
+  const restNamePart = nameParts.slice(1).join(' ');
+
   const [activeTab, setActiveTab] = useState('chef-kds'); // 'chef-kds', 'chef-inventory', 'chef-history', 'chef-analytics'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -716,14 +722,15 @@ export default function ChefLayout({ setActivePage }) {
         <div className="admin-sidebar-header">
           <div className="admin-brand-lockup">
             <img
-              src="/logo.png"
-              alt="Flavora Kitchen Logo"
+              src={brandLogo}
+              alt={`${brandName} Logo`}
+              onError={(e) => { e.target.src = '/logo.png'; }}
               className="admin-brand-logo-img"
             />
             <div className="admin-brand-text">
               <div className="admin-brand-title" style={{ display: 'flex', gap: '0.3rem' }}>
-                <span className="brand-favora">Flavora</span>
-                <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>Kitchen</span>
+                <span className="brand-favora">{firstNamePart}</span>
+                {restNamePart && <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>{restNamePart}</span>}
               </div>
               <div className="admin-brand-subtitle">EXECUTIVE CHEF KDS</div>
             </div>
@@ -783,7 +790,7 @@ export default function ChefLayout({ setActivePage }) {
         {/* Sidebar Footer */}
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-version" style={{ marginTop: 0 }}>
-            Flavora Kitchen KDS • v4.2 Live
+            {brandName} KDS • v4.2 Live
           </div>
         </div>
       </aside>
@@ -818,7 +825,7 @@ export default function ChefLayout({ setActivePage }) {
             </button>
 
             <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E4636', fontFamily: 'var(--font-heading)' }}>
-              Flavora Resto Chef
+              {brandName} Resto Chef
             </h2>
           </div>
 

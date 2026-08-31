@@ -1,58 +1,81 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, ShieldCheck, Building2, FileText, Save, CheckCircle2, Search, Bell, Utensils, QrCode, Lock, Clock, UserCheck, AlertTriangle } from 'lucide-react';
 import { api } from '../../services/api';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 export default function ManagerSettingsPage() {
+  const { branding, updateBranding } = useRestaurantBranding();
   const [activeTab, setActiveTab] = useState('operating'); // 'operating', 'kds', 'floor', 'profile'
   const [searchQuery, setSearchQuery] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
   const [settingsData, setSettingsData] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flavora_restaurant_settings');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
     return {
-      restaurantName: 'Flavora Kitchen',
-      branchName: 'Jubilee Hills (Main Branch)',
-      managerName: 'Ram S. (On-Duty Manager)',
-      managerEmail: 'manager@flavorakitchen.in',
-      managerPhone: '+91 98765 43210',
-      address: 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
-      weekdayHours: '11:00 AM – 10:00 PM',
-      weekendHours: '10:00 AM – 12:00 AM',
-      restaurantStatus: 'open', // 'open', 'closed', 'force_open'
-      closedMessage: 'The restaurant is currently closed for orders. Please visit during our operating hours!',
-      cleaningDuration: '10', // minutes
-      autoAcceptOrders: true,
-      audioAlerts: true,
-      prepTimeWarning: '20 mins',
-      dispatchChime: true,
-      qrOrderingEnabled: true,
-      autoPrintReceipt: true,
-      autoCleaningExpire: true,
-      maxDiningTime: '60 mins'
+      restaurantName: branding.restaurantName || branding.brandName || 'Flavora Kitchen',
+      brandName: branding.brandName || branding.restaurantName || 'Flavora Kitchen',
+      logoUrl: branding.logoUrl || branding.brandLogo || '/logo.png',
+      branchName: branding.branchName || 'Jubilee Hills (Main Branch)',
+      managerName: branding.managerName || 'Ram S. (On-Duty Manager)',
+      managerEmail: branding.managerEmail || 'manager@flavorakitchen.in',
+      managerPhone: branding.managerPhone || '+91 98765 43210',
+      address: branding.address || 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
+      weekdayHours: branding.weekdayHours || '11:00 AM – 10:00 PM',
+      weekendHours: branding.weekendHours || '10:00 AM – 12:00 AM',
+      restaurantStatus: branding.restaurantStatus || 'open', // 'open', 'closed', 'force_open'
+      closedMessage: branding.closedMessage || 'The restaurant is currently closed for orders. Please visit during our operating hours!',
+      cleaningDuration: branding.cleaningDuration || '10', // minutes
+      autoAcceptOrders: branding.autoAcceptOrders ?? true,
+      audioAlerts: branding.audioAlerts ?? true,
+      prepTimeWarning: branding.prepTimeWarning || '20 mins',
+      dispatchChime: branding.dispatchChime ?? true,
+      qrOrderingEnabled: branding.qrOrderingEnabled ?? true,
+      autoPrintReceipt: branding.autoPrintReceipt ?? true,
+      autoCleaningExpire: branding.autoCleaningExpire ?? true,
+      maxDiningTime: branding.maxDiningTime || '60 mins'
     };
   });
 
-  const handleSave = (e) => {
+  useEffect(() => {
+    if (branding && typeof branding === 'object') {
+      setSettingsData(prev => ({
+        ...prev,
+        ...branding,
+        restaurantName: branding.restaurantName || branding.brandName || prev.restaurantName,
+        logoUrl: branding.logoUrl || branding.brandLogo || prev.logoUrl
+      }));
+    }
+  }, [branding]);
+
+  const handleSave = async (e) => {
     e.preventDefault();
     try {
-      localStorage.setItem('flavora_restaurant_settings', JSON.stringify(settingsData));
-      window.dispatchEvent(new Event('flavora_settings_updated'));
-    } catch (e) {}
+      const payload = {
+        ...settingsData,
+        restaurantName: settingsData.restaurantName || settingsData.brandName,
+        brandName: settingsData.restaurantName || settingsData.brandName,
+        logoUrl: settingsData.logoUrl,
+        logo: settingsData.logoUrl,
+        brandLogo: settingsData.logoUrl
+      };
 
-    api.updateSettings(settingsData)
-      .catch(() => {})
-      .finally(() => {
-        setSaveSuccess(true);
-        setToastMessage('✓ Branch operational settings saved & broadcasted!');
-        setTimeout(() => {
-          setSaveSuccess(false);
-          setToastMessage(null);
-        }, 3000);
-      });
+      await updateBranding(payload);
+
+      setSaveSuccess(true);
+      setToastMessage('✓ Branch settings & branding updated across all portals!');
+      setTimeout(() => {
+        setSaveSuccess(false);
+        setToastMessage(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to update server settings:', err);
+      setSaveSuccess(true);
+      setToastMessage('Settings saved locally!');
+      setTimeout(() => {
+        setSaveSuccess(false);
+        setToastMessage(null);
+      }, 3000);
+    }
   };
 
   return (

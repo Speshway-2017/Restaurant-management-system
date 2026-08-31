@@ -63,6 +63,11 @@ const getManagerTabFromCurrentPath = () => {
 };
 
 export default function ManagerLayout({ setActivePage }) {
+  const { brandName, brandLogo } = useRestaurantBranding();
+  const nameParts = brandName.trim().split(' ');
+  const firstNamePart = nameParts[0] || 'Flavora';
+  const restNamePart = nameParts.slice(1).join(' ');
+
   const [activeTab, setActiveTab] = useState(() => getManagerTabFromCurrentPath());
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -309,14 +314,15 @@ export default function ManagerLayout({ setActivePage }) {
         <div className="admin-sidebar-header">
           <div className="admin-brand-lockup">
             <img
-              src="/logo.png"
-              alt="Flavora Kitchen Logo"
+              src={brandLogo}
+              alt={`${brandName} Logo`}
+              onError={(e) => { e.target.src = '/logo.png'; }}
               className="admin-brand-logo-img"
             />
             <div className="admin-brand-text">
               <div className="admin-brand-title" style={{ display: 'flex', gap: '0.3rem' }}>
-                <span className="brand-favora">Flavora</span>
-                <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>Kitchen</span>
+                <span className="brand-favora">{firstNamePart}</span>
+                {restNamePart && <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>{restNamePart}</span>}
               </div>
               <div className="admin-brand-subtitle">RESTO MANAGER PORTAL</div>
             </div>
@@ -363,7 +369,7 @@ export default function ManagerLayout({ setActivePage }) {
         {/* Sidebar Footer */}
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-version" style={{ marginTop: 0 }}>
-            Resto Manager • v3.4
+            {brandName} Manager • v3.4
           </div>
         </div>
 
@@ -399,7 +405,7 @@ export default function ManagerLayout({ setActivePage }) {
             </button>
 
             <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E4636', fontFamily: 'var(--font-heading)' }}>
-              Flavora Resto Manager
+              {brandName} Resto Manager
             </h2>
           </div>
 

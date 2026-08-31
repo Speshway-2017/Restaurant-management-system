@@ -1,44 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mail, Calendar, User, Clock, ArrowRight, X, ChevronDown, CheckCircle2 } from 'lucide-react';
 
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
+
 export default function BlogsPage({ setActivePage }) {
+  const { branding, brandName, fetchBranding } = useRestaurantBranding();
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [visibleCount, setVisibleCount] = useState(3);
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
-  const savedBlogs = (() => {
-    try {
-      const s = localStorage.getItem('flavora_blogs');
-      if (s) return JSON.parse(s).filter(b => b.status !== 'Draft');
-    } catch(e) {}
-    return null;
-  })();
+  useEffect(() => {
+    fetchBranding();
+    const handleSync = () => {
+      fetchBranding();
+    };
+    window.addEventListener('flavora_blogs_updated', handleSync);
+    return () => window.removeEventListener('flavora_blogs_updated', handleSync);
+  }, [fetchBranding]);
 
-  const featuredStory = (savedBlogs && savedBlogs[0]) || {
-    id: 1,
-    title: 'The Secret of Traditional Dum Biryani',
-    category: 'HERITAGE',
-    categoryClass: 'badge-overlay-orange',
-    author: 'Chef Ananya',
-    date: 'October 12, 2024',
-    readTime: '7 min read',
-    image: '/carousel_1.png',
-    excerpt: "Mastering the 'dum' technique is more than just cooking; it's a slow-cooked philosophy of patience. We dive into the specific layering methods and spice blends that have defined authentic Indian biryani for centuries.",
-    content: `
-      ### The Ancient Art of Dum Pukht
-      Dum Pukht translates literally to 'slow oven cooking'. Originating from the royal Mughal and Awadhi kitchens, this technique involves sealing food in a heavy brass or clay handi with a dough paste seal (atta dough). The trapped steam cooks meat and fragrant long-grain basmati rice in their own natural juices.
+  const defaultBlogs = [
+    {
+      id: 1,
+      title: 'The Secret of Traditional Dum Biryani',
+      category: 'HERITAGE',
+      categoryClass: 'badge-overlay-orange',
+      author: 'Chef Ananya',
+      date: 'October 12, 2024',
+      readTime: '7 min read',
+      image: '/carousel_1.png',
+      status: 'Published',
+      excerpt: "Mastering the 'dum' technique is more than just cooking; it's a slow-cooked philosophy of patience. We dive into the specific layering methods and spice blends that have defined authentic Indian biryani for centuries.",
+      content: `
+        ### The Ancient Art of Dum Pukht
+        Dum Pukht translates literally to 'slow oven cooking'. Originating from the royal Mughal and Awadhi kitchens, this technique involves sealing food in a heavy brass or clay handi with a dough paste seal (atta dough). The trapped steam cooks meat and fragrant long-grain basmati rice in their own natural juices.
 
-      ### Essential Spice Ratios & Layering:
-      1. **Par-Boiled Basmati:** Rice cooked to precisely 70% in whole-spice infused water (star anise, cloves, green cardamom, black pepper).
-      2. **The Marinated Protein Base:** Yoghurt, shahi jeera, Kashmiri red chili powder, ginger-garlic paste, and fried golden onions (birista).
-      3. **Saffron & Ghee Infusion:** Pure saffron strands soaked in warm milk drizzled over top rice layers alongside fried mint leaves.
+        ### Essential Spice Ratios & Layering:
+        1. **Par-Boiled Basmati:** Rice cooked to precisely 70% in whole-spice infused water (star anise, cloves, green cardamom, black pepper).
+        2. **The Marinated Protein Base:** Yoghurt, shahi jeera, Kashmiri red chili powder, ginger-garlic paste, and fried golden onions (birista).
+        3. **Saffron & Ghee Infusion:** Pure saffron strands soaked in warm milk drizzled over top rice layers alongside fried mint leaves.
 
-      At Flavora Kitchen, we preserve this slow-cooking heritage while ensuring prompt dining service through our digital kitchen batch scheduling.
-    `
-  };
-
-  const recentInsights = savedBlogs ? savedBlogs.slice(1) : [
+        At ${brandName}, we preserve this slow-cooking heritage while ensuring prompt dining service through our digital kitchen batch scheduling.
+      `
+    },
     {
       id: 2,
       title: 'Sourcing Seasonal Ingredients in India',
@@ -48,15 +52,11 @@ export default function BlogsPage({ setActivePage }) {
       date: 'October 05, 2024',
       readTime: '5 min read',
       image: '/tandoor_oven.png',
+      status: 'Published',
       excerpt: 'Navigating local markets to find the best seasonal produce for your restaurant menu, ensuring farm-fresh quality and vibrant natural flavors.',
       content: `
         ### Farm-to-Table in the Indian Context
         Seasonal sourcing in India requires deep relationships with regional mandis (wholesale markets). From monsoon mustard greens to winter Guntur chilies, aligning your menu with peak harvest cycles dramatically improves dish taste while lowering food costs.
-
-        ### Key Guidelines:
-        - **Daily Supplier Audits:** Checking produce crispness, moisture retention, and spice aroma.
-        - **Cold-Chain Transport:** Ensuring perishables stay under 4°C during transit.
-        - **Inventory Auto-Alerts:** Utilizing automated stock management to prevent ingredient wastage.
       `
     },
     {
@@ -68,67 +68,33 @@ export default function BlogsPage({ setActivePage }) {
       date: 'September 28, 2024',
       readTime: '4 min read',
       image: '/chef_plating.png',
+      status: 'Published',
       excerpt: 'Transforming rustic, complex curries into visually stunning modern masterpieces without sacrificing traditional flavor profiles.',
       content: `
         ### Elevating Gravies & Tandoori Starters
         Indian cuisine is rich in vibrant colors—turmeric golds, coriander greens, and saffron oranges. Plating modern Indian dishes relies on contrast, height, and negative space on stoneware rimmed bowls.
-
-        ### Micro-Garnishing Rules:
-        - Use micro-herbs, edible silver leaf (Vark), and ghee quenelles.
-        - Deconstruct classic desserts like Gulab Jamun with pistachios and rabri mousse.
-      `
-    },
-    {
-      id: 4,
-      title: 'Restaurant Growth in the Digital Age',
-      category: 'BUSINESS',
-      categoryClass: 'badge-overlay-dark',
-      author: 'CA Rajesh Sharma',
-      date: 'September 15, 2024',
-      readTime: '6 min read',
-      image: '/carousel_3.png',
-      excerpt: 'Leveraging data analytics, KDS tokens, and streamlined operations to scale your culinary business while maintaining top-notch hospitality.',
-      content: `
-        ### Scaling F&B Operations Efficiently
-        Modern diners expect speed, transparency, and consistency. Integrating cloud-based Point of Sale (POS) with Kitchen Display Systems (KDS) reduces human communication bottlenecks by over 60%.
-
-        ### Technology Pillars:
-        - **Instant Table QR Ordering:** Eliminating wait times for menus.
-        - **Automated CGST/SGST Billing:** Compliance without manual calculation.
-        - **Real-Time Revenue Analytics:** Identifying high-margin dishes dynamically.
-      `
-    },
-    {
-      id: 5,
-      title: 'How 5-Tap QR Ordering Increases Average Ticket Size by 18%',
-      category: 'CUSTOMER EXPERIENCE',
-      categoryClass: 'badge-overlay-orange',
-      author: 'Priya Nair',
-      date: 'August 02, 2024',
-      readTime: '4 min read',
-      image: '/carousel_2.png',
-      excerpt: 'High-resolution dish photos, intelligent pairing recommendations, and zero waiter wait-time drive impulse appetizer and dessert add-ons.',
-      content: `
-        ### The Power of Visual Menu Ordering
-        When guests view dishes in high-definition photographs, visual appetite triggers lead directly to higher average spending per table. Instant QR ordering empowers guests to add beverages and side breads seamlessly during their meal.
-      `
-    },
-    {
-      id: 6,
-      title: 'Kitchen Display Systems (KDS) vs Paper Thermal Tickets',
-      category: 'OPERATIONS',
-      categoryClass: 'badge-overlay-green',
-      author: 'Chef Vikram',
-      date: 'July 28, 2024',
-      readTime: '5 min read',
-      image: '/chef_1.png',
-      excerpt: 'Replacing lost paper tickets with high-contrast, distance-glanceable KDS screens in hot, fast-paced kitchen pass areas.',
-      content: `
-        ### Digital Kitchen Efficiency
-        Paper tickets easily get misplaced or stained near hot tandoor ovens. Digital KDS tablets color-code order stages and notify waiters automatically when orders are ready at the pass.
       `
     }
   ];
+
+  const allBlogs = (branding && Array.isArray(branding.blogs) && branding.blogs.length > 0)
+    ? branding.blogs
+    : (() => {
+        try {
+          const s = localStorage.getItem('flavora_blogs');
+          if (s) {
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch(e) {}
+        return defaultBlogs;
+      })();
+
+  // Exclude Drafts from Customer view
+  const publishedBlogs = allBlogs.filter(b => b.status !== 'Draft');
+
+  const featuredStory = publishedBlogs[0] || defaultBlogs[0];
+  const recentInsights = publishedBlogs.length > 1 ? publishedBlogs.slice(1) : defaultBlogs.slice(1);
 
   const handleSubscribe = (e) => {
     e.preventDefault();
@@ -169,8 +135,29 @@ export default function BlogsPage({ setActivePage }) {
           </div>
 
           <div className="featured-story-grid">
-            <div className="featured-img-wrapper">
-              <span className={featuredStory.categoryClass}>{featuredStory.category}</span>
+            <div className="featured-img-wrapper" style={{ position: 'relative', overflow: 'hidden' }}>
+              <span
+                className="blog-category-badge-overlay"
+                style={{
+                  position: 'absolute',
+                  top: '14px',
+                  left: '14px',
+                  backgroundColor: '#0F2A1D',
+                  color: '#F2C14E',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  padding: '0.35rem 0.85rem',
+                  borderRadius: '6px',
+                  zIndex: 10,
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                  backdropFilter: 'blur(4px)',
+                  border: '1px solid rgba(242, 193, 78, 0.4)'
+                }}
+              >
+                {featuredStory.category}
+              </span>
               <img src={featuredStory.image} alt={featuredStory.title} />
             </div>
 
@@ -213,8 +200,29 @@ export default function BlogsPage({ setActivePage }) {
                 className="insight-card"
                 onClick={() => setSelectedArticle(item)}
               >
-                <div className="insight-card-img-wrapper">
-                  <span className={item.categoryClass}>{item.category}</span>
+                <div className="insight-card-img-wrapper" style={{ position: 'relative', overflow: 'hidden' }}>
+                  <span
+                    className="blog-category-badge-overlay"
+                    style={{
+                      position: 'absolute',
+                      top: '12px',
+                      left: '12px',
+                      backgroundColor: '#0F2A1D',
+                      color: '#F2C14E',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: '6px',
+                      zIndex: 10,
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                      backdropFilter: 'blur(4px)',
+                      border: '1px solid rgba(242, 193, 78, 0.4)'
+                    }}
+                  >
+                    {item.category}
+                  </span>
                   <img src={item.image} alt={item.title} />
                 </div>
 

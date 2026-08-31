@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Search, Edit3, Trash2, CheckCircle2, Eye, Calendar, User, Clock, Filter, Sparkles, X, Globe, Lock, MoreVertical } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { FileText, Plus, Search, Edit3, Trash2, CheckCircle2, Eye, Calendar, User, Clock, Filter, Sparkles, X, Globe, Lock, MoreVertical, UploadCloud, Link2 } from 'lucide-react';
+import { api } from '../../services/api';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 export default function AdminBlogsPage({ isEmbedded = false }) {
+  const { branding, updateBranding } = useRestaurantBranding();
+
   const initialBlogs = [
     {
       id: 1,
@@ -45,6 +49,9 @@ export default function AdminBlogsPage({ isEmbedded = false }) {
   ];
 
   const [blogs, setBlogs] = useState(() => {
+    if (branding && Array.isArray(branding.blogs) && branding.blogs.length > 0) {
+      return branding.blogs;
+    }
     const saved = localStorage.getItem('flavora_blogs');
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
@@ -52,11 +59,19 @@ export default function AdminBlogsPage({ isEmbedded = false }) {
     return initialBlogs;
   });
 
+  useEffect(() => {
+    if (branding && Array.isArray(branding.blogs) && branding.blogs.length > 0) {
+      setBlogs(branding.blogs);
+    }
+  }, [branding?.blogs]);
+
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBlog, setEditingBlog] = useState(null);
   const [toastMsg, setToastMsg] = useState('');
+  const [imageTab, setImageTab] = useState('upload'); // 'upload' or 'link'
+  const fileInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -69,9 +84,54 @@ export default function AdminBlogsPage({ isEmbedded = false }) {
     content: ''
   });
 
-  useEffect(() => {
-    localStorage.setItem('flavora_blogs', JSON.stringify(blogs));
-  }, [blogs]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileUpload = async (file) => {
+    if (!file || !file.type.startsWith('image/')) {
+      showToast('Please select a valid image file (PNG, JPG, WEBP)');
+      return;
+    }
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target.result;
+      try {
+        const res = await api.uploadImage(base64, 'blogs');
+        if (res && res.url) {
+          setFormData(prev => ({ ...prev, image: res.url }));
+          showToast('✓ Image uploaded successfully!');
+        } else {
+          setFormData(prev => ({ ...prev, image: base64 }));
+          showToast('✓ Image attached!');
+        }
+      } catch (err) {
+        setFormData(prev => ({ ...prev, image: base64 }));
+        showToast('✓ Image attached!');
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const updateBlogState = async (newBlogs) => {
+    setBlogs(newBlogs);
+    try {
+      localStorage.setItem('flavora_blogs', JSON.stringify(newBlogs));
+      window.dispatchEvent(new Event('flavora_blogs_updated'));
+    } catch (e) {}
+
+    // Persist directly to MongoDB database via Settings API
+    try {
+      await updateBranding({
+        ...branding,
+        blogs: newBlogs
+      });
+    } catch (err) {
+      console.error('Failed to sync blogs to MongoDB:', err);
+    }
+  };
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -116,10 +176,11 @@ export default function AdminBlogsPage({ isEmbedded = false }) {
     }
 
     if (editingBlog) {
-      setBlogs(blogs.map(b => b.id === editingBlog.id ? {
+      const updated = blogs.map(b => String(b.id) === String(editingBlog.id) ? {
         ...b,
         ...formData
-      } : b));
+      } : b);
+      updateBlogState(updated);
       showToast(`✅ Article "${formData.title}" updated successfully!`);
     } else {
       const newBlog = {
@@ -127,7 +188,8 @@ export default function AdminBlogsPage({ isEmbedded = false }) {
         ...formData,
         date: new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })
       };
-      setBlogs([newBlog, ...blogs]);
+      const updated = [newBlog, ...blogs];
+      updateBlogState(updated);
       showToast(`🎉 New article "${formData.title}" published!`);
     }
 
@@ -136,16 +198,18 @@ export default function AdminBlogsPage({ isEmbedded = false }) {
 
   const handleDeleteBlog = (id, title) => {
     if (window.confirm(`Are you sure you want to delete blog article "${title}"?`)) {
-      setBlogs(blogs.filter(b => b.id !== id));
+      const updated = blogs.filter(b => String(b.id) !== String(id));
+      updateBlogState(updated);
       showToast(`🗑️ Blog article "${title}" deleted.`);
     }
   };
 
   const toggleStatus = (id) => {
-    setBlogs(blogs.map(b => b.id === id ? {
+    const updated = blogs.map(b => String(b.id) === String(id) ? {
       ...b,
       status: b.status === 'Published' ? 'Draft' : 'Published'
-    } : b));
+    } : b);
+    updateBlogState(updated);
     showToast(`Status updated.`);
   };
 
@@ -332,105 +396,330 @@ export default function AdminBlogsPage({ isEmbedded = false }) {
 
       {/* CREATE / EDIT MODAL */}
       {isModalOpen && (
-        <div className="admin-modal-backdrop" onClick={() => setIsModalOpen(false)}>
-          <div className="admin-modal-container" onClick={(e) => e.stopPropagation()} style={{ background: '#FFFFFF', maxWidth: '580px' }}>
-            <div className="admin-modal-header">
-              <h2 className="admin-modal-title">{editingBlog ? 'Edit Blog Article' : 'Publish New Article'}</h2>
-              <button className="admin-modal-close" onClick={() => setIsModalOpen(false)}>&times;</button>
+        <div
+          className="admin-modal-backdrop"
+          onClick={() => setIsModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem'
+          }}
+        >
+          <div
+            className="admin-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF',
+              maxWidth: '620px',
+              width: '100%',
+              maxHeight: '90vh',
+              borderRadius: '20px',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              border: '1px solid #E2E8F0'
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                backgroundColor: '#0F2A1D',
+                color: '#FFFFFF',
+                padding: '1.1rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexShrink: 0
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <FileText size={20} color="#F2C14E" />
+                <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#FFFFFF' }}>
+                  {editingBlog ? 'Edit Blog Article' : 'Publish New Article'}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            <form onSubmit={handleSaveBlog} style={{ padding: '1.5rem' }}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontWeight: 700 }}>Article Title *</label>
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSaveBlog} style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+              <div>
+                <label className="form-label" style={{ fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'block' }}>Article Title *</label>
                 <input
                   type="text"
                   placeholder="e.g. The Secret of Traditional Dum Biryani"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="form-control"
+                  style={{ width: '100%', borderRadius: '10px', padding: '0.65rem 0.85rem' }}
                   required
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <label className="form-label" style={{ fontWeight: 700 }}>Category *</label>
+                  <label className="form-label" style={{ fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'block' }}>Category *</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="form-control"
+                    style={{ width: '100%', borderRadius: '10px', padding: '0.65rem 0.85rem' }}
                   >
                     <option value="HERITAGE">HERITAGE</option>
                     <option value="SOURCING">SOURCING</option>
                     <option value="OPERATIONS">OPERATIONS</option>
                     <option value="RECIPES">RECIPES</option>
+                    <option value="TECHNIQUE">TECHNIQUE</option>
+                    <option value="BUSINESS">BUSINESS</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="form-label" style={{ fontWeight: 700 }}>Author *</label>
+                  <label className="form-label" style={{ fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'block' }}>Author *</label>
                   <input
                     type="text"
                     value={formData.author}
                     onChange={(e) => setFormData({ ...formData, author: e.target.value })}
                     className="form-control"
+                    style={{ width: '100%', borderRadius: '10px', padding: '0.65rem 0.85rem' }}
                     required
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <label className="form-label" style={{ fontWeight: 700 }}>Read Time</label>
+                  <label className="form-label" style={{ fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'block' }}>Read Time</label>
                   <input
                     type="text"
                     placeholder="e.g. 5 min read"
                     value={formData.readTime}
                     onChange={(e) => setFormData({ ...formData, readTime: e.target.value })}
                     className="form-control"
+                    style={{ width: '100%', borderRadius: '10px', padding: '0.65rem 0.85rem' }}
                   />
                 </div>
 
                 <div>
-                  <label className="form-label" style={{ fontWeight: 700 }}>Cover Image URL</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. /carousel_1.png"
-                    value={formData.image}
-                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                  <label className="form-label" style={{ fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'block' }}>Publishing Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                     className="form-control"
-                  />
+                    style={{ width: '100%', borderRadius: '10px', padding: '0.65rem 0.85rem' }}
+                  >
+                    <option value="Published">🌟 Published (Visible to Public)</option>
+                    <option value="Draft">🔒 Draft (Admin Only)</option>
+                  </select>
                 </div>
               </div>
 
-              <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontWeight: 700 }}>Excerpt Summary *</label>
+              {/* Cover Image Upload Dual Tab */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 800, color: '#0F2A1D', marginBottom: '0.4rem', display: 'block' }}>Cover Image</label>
+                
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setImageTab('upload')}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem 0.85rem',
+                      borderRadius: '8px',
+                      border: '1.5px solid',
+                      borderColor: imageTab === 'upload' ? '#0F2A1D' : '#CBD5E1',
+                      backgroundColor: imageTab === 'upload' ? '#0F2A1D' : '#FFFFFF',
+                      color: imageTab === 'upload' ? '#FFFFFF' : '#475569',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <UploadCloud size={15} />
+                    <span>Upload File</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setImageTab('link')}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem 0.85rem',
+                      borderRadius: '8px',
+                      border: '1.5px solid',
+                      borderColor: imageTab === 'link' ? '#0F2A1D' : '#CBD5E1',
+                      backgroundColor: imageTab === 'link' ? '#0F2A1D' : '#FFFFFF',
+                      color: imageTab === 'link' ? '#FFFFFF' : '#475569',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <Link2 size={15} />
+                    <span>Paste Image URL</span>
+                  </button>
+                </div>
+
+                {imageTab === 'upload' ? (
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleFileUpload(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    <div
+                      onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handleFileUpload(e.dataTransfer.files[0]);
+                        }
+                      }}
+                      style={{
+                        border: '2px dashed',
+                        borderColor: isDragging ? '#0F2A1D' : '#CBD5E1',
+                        borderRadius: '12px',
+                        padding: '1.25rem',
+                        textAlign: 'center',
+                        backgroundColor: isDragging ? '#F0FDF4' : '#FAF6EE',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <UploadCloud size={30} color="#0F2A1D" style={{ margin: '0 auto 0.4rem auto' }} />
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: '0.88rem', color: '#0F2A1D' }}>
+                        {isUploading ? 'Uploading Image...' : 'Click to Browse or Drag & Drop Cover Photo'}
+                      </p>
+                      <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Supports PNG, JPG, WEBP</span>
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="https://images.unsplash.com/photo-... or /carousel_1.png"
+                    value={formData.image}
+                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                    className="form-control"
+                    style={{ width: '100%', borderRadius: '10px', padding: '0.65rem 0.85rem' }}
+                  />
+                )}
+
+                {/* Cover Image Preview Thumbnail */}
+                {formData.image && (
+                  <div style={{ marginTop: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#F8FAFC', padding: '0.5rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                    <img src={formData.image} alt="Preview" style={{ width: '56px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
+                    <div style={{ fontSize: '0.78rem', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                      <strong>Preview:</strong> {formData.image.slice(0, 45)}...
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="form-label" style={{ fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'block' }}>Excerpt Summary *</label>
                 <textarea
                   rows="2"
                   placeholder="Short summary displayed on blog cards..."
                   value={formData.excerpt}
                   onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })}
                   className="form-control"
+                  style={{ width: '100%', borderRadius: '10px', padding: '0.65rem 0.85rem' }}
                   required
                 />
               </div>
 
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label" style={{ fontWeight: 700 }}>Full Article Content</label>
+              <div>
+                <label className="form-label" style={{ fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'block' }}>Full Article Content</label>
                 <textarea
-                  rows="4"
+                  rows="5"
                   placeholder="Detailed article body text..."
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   className="form-control"
+                  style={{ width: '100%', borderRadius: '10px', padding: '0.65rem 0.85rem' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-outline" onClick={() => setIsModalOpen(false)}>
+              {/* Modal Footer Actions */}
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', paddingTop: '0.5rem', borderTop: '1px solid #E2E8F0', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    color: '#475569',
+                    border: '1.5px solid #CBD5E1',
+                    borderRadius: '10px',
+                    padding: '0.65rem 1.25rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ padding: '0.65rem 1.4rem', fontWeight: 800 }}>
+                <button
+                  type="submit"
+                  style={{
+                    backgroundColor: '#0F2A1D',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '0.65rem 1.5rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    boxShadow: '0 4px 12px rgba(15, 42, 29, 0.25)'
+                  }}
+                >
                   <Plus size={16} />
                   <span>{editingBlog ? 'SAVE CHANGES' : 'PUBLISH ARTICLE'}</span>
                 </button>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 import {
   Receipt,
   CheckCircle2,
@@ -32,6 +33,7 @@ import {
 import { api } from '../../services/api';
 
 export default function AdminPaymentsPage() {
+  const { brandName } = useRestaurantBranding();
   // Filter States
   const [timeRange, setTimeRange] = useState('This Month');
   const [branchFilter, setBranchFilter] = useState('All Branches');
@@ -199,7 +201,7 @@ export default function AdminPaymentsPage() {
         <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
         <head><meta charset="utf-8"/></head>
         <body>
-          <h2>Flavora Kitchen - Payments & Financial Settlement Statement</h2>
+          <h2>${brandName} - Payments & Financial Settlement Statement</h2>
           <p><strong>Filter Range:</strong> ${timeRange} | <strong>Branch:</strong> ${branchFilter} | <strong>Generated:</strong> ${new Date().toLocaleString()}</p>
           
           <h3>1. Executive Financial Summary</h3>

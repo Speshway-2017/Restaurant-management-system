@@ -6,13 +6,19 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import AnimatedInput from '../components/AnimatedInput';
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 
 export default function LoginPage({ setActivePage }) {
+  const { brandName, brandLogo, tagline } = useRestaurantBranding();
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const nameParts = brandName.trim().split(' ');
+  const firstNamePart = nameParts[0] || 'Flavora';
+  const restNamePart = nameParts.slice(1).join(' ');
 
   const handleLoginSubmit = (e) => {
     e.preventDefault();
@@ -107,18 +113,19 @@ export default function LoginPage({ setActivePage }) {
             <div className="ref-brand-lockup-integrated">
               <div className="ref-brand-logo-icon-wrap">
                 <img
-                  src="/logo.png"
-                  alt="Flavora Kitchen Logo"
+                  src={brandLogo}
+                  alt={`${brandName} Logo`}
+                  onError={(e) => { e.target.src = '/logo.png'; }}
                   className="ref-brand-logo-img"
                 />
               </div>
               <div className="ref-brand-text-block">
                 <div className="ref-brand-name">
-                  <span className="ref-brand-flavora">Flavora</span>
-                  <span className="ref-brand-kitchen">Kitchen</span>
+                  <span className="ref-brand-flavora">{firstNamePart}</span>
+                  {restNamePart && <span className="ref-brand-kitchen" style={{ marginLeft: '0.25rem' }}>{restNamePart}</span>}
                 </div>
                 <div className="ref-brand-tagline">
-                  Good Food. Great Moments.
+                  {tagline || 'Good Food. Great Moments.'}
                 </div>
               </div>
             </div>
@@ -165,7 +172,7 @@ export default function LoginPage({ setActivePage }) {
 
           {/* D. FOOTER SUBTEXT */}
           <div style={{ color: 'rgba(255, 255, 255, 0.75)', fontSize: '0.78rem', letterSpacing: '0.02em' }}>
-            © 2026 Flavora Kitchen. Powering Pan-India Restaurants.
+            © 2026 {brandName}. Powering Pan-India Restaurants.
           </div>
 
         </div>

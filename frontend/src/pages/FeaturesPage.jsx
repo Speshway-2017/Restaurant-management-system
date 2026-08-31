@@ -4,7 +4,10 @@ import {
   CheckCircle2, Sparkles, Search, ArrowRight, Zap, ShieldCheck, Receipt, Users
 } from 'lucide-react';
 
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
+
 export default function FeaturesPage({ setActivePage, onOpenDemoModal }) {
+  const { brandName } = useRestaurantBranding();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -146,7 +149,7 @@ export default function FeaturesPage({ setActivePage, onOpenDemoModal }) {
           </div>
 
           <h1 className="page-hero-title-unified">
-            Explore <span style={{ color: 'var(--color-secondary)' }}>Flavora Kitchen</span> Features
+            Explore <span style={{ color: 'var(--color-secondary)' }}>{brandName}</span> Features
           </h1>
 
           <p className="page-hero-subtitle-unified">

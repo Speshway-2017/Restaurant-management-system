@@ -1,58 +1,100 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, ShieldCheck, Building2, FileText, Save, CheckCircle2, Search, Bell, Utensils, QrCode, Lock, Clock, Camera } from 'lucide-react';
 import { api } from '../../services/api';
-import AdminBlogsPage from './AdminBlogsPage';
-import AdminGalleryPage from './AdminGalleryPage';
+
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 export default function AdminSettingsPage({ subTab = 'settings-profile', isManagerMode = false }) {
+  const { branding, updateBranding } = useRestaurantBranding();
   const [activeTab, setActiveTab] = useState('profile'); // 'profile', 'kds', 'tax', 'branches'
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+
+  const processLogoFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      if (reader.result) {
+        const base64 = reader.result;
+        setSettingsData(prev => ({ ...prev, logoUrl: base64, brandLogo: base64 }));
+        try {
+          const res = await api.uploadImage(base64, 'flavora_resto');
+          const uploadedUrl = (res && res.url) ? res.url : ((res && res.data && res.data.url) ? res.data.url : null);
+          if (uploadedUrl) {
+            setSettingsData(prev => ({ ...prev, logoUrl: uploadedUrl, brandLogo: uploadedUrl }));
+          }
+        } catch (e) {}
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const [settingsData, setSettingsData] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flavora_restaurant_settings');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
     return {
-      restaurantName: 'Flavora Kitchen',
-      branchName: 'Jubilee Hills (Main Branch)',
-      tagline: 'Good food. Great moments.',
-      contactEmail: isManagerMode ? 'manager@flavorakitchen.in' : 'admin@flavorakitchen.in',
-      contactPhone: '+91 98765 43210',
-      address: 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
-      weekdayHours: '11:00 AM – 10:00 PM',
-      weekendHours: '10:00 AM – 12:00 AM',
-      restaurantStatus: 'open', // 'open', 'closed', 'force_open'
-      closedMessage: 'We are currently closed for orders. Please visit during our operating hours!',
-      autoAcceptOrders: true,
-      audioAlerts: true,
-      prepTimeWarning: '20 mins',
-      qrOrderingEnabled: true,
-      gstin: '29AAAAA0000A1Z5',
-      fssai: '11223344556677',
-      gstRate: '5%',
-      invoiceFootnote: 'Thank you for dining with Flavora Kitchen! Visit again.'
+      restaurantName: branding.restaurantName || branding.brandName || 'Flavora Kitchen',
+      brandName: branding.brandName || branding.restaurantName || 'Flavora Kitchen',
+      logoUrl: branding.logoUrl || branding.brandLogo || '/logo.png',
+      branchName: branding.branchName || 'Jubilee Hills (Main Branch)',
+      tagline: branding.tagline || 'Good food. Great moments.',
+      contactEmail: branding.contactEmail || (isManagerMode ? 'manager@flavorakitchen.in' : 'admin@flavorakitchen.in'),
+      contactPhone: branding.contactPhone || '+91 98765 43210',
+      address: branding.address || 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
+      weekdayHours: branding.weekdayHours || '11:00 AM – 10:00 PM',
+      weekendHours: branding.weekendHours || '10:00 AM – 12:00 AM',
+      restaurantStatus: branding.restaurantStatus || 'open', // 'open', 'closed', 'force_open'
+      closedMessage: branding.closedMessage || 'We are currently closed for orders. Please visit during our operating hours!',
+      autoAcceptOrders: branding.autoAcceptOrders ?? true,
+      audioAlerts: branding.audioAlerts ?? true,
+      prepTimeWarning: branding.prepTimeWarning || '20 mins',
+      qrOrderingEnabled: branding.qrOrderingEnabled ?? true,
+      gstin: branding.gstin || '29AAAAA0000A1Z5',
+      fssai: branding.fssai || '11223344556677',
+      gstRate: branding.gstRate || '5%',
+      invoiceFootnote: branding.invoiceFootnote || 'Thank you for dining with us! Visit again.'
     };
   });
 
-  const handleSave = (e) => {
+  useEffect(() => {
+    if (branding && typeof branding === 'object') {
+      setSettingsData(prev => ({
+        ...prev,
+        ...branding,
+        restaurantName: branding.restaurantName || branding.brandName || prev.restaurantName,
+        logoUrl: branding.logoUrl || branding.brandLogo || prev.logoUrl
+      }));
+    }
+  }, [branding]);
+
+  const handleSave = async (e) => {
     e.preventDefault();
     try {
-      localStorage.setItem('flavora_restaurant_settings', JSON.stringify(settingsData));
-      window.dispatchEvent(new Event('flavora_settings_updated'));
-    } catch (e) {}
+      const payload = {
+        ...settingsData,
+        restaurantName: settingsData.restaurantName || settingsData.brandName,
+        brandName: settingsData.restaurantName || settingsData.brandName,
+        logoUrl: settingsData.logoUrl,
+        logo: settingsData.logoUrl,
+        brandLogo: settingsData.logoUrl
+      };
 
-    api.updateSettings(settingsData)
-      .catch(() => {})
-      .finally(() => {
-        setSaveSuccess(true);
-        setToastMessage('Settings updated & broadcasted successfully!');
-        setTimeout(() => {
-          setSaveSuccess(false);
-          setToastMessage(null);
-        }, 3000);
-      });
+      await updateBranding(payload);
+
+      setSaveSuccess(true);
+      setToastMessage('✓ Restaurant branding & settings updated across all portals!');
+      setTimeout(() => {
+        setSaveSuccess(false);
+        setToastMessage(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to update server settings:', err);
+      setSaveSuccess(true);
+      setToastMessage('Settings saved locally!');
+      setTimeout(() => {
+        setSaveSuccess(false);
+        setToastMessage(null);
+      }, 3000);
+    }
   };
 
   return (
@@ -116,16 +158,7 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
             <button className={`admin-pill-btn ${activeTab === 'kds' ? 'is-active' : ''}`} onClick={() => setActiveTab('kds')}>
               Kitchen & KDS Alerts
             </button>
-            {!isManagerMode && (
-              <>
-                <button className={`admin-pill-btn ${activeTab === 'blogs' ? 'is-active' : ''}`} onClick={() => setActiveTab('blogs')}>
-                  Blog Management
-                </button>
-                <button className={`admin-pill-btn ${activeTab === 'gallery' ? 'is-active' : ''}`} onClick={() => setActiveTab('gallery')}>
-                  Gallery Management
-                </button>
-              </>
-            )}
+            
           </div>
         </div>
       </div>
@@ -133,7 +166,7 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
       {saveSuccess && (
         <div className="admin-alert-banner is-success mb-4" style={{ backgroundColor: '#E2F1E8', border: '1px solid #3F8F5B', padding: '0.85rem 1.25rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <CheckCircle2 size={18} color="#3F8F5B" />
-          <span style={{ color: '#1E4636', fontWeight: 700 }}>Settings updated successfully! Changes applied to active POS & KDS terminals.</span>
+          <span style={{ color: '#1E4636', fontWeight: 700 }}>Settings updated successfully.</span>
         </div>
       )}
 
@@ -149,13 +182,24 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
 
           <div className="grid-2" style={{ gap: '1.1rem' }}>
             <div className="admin-form-group">
-              <label className="form-label">Restaurant Name *</label>
+              <label className="form-label">Restaurant Brand Name *</label>
               <input 
                 type="text" 
                 className="form-control" 
-                value={settingsData.restaurantName} 
+                value={settingsData.restaurantName || 'Flavora Kitchen'} 
                 onChange={(e) => setSettingsData({ ...settingsData, restaurantName: e.target.value })}
                 required 
+              />
+            </div>
+
+            <div className="admin-form-group">
+              <label className="form-label">Brand Tagline / Slogan</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                value={settingsData.tagline || 'Good food. Great moments.'} 
+                onChange={(e) => setSettingsData({ ...settingsData, tagline: e.target.value })}
+                placeholder="e.g. Good food. Great moments."
               />
             </div>
 

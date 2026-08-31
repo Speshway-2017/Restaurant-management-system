@@ -1,7 +1,10 @@
 import React from 'react';
 import { Zap, Cpu, Server, Activity, Database, ShieldCheck, Gauge, CheckCircle2 } from 'lucide-react';
 
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
+
 export default function PerformancePage({ setActivePage, onOpenDemoModal }) {
+  const { brandName } = useRestaurantBranding();
   const benchmarks = [
     { title: 'Socket.io Latency', value: '< 42 ms', desc: 'Average order update propagation time from Customer QR submit to Chef KDS screen' },
     { title: 'Redis Cache Hit Rate', value: '99.4%', desc: 'Frequently read digital menu items served directly from in-memory Redis cache' },
@@ -51,7 +54,7 @@ export default function PerformancePage({ setActivePage, onOpenDemoModal }) {
               MERN + Redis + Flutter Infrastructure
             </h2>
             <p className="text-body" style={{ color: 'var(--color-neutral-700)', marginBottom: '1.5rem' }}>
-              As documented in `docs/techstack.md`, Flavora Kitchen combines MongoDB Atlas flexible document schema with Redis caching and bi-directional Socket.io pub-sub channels.
+              As documented in `docs/techstack.md`, {brandName} combines MongoDB Atlas flexible document schema with Redis caching and bi-directional Socket.io pub-sub channels.
             </p>
 
             <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>

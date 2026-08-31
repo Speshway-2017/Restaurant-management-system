@@ -2,6 +2,11 @@ const mongoose = require('mongoose');
 
 const settingsSchema = new mongoose.Schema({
   restaurantName: { type: String, default: 'Flavora Kitchen' },
+  brandName: { type: String, default: 'Flavora Kitchen' },
+  name: { type: String, default: 'Flavora Kitchen' },
+  logoUrl: { type: String, default: '/logo.png' },
+  logo: { type: String, default: '/logo.png' },
+  brandLogo: { type: String, default: '/logo.png' },
   branchName: { type: String, default: 'Jubilee Hills (Main Branch)' },
   tagline: { type: String, default: 'Good food. Great moments.' },
   email: { type: String, default: 'admin@flavorakitchen.in' },

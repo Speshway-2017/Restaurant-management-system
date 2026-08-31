@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import DemoModal from './components/DemoModal';
+import { useRestaurantBranding } from './context/RestaurantBrandingContext';
 
 import HomePage from './pages/HomePage';
 import AboutUsPage from './pages/AboutUsPage';
@@ -148,7 +149,7 @@ export default function App() {
       case 'menu':
         return <MenuPage onOpenDemoModal={() => setDemoModalOpen(true)} />;
       case 'offer':
-        return <OffersPage onOpenDemoModal={() => setDemoModalOpen(true)} />;
+        return <OffersPage setActivePage={setActivePage} onOpenDemoModal={() => setDemoModalOpen(true)} />;
       case 'features':
         return <FeaturesPage setActivePage={setActivePage} onOpenDemoModal={() => setDemoModalOpen(true)} />;
       case 'performance':
@@ -174,6 +175,8 @@ export default function App() {
     }
   };
 
+  const { branding } = useRestaurantBranding();
+  const isBannerVisible = branding && branding.announcementEnabled !== false && Boolean(branding.announcementMessage || branding.announcementBadge);
   const isFullStandalonePage = activePage === 'login' || activePage === 'admin' || activePage === 'manager' || activePage === 'chef' || activePage === 'waiter';
 
   return (
@@ -186,7 +189,7 @@ export default function App() {
         />
       )}
 
-      <main className="main-content" style={isFullStandalonePage ? { minHeight: '100vh' } : { paddingTop: '50px' }}>
+      <main className="main-content" style={isFullStandalonePage ? { minHeight: '100vh' } : { paddingTop: isBannerVisible ? '86px' : '50px', transition: 'padding-top 0.3s ease' }}>
         {renderCurrentPage()}
       </main>
 

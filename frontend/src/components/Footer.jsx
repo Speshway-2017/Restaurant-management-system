@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Phone, Mail, MapPin, Clock, Facebook, Linkedin, Twitter, Youtube } from 'lucide-react';
+import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 import { api } from '../services/api';
 import { isRestaurantOpenNow } from '../utils/restaurantTimings';
 
 export default function Footer({ setActivePage }) {
+  const { branding, brandName, brandLogo } = useRestaurantBranding();
+
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('flavora_restaurant_settings');
@@ -19,9 +22,14 @@ export default function Footer({ setActivePage }) {
         if (data && typeof data === 'object') {
           setSettings(prev => {
             const updated = { ...prev, ...data };
+
             try {
-              localStorage.setItem('flavora_restaurant_settings', JSON.stringify(updated));
+              localStorage.setItem(
+                'flavora_restaurant_settings',
+                JSON.stringify(updated)
+              );
             } catch (e) {}
+
             return updated;
           });
         }
@@ -31,16 +39,43 @@ export default function Footer({ setActivePage }) {
     const handleSettingsSync = () => {
       try {
         const saved = localStorage.getItem('flavora_restaurant_settings');
-        if (saved) setSettings(JSON.parse(saved));
+
+        if (saved) {
+          setSettings(JSON.parse(saved));
+        }
       } catch (e) {}
     };
-    window.addEventListener('flavora_settings_updated', handleSettingsSync);
-    window.addEventListener('storage', handleSettingsSync);
+
+    window.addEventListener(
+      'flavora_settings_updated',
+      handleSettingsSync
+    );
+
+    window.addEventListener(
+      'storage',
+      handleSettingsSync
+    );
+
     return () => {
-      window.removeEventListener('flavora_settings_updated', handleSettingsSync);
-      window.removeEventListener('storage', handleSettingsSync);
+      window.removeEventListener(
+        'flavora_settings_updated',
+        handleSettingsSync
+      );
+
+      window.removeEventListener(
+        'storage',
+        handleSettingsSync
+      );
     };
   }, []);
+
+  const mergedSettings = {
+    ...(settings || {}),
+    ...(branding || {}),
+  };
+
+  // rest of your existing Footer JSX...
+}
 
   const handleNavClick = (pageId) => {
     if (setActivePage) setActivePage(pageId);
@@ -73,13 +108,21 @@ export default function Footer({ setActivePage }) {
           <div className="footer-col brand-col">
             <div className="footer-brand-header">
               <img 
-                src="/logo.png" 
-                alt="Flavora Kitchen Logo" 
+                src={brandLogo} 
+                alt={`${brandName} Logo`} 
+                onError={(e) => { e.target.src = '/logo.png'; }}
                 className="footer-logo-img"
               />
               <div className="footer-brand-title">
-                <span style={{ color: 'var(--color-secondary)' }}>Flavora </span>
-                <span style={{ color: '#FFFFFF' }}>Kitchen</span>
+                {(() => {
+                  const parts = brandName.trim().split(' ');
+                  return (
+                    <>
+                      <span style={{ color: 'var(--color-secondary)' }}>{parts[0]} </span>
+                      {parts.length > 1 && <span style={{ color: '#FFFFFF' }}>{parts.slice(1).join(' ')}</span>}
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -178,7 +221,7 @@ export default function Footer({ setActivePage }) {
         {/* Bottom Bar */}
         <div className="footer-bottom-bar">
           <div className="copyright-text">
-            © 2026 Flavora Kitchen. All rights reserved.
+            © 2026 {brandName}. All rights reserved.
           </div>
         </div>
       </div>
