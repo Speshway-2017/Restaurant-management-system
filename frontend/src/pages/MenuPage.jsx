@@ -9,13 +9,27 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  // Dynamic Table number initialized strictly from QR code parameter (?table=...) or stored scan (No default T-01)
+  // Locked Table session initialized strictly from original QR scan in sessionStorage to prevent manual URL tampering
   const [tableNum, setTableNum] = useState(() => {
     try {
+      const savedSessionTable = sessionStorage.getItem('flavora_scanned_table');
       const urlParams = new URLSearchParams(window.location.search);
-      const tableParam = urlParams.get('table');
-      if (tableParam) {
-        const upper = tableParam.toUpperCase();
+      const urlTableParam = urlParams.get('table');
+
+      // If session table is already locked in this tab session, maintain locked session!
+      if (savedSessionTable) {
+        const lockedUpper = savedSessionTable.toUpperCase();
+        // If someone manually edited the URL parameter in address bar, reset URL back to locked table!
+        if (urlTableParam && urlTableParam.toUpperCase() !== lockedUpper) {
+          window.history.replaceState(null, '', `${window.location.pathname}?table=${lockedUpper}`);
+        }
+        return lockedUpper;
+      }
+
+      // First time scanning table QR code
+      if (urlTableParam) {
+        const upper = urlTableParam.toUpperCase();
+        sessionStorage.setItem('flavora_scanned_table', upper);
         localStorage.setItem('flavora_scanned_table', upper);
         return upper;
       }
@@ -48,7 +62,16 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [isCustomerOrdersModalOpen, setIsCustomerOrdersModalOpen] = useState(false);
   const [isCategoryDrawerOpen, setIsCategoryDrawerOpen] = useState(false);
-  const [guestName, setGuestName] = useState('');
+  const [guestName, setGuestName] = useState(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tbl = urlParams.get('table') || sessionStorage.getItem('flavora_scanned_table') || 'GENERAL';
+      const cleanTbl = String(tbl).toUpperCase().replace(/[^A-Z0-9-]/g, '');
+      return sessionStorage.getItem(`flavora_guest_name_${cleanTbl}`) || '';
+    } catch (e) {
+      return '';
+    }
+  });
   const [chefNotes, setChefNotes] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderSuccessMsg, setOrderSuccessMsg] = useState(null);
@@ -62,6 +85,31 @@ export default function MenuPage({ onOpenDemoModal }) {
       return {};
     }
   });
+
+  const [outOfStockItems, setOutOfStockItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_out_of_stock_items');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const handleStockUpdate = () => {
+      try {
+        const saved = localStorage.getItem('flavora_out_of_stock_items');
+        if (saved) setOutOfStockItems(JSON.parse(saved));
+      } catch (e) { }
+    };
+    handleStockUpdate();
+    window.addEventListener('flavora_menu_updated', handleStockUpdate);
+    window.addEventListener('storage', handleStockUpdate);
+    return () => {
+      window.removeEventListener('flavora_menu_updated', handleStockUpdate);
+      window.removeEventListener('storage', handleStockUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     const handleSettingsSync = () => {
@@ -139,7 +187,8 @@ export default function MenuPage({ onOpenDemoModal }) {
           activeOrd = orders.find(ord => {
             const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
             const isMatch = ordTableDigits && cleanTableNum && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
-            const isActiveStatus = ord.status && !['Cancelled', 'Completed'].includes(ord.status);
+            const isClosedOrPaid = ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled' || ord.status === 'Served' || ord.payment === 'Paid' || ord.payment === 'Completed' || ord.paymentStatus === 'Paid';
+            const isActiveStatus = ord.status && !isClosedOrPaid;
             return isMatch && isActiveStatus;
           });
         }
@@ -233,10 +282,6 @@ export default function MenuPage({ onOpenDemoModal }) {
   const handleAddToCart = (id) => {
     if (!tableNum) {
       alert(`Ordering is available exclusively for Dine-In guests via Table QR Code. Please scan your dining table's QR code to unlock dish ordering.`);
-      return;
-    }
-    if (tableOccupiedInfo && tableOccupiedInfo.isOccupied) {
-      alert(`Table ${tableNum} is currently occupied by another dining session. Adding items is locked until the session is completed.`);
       return;
     }
     const updated = { ...cart, [id]: (cart[id] || 0) + 1 };
@@ -511,7 +556,13 @@ export default function MenuPage({ onOpenDemoModal }) {
       } catch (e) { }
       setCart({});
       window.dispatchEvent(new Event('flavora_cart_updated'));
-      setGuestName('');
+      if (guestName.trim()) {
+        try {
+          const cleanTbl = String(activeTable || tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}`, guestName.trim());
+          sessionStorage.setItem(`flavora_order_submitted_${cleanTbl}`, 'true');
+        } catch (e) { }
+      }
       setChefNotes('');
 
       const backendOrderId = persistedOrder?.orderId || persistedOrder?._id || 'ORD-SUCCESS';
@@ -526,8 +577,27 @@ export default function MenuPage({ onOpenDemoModal }) {
       // 4. Update local storage & table states
       try {
         const cleanT = activeTable.toUpperCase().replace('TABLE', '').replace('T-', '').trim();
-        const savedOrders = placedTableOrders;
-        const newPlacedOrders = [...savedOrders, { ...orderPayload, orderId: backendOrderId }];
+        const savedOrders = Array.isArray(placedTableOrders) ? [...placedTableOrders] : [];
+        
+        const formattedOrderObj = {
+          orderId: backendOrderId,
+          table: persistedOrder?.table || activeTable,
+          customer: persistedOrder?.customer || (guestName.trim() || 'Guest Diner'),
+          status: persistedOrder?.status || 'Placed',
+          items: persistedOrder?.items || orderItems,
+          totalAmount: persistedOrder?.total || persistedOrder?.totalAmount || totalCartPrice,
+          chefNotes: persistedOrder?.notes || persistedOrder?.chefNotes || chefNotes
+        };
+
+        const existingIdx = savedOrders.findIndex(o => (o.orderId || o.id) === backendOrderId);
+        let newPlacedOrders = [];
+        if (existingIdx >= 0) {
+          newPlacedOrders = savedOrders;
+          newPlacedOrders[existingIdx] = formattedOrderObj;
+        } else {
+          newPlacedOrders = [formattedOrderObj];
+        }
+
         setPlacedTableOrders(newPlacedOrders);
 
         localStorage.setItem(`flavora_table_orders_${activeTable}`, JSON.stringify(newPlacedOrders));
@@ -744,13 +814,13 @@ export default function MenuPage({ onOpenDemoModal }) {
         </div>
       )}
 
-      {/* Occupied Table Alert Banner (Shown when scanning an already-occupied table) */}
+      {/* Active Table Order Info Banner */}
       {tableNum && tableOccupiedInfo && tableOccupiedInfo.isOccupied && (
         <div style={{
-          backgroundColor: '#FEF2F2',
-          border: '1.5px solid #FCA5A5',
+          backgroundColor: '#F0FDF4',
+          border: '1.5px solid #86EFAC',
           borderRadius: '14px',
-          padding: '1rem 1.25rem',
+          padding: '0.85rem 1.25rem',
           margin: '1rem auto 0.5rem auto',
           maxWidth: '1200px',
           display: 'flex',
@@ -758,21 +828,21 @@ export default function MenuPage({ onOpenDemoModal }) {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '0.85rem',
-          boxShadow: '0 4px 16px rgba(220, 38, 38, 0.08)'
+          boxShadow: '0 4px 16px rgba(22, 101, 52, 0.06)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '0.55rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ backgroundColor: '#166534', color: '#FFFFFF', padding: '0.55rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <QrCode size={22} />
             </div>
             <div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#991B1B', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                <span>🔒 Table {tableNum} is Currently Occupied</span>
-                <span style={{ backgroundColor: '#EF4444', color: '#FFFFFF', fontSize: '0.7rem', padding: '0.15rem 0.55rem', borderRadius: '9999px', fontWeight: 800 }}>
-                  ● Ordering Locked
+              <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                <span>📍 Seated at Table {tableNum}</span>
+                <span style={{ backgroundColor: '#DCFCE7', color: '#166534', fontSize: '0.72rem', padding: '0.15rem 0.55rem', borderRadius: '9999px', fontWeight: 800, border: '1px solid #86EFAC' }}>
+                  🟢 Active Session
                 </span>
               </div>
-              <p style={{ fontSize: '0.82rem', color: '#7F1D1D', margin: '0.25rem 0 0 0', fontWeight: 600 }}>
-                This table is currently occupied by another dining session. Adding dishes and placing orders is blocked until the order is completed.
+              <p style={{ fontSize: '0.82rem', color: '#15803D', margin: '0.2rem 0 0 0', fontWeight: 600 }}>
+                You are currently ordering for Table {tableNum}. Feel free to browse the menu and add dishes to your order anytime!
               </p>
             </div>
           </div>
@@ -942,7 +1012,9 @@ export default function MenuPage({ onOpenDemoModal }) {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '1.25rem 2rem' }}>
                     {group.items.map(item => {
                       const qty = cart[item.id] || 0;
-                      const isAvailable = item.available !== false;
+                      const itemId = item._id || item.id;
+                      const isOutInStore = outOfStockItems.includes(itemId) || outOfStockItems.includes(item.name);
+                      const isAvailable = item.available !== false && item.isAvailable !== false && !isOutInStore;
 
                       return (
                         <div
@@ -1031,28 +1103,6 @@ export default function MenuPage({ onOpenDemoModal }) {
                               <span style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 700, fontStyle: 'italic', backgroundColor: '#F1F5F9', padding: '0.3rem 0.75rem', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
                                 Scan QR to Order
                               </span>
-                            ) : (tableOccupiedInfo && tableOccupiedInfo.isOccupied) ? (
-                              <button
-                                type="button"
-                                disabled
-                                title="Table is currently occupied by another session. Ordering is blocked until the session is completed."
-                                style={{
-                                  backgroundColor: '#E2E8F0',
-                                  color: '#64748B',
-                                  border: '1px solid #CBD5E1',
-                                  padding: '0.45rem 1rem',
-                                  borderRadius: '8px',
-                                  fontSize: '0.8rem',
-                                  fontWeight: 800,
-                                  cursor: 'not-allowed',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '0.25rem',
-                                  opacity: 0.85
-                                }}
-                              >
-                                🔒 Locked
-                              </button>
                             ) : qty > 0 ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.2rem 0.5rem', borderRadius: '8px' }}>
                                 <button
@@ -1336,17 +1386,59 @@ export default function MenuPage({ onOpenDemoModal }) {
                 />
               </div>
 
-              {/* Guest Name Input */}
-              <div className="admin-form-group mb-3">
-                <label className="form-label" style={{ fontWeight: 700 }}>Your Name (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Deepak J."
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  className="form-control"
-                />
-              </div>
+              {/* Guest Name Input / Established Diner Badge */}
+              {(() => {
+                const cleanTblKey = String(tableNum || activeTable || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                const isEstablishedSession = Boolean(
+                  (Array.isArray(placedTableOrders) && placedTableOrders.length > 0) ||
+                  sessionStorage.setItem && sessionStorage.getItem(`flavora_order_submitted_${cleanTblKey}`) === 'true'
+                );
+
+                if (isEstablishedSession && guestName.trim()) {
+                  return (
+                    <div className="admin-form-group mb-3">
+                      <label className="form-label" style={{ fontWeight: 700, fontSize: '0.84rem', color: '#64748B' }}>Diner Name</label>
+                      <div style={{
+                        backgroundColor: '#F0FDF4',
+                        border: '1.5px solid #86EFAC',
+                        borderRadius: '10px',
+                        padding: '0.55rem 0.85rem',
+                        color: '#166534',
+                        fontWeight: 800,
+                        fontSize: '0.9rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}>
+                        <span>👤 {guestName}</span>
+                        <span style={{ fontSize: '0.72rem', backgroundColor: '#DCFCE7', padding: '0.15rem 0.45rem', borderRadius: '4px', color: '#15803D', fontWeight: 800 }}>
+                          Table {tableNum} Guest
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="admin-form-group mb-3">
+                    <label className="form-label" style={{ fontWeight: 700 }}>Your Name (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Deepak J."
+                      value={guestName}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setGuestName(val);
+                        try {
+                          const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}`, val.trim());
+                        } catch (err) { }
+                      }}
+                      className="form-control"
+                    />
+                  </div>
+                );
+              })()}
 
               {/* Instructions for Chef */}
               <div className="admin-form-group mb-4">
@@ -1433,40 +1525,60 @@ export default function MenuPage({ onOpenDemoModal }) {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  {placedTableOrders.map((ord, idx) => (
-                    <div key={ord.orderId || idx} style={{ backgroundColor: '#FAF6EE', border: '1.5px solid #EAE3D2', borderRadius: '14px', padding: '1rem 1.1rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', borderBottom: '1px solid #EAE3D2', paddingBottom: '0.45rem' }}>
-                        <div>
-                          <span style={{ fontWeight: 800, color: '#1E4636', fontSize: '0.92rem' }}>#{ord.orderId}</span>
-                          <span style={{ fontSize: '0.76rem', color: '#64748B', marginLeft: '0.5rem' }}>Dine-In • Table {tableNum}</span>
-                        </div>
-                        <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.55rem', borderRadius: '9999px' }}>
-                          ● {ord.status || 'Preparing in Kitchen'}
-                        </span>
-                      </div>
+                  {placedTableOrders.map((ord, idx) => {
+                    const itemsList = Array.isArray(ord.items) ? ord.items : [];
+                    const calculatedSum = itemsList.reduce((acc, it) => {
+                      const q = Number(it.quantity || it.qty || it.count || 1);
+                      const rawP = Number(it.price || it.unitPrice || 0);
+                      const catalogMatch = (menuItems || []).find(m => (m.name || '').toLowerCase() === (it.name || '').toLowerCase());
+                      const fp = rawP > 0 ? rawP : (catalogMatch ? Number(catalogMatch.price || 0) : 0);
+                      return acc + (fp * q);
+                    }, 0);
+                    const displayTotal = Number(ord.totalAmount || ord.total || calculatedSum);
 
-                      {/* Items List */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.65rem' }}>
-                        {ord.items.map((it, i) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', color: '#334155' }}>
-                            <span><strong>{it.qty}x</strong> {it.name}</span>
-                            <span style={{ fontWeight: 700, color: '#1E4636' }}>₹{it.price * it.qty}</span>
+                    return (
+                      <div key={ord.orderId || idx} style={{ backgroundColor: '#FAF6EE', border: '1.5px solid #EAE3D2', borderRadius: '14px', padding: '1rem 1.1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', borderBottom: '1px solid #EAE3D2', paddingBottom: '0.45rem' }}>
+                          <div>
+                            <span style={{ fontWeight: 800, color: '#1E4636', fontSize: '0.92rem' }}>#{ord.orderId || `ORD-${idx + 1}`}</span>
+                            <span style={{ fontSize: '0.76rem', color: '#64748B', marginLeft: '0.5rem' }}>Dine-In • Table {tableNum}</span>
                           </div>
-                        ))}
-                      </div>
-
-                      {ord.chefNotes && (
-                        <div style={{ fontSize: '0.78rem', color: '#9A3412', backgroundColor: '#FFF7ED', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.65rem' }}>
-                          📝 Note: {ord.chefNotes}
+                          <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.55rem', borderRadius: '9999px' }}>
+                            ● {ord.status || 'Preparing in Kitchen'}
+                          </span>
                         </div>
-                      )}
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.4rem', borderTop: '1px dashed #D5C9B5', fontWeight: 900, color: '#0F2A1D', fontSize: '0.95rem' }}>
-                        <span>Order Total</span>
-                        <span style={{ color: '#E07A3C' }}>₹{ord.totalAmount}</span>
+                        {/* Items List */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.65rem' }}>
+                          {itemsList.map((it, i) => {
+                            const qty = Number(it.quantity || it.qty || it.count || 1);
+                            const rawP = Number(it.price || it.unitPrice || 0);
+                            const catalogMatch = (menuItems || []).find(m => (m.name || '').toLowerCase() === (it.name || '').toLowerCase());
+                            const price = rawP > 0 ? rawP : (catalogMatch ? Number(catalogMatch.price || 0) : 0);
+                            const itemTotal = price * qty;
+
+                            return (
+                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', color: '#334155' }}>
+                                <span><strong style={{ color: '#E07A3C', marginRight: '0.35rem' }}>{qty}x</strong> {it.name}</span>
+                                <span style={{ fontWeight: 700, color: '#1E4636' }}>₹{itemTotal}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {ord.chefNotes && (
+                          <div style={{ fontSize: '0.78rem', color: '#9A3412', backgroundColor: '#FFF7ED', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.65rem' }}>
+                            📝 Note: {ord.chefNotes}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.4rem', borderTop: '1px dashed #D5C9B5', fontWeight: 900, color: '#0F2A1D', fontSize: '0.95rem' }}>
+                          <span>Order Total</span>
+                          <span style={{ color: '#E07A3C' }}>₹{displayTotal}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1475,9 +1587,24 @@ export default function MenuPage({ onOpenDemoModal }) {
               <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 600 }}>
                 📍 Table {tableNum} Dine-In Session
               </div>
-              <button className="btn btn-primary" onClick={() => setIsCustomerOrdersModalOpen(false)} style={{ backgroundColor: '#1E4636', color: '#FFFFFF' }}>
-                Close
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setIsCustomerOrdersModalOpen(false)}
+                  style={{ backgroundColor: '#FF8A00', color: '#FFFFFF', border: 'none', fontWeight: 800, fontSize: '0.82rem', padding: '0.45rem 0.9rem', borderRadius: '8px', cursor: 'pointer' }}
+                >
+                  + Add More Dishes
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setIsCustomerOrdersModalOpen(false)}
+                  style={{ backgroundColor: '#1E4636', color: '#FFFFFF', border: 'none', fontWeight: 800, fontSize: '0.82rem', padding: '0.45rem 0.9rem', borderRadius: '8px', cursor: 'pointer' }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
           </div>

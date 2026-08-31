@@ -85,16 +85,18 @@ export default function WaiterOrdersPage() {
         const dbMatch = dbList.find((d, dIdx) => d && getCleanOrderId(d, dIdx) === cleanId);
         const localMatch = localList.find((l, lIdx) => l && getCleanOrderId(l, lIdx) === cleanId);
 
+        const dbStatus = dbMatch?.status;
+        const localStatus = localMatch?.status;
+        const isOrderReady = dbStatus === 'Ready' || localStatus === 'Ready' || ordDoc.status === 'Ready';
+
         const dbItems = Array.isArray(dbMatch?.items) ? dbMatch.items : (Array.isArray(ordDoc.items) ? ordDoc.items : []);
         const localItems = Array.isArray(localMatch?.items) ? localMatch.items : [];
-
-        const isOrderReady = (dbMatch && dbMatch.status === 'Ready') || (localMatch && localMatch.status === 'Ready') || ordDoc.status === 'Ready';
 
         const mergedItems = mergeOrderItems(dbItems, localItems);
 
         const finalItems = mergedItems.map(it => {
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
-          const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || isOrderReady));
+          const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY'));
           const status = isDelivered ? 'SERVED' : (isReady ? 'READY' : 'PREPARING');
 
           return {
@@ -109,13 +111,24 @@ export default function WaiterOrdersPage() {
         const readyCount = finalItems.filter(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'SERVED' && i.status !== 'DELIVERED').length;
         const deliveredCount = finalItems.filter(i => i.status === 'SERVED' || i.status === 'DELIVERED' || i.isDelivered).length;
 
-        let derivedStatus = ordDoc.status || 'Placed';
-        if (totalCount > 0 && deliveredCount === totalCount) {
-          derivedStatus = 'Served';
-        } else if (deliveredCount > 0) {
-          derivedStatus = 'PARTIALLY DELIVERED';
-        } else if (readyCount > 0 || isOrderReady) {
-          derivedStatus = 'Ready';
+        const isAlreadyPaid = Boolean(
+          dbStatus === 'Completed' || dbStatus === 'Paid' || 
+          localStatus === 'Completed' || localStatus === 'Paid' || 
+          ordDoc.status === 'Completed' || ordDoc.status === 'Paid' || 
+          ordDoc.payment === 'Paid' || ordDoc.payment === 'Completed'
+        );
+
+        let derivedStatus = isAlreadyPaid ? 'Completed' : (dbStatus || localStatus || ordDoc.status || 'Placed');
+        if (!isAlreadyPaid) {
+          if (totalCount > 0 && deliveredCount === totalCount) {
+            derivedStatus = 'Served';
+          } else if (deliveredCount > 0) {
+            derivedStatus = 'PARTIALLY DELIVERED';
+          } else if (readyCount === totalCount || (readyCount > 0 && readyCount + deliveredCount === totalCount)) {
+            derivedStatus = 'Ready';
+          } else if (readyCount > 0) {
+            derivedStatus = 'Preparing';
+          }
         }
 
         return {
@@ -253,16 +266,31 @@ export default function WaiterOrdersPage() {
     setBillingOrder(null);
   };
 
+  const getIsPaid = (o) => Boolean(
+    o.status === 'Completed' || o.status === 'Paid' || 
+    o.payment === 'Paid' || o.payment === 'Completed'
+  );
+
   const filteredOrders = orders.filter(o => {
+    const isPaid = getIsPaid(o);
     if (filter === 'ALL') return showPreparedOnly ? (Array.isArray(o.items) && o.items.some(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'DELIVERED')) : true;
     if (filter === 'READY') {
+      if (isPaid) return false;
       const itemsList = Array.isArray(o.items) ? o.items : [];
       const readyCount = itemsList.filter(i => (i.status === 'READY' || i.isReady) && i.status !== 'DELIVERED' && !i.isDelivered).length;
       return o.status === 'Ready' || readyCount > 0;
     }
-    if (filter === 'ACTIVE') return o.status === 'Placed' || o.status === 'Preparing' || o.status === 'Ready' || o.status === 'PARTIALLY DELIVERED';
-    if (filter === 'SERVED') return o.status === 'Served' || o.status === 'PARTIALLY DELIVERED' || o.status === 'Bill Generated';
-    if (filter === 'PAID') return o.status === 'Completed' || o.status === 'Paid' || o.payment === 'Completed';
+    if (filter === 'ACTIVE') {
+      if (isPaid) return false;
+      return o.status === 'Placed' || o.status === 'Preparing' || o.status === 'Ready' || o.status === 'PARTIALLY DELIVERED';
+    }
+    if (filter === 'SERVED') {
+      if (isPaid) return false;
+      return o.status === 'Served' || o.status === 'PARTIALLY DELIVERED' || o.status === 'Bill Generated';
+    }
+    if (filter === 'PAID') {
+      return isPaid;
+    }
     return true;
   });
 
@@ -313,10 +341,10 @@ export default function WaiterOrdersPage() {
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
               {[
                 { id: 'ALL', label: `All Orders (${orders.length})` },
-                { id: 'READY', label: `Ready for Pickup (${orders.filter(o => o.status === 'Ready' || (Array.isArray(o.items) && o.items.some(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'DELIVERED'))).length})` },
-                { id: 'ACTIVE', label: `Preparing (${orders.filter(o => o.status === 'Placed' || o.status === 'Preparing').length})` },
-                { id: 'SERVED', label: `Served / Billing (${orders.filter(o => o.status === 'Served' || o.status === 'Bill Generated').length})` },
-                { id: 'PAID', label: `Paid (${orders.filter(o => o.status === 'Completed' || o.status === 'Paid' || o.payment === 'Completed').length})` }
+                { id: 'READY', label: `Ready for Pickup (${orders.filter(o => !getIsPaid(o) && (o.status === 'Ready' || (Array.isArray(o.items) && o.items.some(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'DELIVERED')))).length})` },
+                { id: 'ACTIVE', label: `Preparing (${orders.filter(o => !getIsPaid(o) && (o.status === 'Placed' || o.status === 'Preparing')).length})` },
+                { id: 'SERVED', label: `Served / Billing (${orders.filter(o => !getIsPaid(o) && (o.status === 'Served' || o.status === 'Bill Generated' || o.status === 'PARTIALLY DELIVERED')).length})` },
+                { id: 'PAID', label: `Paid (${orders.filter(o => getIsPaid(o)).length})` }
               ].map(f => (
                 <button
                   key={f.id}

@@ -3,55 +3,135 @@ const Table = require('../models/Table');
 
 class OrderService {
   async getOrders() {
-    const orders = await orderRepository.findAll();
-    if (!orders || orders.length === 0) {
-      try {
-        await Table.updateMany({}, { status: 'Available', currentOrder: '', cleaningUntil: null });
-      } catch (e) {}
-      return [];
-    }
-    return orders;
+    return await orderRepository.findAll() || [];
   }
 
   async createOrder(data) {
-    // Generate orderId if missing
-    const orderId = data.orderId || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
-
     // Format table number cleanly
     const rawTable = data.table || data.tableNumber || data.tableId || 'T-10';
     const rawDigits = String(rawTable).replace(/[^0-9]/g, '');
     const cleanNum = rawDigits ? String(parseInt(rawDigits, 10)) : '10';
     const formattedTable = `T-${cleanNum.padStart(2, '0')}`;
 
-    // Normalize payload to match Mongoose Order Schema strictly
+    // Normalize incoming new items
+    const newIncomingItems = Array.isArray(data.items) ? data.items.map((item, idx) => ({
+      id: item.id || item._id || `item-${Date.now()}-${idx}`,
+      name: item.name || item.dishId || 'Delicious Item',
+      price: Number(item.price) || 0,
+      quantity: Number(item.quantity || item.qty || 1),
+      status: item.status || (item.isDelivered ? 'DELIVERED' : (item.isReady ? 'READY' : 'PREPARING')),
+      isReady: Boolean(item.isReady || item.status === 'READY' || item.status === 'DELIVERED'),
+      isDelivered: Boolean(item.isDelivered || item.status === 'DELIVERED')
+    })) : [];
+
+    const OrderModel = require('../models/Order');
+    const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i');
+
+    // 1. Check if an ACTIVE (open/unpaid) order already exists for this table
+    let existingActiveOrder = await OrderModel.findOne({
+      $or: [
+        { table: formattedTable },
+        { table: `Table ${cleanNum}` },
+        { table: cleanNum },
+        { table: exactRegex }
+      ],
+      status: { $nin: ['Completed', 'Paid', 'Cancelled'] },
+      payment: { $ne: 'Paid' }
+    });
+
+    if (existingActiveOrder) {
+      // Preserve original customer details established in first order
+      const originalCustomer = (existingActiveOrder.customer && existingActiveOrder.customer !== 'Guest Diner' && existingActiveOrder.customer !== 'Guest')
+        ? existingActiveOrder.customer
+        : (data.customer || data.guestName || existingActiveOrder.customer || 'Guest Diner');
+
+      existingActiveOrder.customer = String(originalCustomer).trim();
+
+      // Append new chef notes if provided
+      const newNotes = (data.notes || data.chefNotes || data.instructions || '').trim();
+      if (newNotes && !existingActiveOrder.notes?.includes(newNotes)) {
+        existingActiveOrder.notes = existingActiveOrder.notes ? `${existingActiveOrder.notes} | ${newNotes}` : newNotes;
+      }
+
+      // MERGE NEW ITEMS INTO EXISTING ACTIVE ORDER (SAME ORDER ID)
+      const existingItems = Array.isArray(existingActiveOrder.items) ? [...existingActiveOrder.items] : [];
+
+      // Append new items while preserving existing item statuses completely
+      newIncomingItems.forEach((newItem, idx) => {
+        existingItems.push({
+          id: newItem.id || `item-${Date.now()}-${idx}`,
+          name: newItem.name,
+          price: Number(newItem.price) || 0,
+          quantity: Number(newItem.quantity || newItem.qty || 1),
+          status: 'PREPARING',
+          isReady: false,
+          isDelivered: false
+        });
+      });
+
+      existingActiveOrder.items = existingItems;
+
+      // Recalculate total amount for the combined order
+      const newCalculatedTotal = existingItems.reduce((sum, it) => {
+        const q = Number(it.quantity || it.qty || 1);
+        const p = Number(it.price) || 0;
+        return sum + (p * q);
+      }, 0);
+
+      existingActiveOrder.total = newCalculatedTotal;
+
+      // Reopen/continue order status if new unserved items are added
+      const servedCount = existingItems.filter(i => i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED').length;
+      if (servedCount > 0 && servedCount < existingItems.length) {
+        existingActiveOrder.status = 'PARTIALLY DELIVERED';
+      } else {
+        existingActiveOrder.status = 'Placed';
+      }
+
+      await existingActiveOrder.save();
+
+      // Ensure table remains occupied with this currentOrder
+      try {
+        await Table.findOneAndUpdate(
+          {
+            $or: [
+              { number: formattedTable },
+              { number: cleanNum },
+              { number: `T-${cleanNum}` },
+              { name: exactRegex },
+              { number: exactRegex }
+            ]
+          },
+          { status: 'Occupied', currentOrder: existingActiveOrder.orderId || existingActiveOrder._id },
+          { new: true }
+        );
+      } catch (e) { }
+
+      return existingActiveOrder;
+    }
+
+    // 2. If NO active order exists, generate a new orderId and create a brand new order document
+    const orderId = data.orderId || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+
     const orderData = {
       orderId: orderId,
       table: formattedTable,
       type: (data.type === 'Takeaway' || data.type === 'Delivery') ? data.type : 'Dine-In',
       customer: data.customer || data.guestName || 'Guest Diner',
       phone: data.phone || '+91 Direct QR',
-      items: Array.isArray(data.items) ? data.items.map((item, idx) => ({
-        id: item.id || item._id || `item-${Date.now()}-${idx}`,
-        name: item.name || item.dishId || 'Delicious Item',
-        price: Number(item.price) || 0,
-        quantity: Number(item.quantity || item.qty || 1),
-        status: item.status || (item.isDelivered ? 'DELIVERED' : (item.isReady ? 'READY' : 'PREPARING')),
-        isReady: Boolean(item.isReady || item.status === 'READY' || item.status === 'DELIVERED'),
-        isDelivered: Boolean(item.isDelivered || item.status === 'DELIVERED')
-      })) : [],
+      items: newIncomingItems,
       total: Number(data.total || data.totalAmount || 0),
       status: (data.status && ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Cancelled'].includes(data.status)) ? data.status : 'Placed',
       payment: data.payment || 'Pending',
       time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // 1. Create and persist order in MongoDB database
+    // Create and persist new order in MongoDB database
     const newOrder = await orderRepository.create(orderData);
 
-    // 2. Only after successful order persistence, update table status to Occupied
+    // Only after successful order persistence, update table status to Occupied
     if (formattedTable) {
       try {
-        const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i');
         let updatedTable = await Table.findOneAndUpdate(
           {
             $or: [
@@ -98,9 +178,10 @@ class OrderService {
       const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i');
 
       if (forceStatus === 'Cleaning') {
+        const cleaningTime = new Date(Date.now() + 10 * 60 * 1000);
         await Table.findOneAndUpdate(
           { $or: [{ number: exactRegex }, { name: exactRegex }] },
-          { status: 'Cleaning', currentOrder: '' }
+          { status: 'Cleaning', currentOrder: '', cleaningUntil: cleaningTime }
         );
         return;
       }
@@ -243,13 +324,15 @@ class OrderService {
       derivedOrderStatus = 'Served'; // Fully Delivered
     } else if (deliveredCount > 0) {
       derivedOrderStatus = 'PARTIALLY DELIVERED';
-    } else if (readyCount > 0) {
+    } else if (readyCount === totalCount || (readyCount > 0 && readyCount + deliveredCount === totalCount)) {
       derivedOrderStatus = 'Ready';
+    } else if (readyCount > 0) {
+      derivedOrderStatus = 'Preparing';
     } else {
       derivedOrderStatus = 'Preparing';
     }
 
-    const updatedOrder = await orderRepository.updateStatus(id, derivedOrderStatus, {
+    const updatedOrder = await orderRepository.updateStatus(order.orderId || order._id || id, derivedOrderStatus, {
       items: updatedItems,
       status: derivedOrderStatus
     });

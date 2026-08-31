@@ -72,6 +72,7 @@ export default function ChefLayout({ setActivePage }) {
   const profileMenuRef = useRef(null);
   const contentViewportRef = useRef(null);
   const previousOrderCountRef = useRef(0);
+  const optimisticStatusesRef = useRef({});
 
   const [chefProfile, setChefProfile] = useState(() => {
     try {
@@ -176,20 +177,84 @@ export default function ChefLayout({ setActivePage }) {
         backendData = await api.getOrders();
       } catch (e) { }
 
-      let combined = Array.isArray(backendData) ? [...backendData] : [];
+      let localOrders = [];
+      try {
+        const saved = localStorage.getItem('flavora_manager_orders');
+        if (saved) localOrders = JSON.parse(saved);
+      } catch (e) { }
+
+      const getCleanId = (o, fallbackIdx = 0) => {
+        if (!o) return `KDS-${6000 + fallbackIdx}`;
+        const raw = o.orderId || (typeof o.id === 'string' && o.id.startsWith('ORD-') ? o.id : null) || o.id || o._id || `KDS-${6000 + fallbackIdx}`;
+        return String(raw).replace(/^#/i, '').trim();
+      };
+
+      // Merge backend and local orders using Map keyed by clean ID
+      const orderMap = new Map();
+
+      if (Array.isArray(localOrders)) {
+        localOrders.forEach((lo, idx) => {
+          if (!lo) return;
+          const cleanId = getCleanId(lo, idx);
+          orderMap.set(cleanId, lo);
+        });
+      }
+
+      if (Array.isArray(backendData)) {
+        backendData.forEach((bo, idx) => {
+          if (!bo) return;
+          const cleanId = getCleanId(bo, idx);
+          const existingLocal = orderMap.get(cleanId);
+          if (existingLocal) {
+            const isReadyInAny = bo.status === 'Ready' || existingLocal.status === 'Ready';
+            const finalStatus = isReadyInAny ? 'Ready' : (bo.status || existingLocal.status || 'Placed');
+
+            const mergedItems = (bo.items && bo.items.length > 0) ? bo.items : existingLocal.items;
+            const finalItems = (Array.isArray(mergedItems) ? mergedItems : []).map(it => {
+              if (isReadyInAny && !it.isDelivered && it.status !== 'SERVED') {
+                return { ...it, status: 'READY', isReady: true };
+              }
+              return it;
+            });
+
+            orderMap.set(cleanId, {
+              ...existingLocal,
+              ...bo,
+              status: finalStatus,
+              items: finalItems
+            });
+          } else {
+            orderMap.set(cleanId, bo);
+          }
+        });
+      }
+
+      const combined = Array.from(orderMap.values());
 
       const mappedOrders = combined.map((o, idx) => {
-        const idStr = o.orderId || o.id || o._id || `KDS-${6000 + idx}`;
+        const cleanId = getCleanId(o, idx);
+        const idStr = o.orderId || (typeof o.id === 'string' && o.id.startsWith('ORD-') ? o.id : null) || o.id || o._id || cleanId;
         const createdDate = o.createdAt ? new Date(o.createdAt) : new Date();
         const items = Array.isArray(o.items) ? o.items : [];
+        const overrideStatus = optimisticStatusesRef.current[cleanId] || optimisticStatusesRef.current[idStr];
+        const rawStatus = overrideStatus || o.status || 'Placed';
+
+        const finalItems = items.map(it => {
+          if (rawStatus === 'Ready' && !it.isDelivered && it.status !== 'SERVED') {
+            return { ...it, status: 'READY', isReady: true };
+          }
+          return it;
+        });
 
         return {
           id: idStr,
+          _id: o._id,
+          orderId: o.orderId || idStr,
           table: o.table || (o.tableNum ? `Table ${o.tableNum}` : 'Takeaway'),
           type: o.type || 'Dine-In',
           customer: o.customer || o.customerName || 'Guest',
-          status: o.status || 'Placed',
-          items: items,
+          status: rawStatus,
+          items: finalItems,
           notes: o.notes || o.chefNotes || o.instructions || '',
           time: createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           createdAt: createdDate,
@@ -206,19 +271,22 @@ export default function ChefLayout({ setActivePage }) {
 
       setOrdersList(mappedOrders);
 
-      // Sync checkedDishItems state map with actual item status (READY or DELIVERED)
+      // Sync checkedDishItems state map with authoritative DB item status (READY or DELIVERED)
       const syncedCheckedMap = {};
       mappedOrders.forEach(ord => {
         const itemMap = {};
+        const cleanId = getCleanId(ord);
         (ord.items || []).forEach((it, idx) => {
           const isChecked = Boolean(it.isReady || it.status === 'READY' || it.status === 'DELIVERED' || it.status === 'SERVED' || it.isDelivered);
           itemMap[idx] = isChecked;
         });
         syncedCheckedMap[ord.id] = itemMap;
+        syncedCheckedMap[cleanId] = itemMap;
+        syncedCheckedMap[`#${cleanId}`] = itemMap;
       });
       setCheckedDishItems(prev => ({
-        ...syncedCheckedMap,
-        ...prev
+        ...prev,
+        ...syncedCheckedMap
       }));
 
       try {
@@ -250,6 +318,9 @@ export default function ChefLayout({ setActivePage }) {
 
   const handleUpdateStatus = async (orderId, newStatus) => {
     const cleanOrderId = String(orderId).replace(/^#/i, '');
+    optimisticStatusesRef.current[cleanOrderId] = newStatus;
+    optimisticStatusesRef.current[orderId] = newStatus;
+
     const targetOrder = ordersList.find(o => 
       o.id === orderId || o.orderId === orderId || o._id === orderId ||
       o.id === cleanOrderId || o.orderId === cleanOrderId || o.id === `#${cleanOrderId}` || o.orderId === `#${cleanOrderId}`
@@ -259,6 +330,7 @@ export default function ChefLayout({ setActivePage }) {
     const orderCheckedMap = checkedDishItems[orderId] || checkedDishItems[cleanOrderId] || checkedDishItems[`#${cleanOrderId}`] || {};
     const hasCheckedItems = Object.keys(orderCheckedMap).length > 0 && Object.values(orderCheckedMap).some(Boolean);
 
+    let effectiveOrderStatus = newStatus;
     if (newStatus === 'Ready' && updatedItems.length > 0) {
       if (hasCheckedItems) {
         // Chef explicitly checked specific dish checkboxes! Mark ONLY checked items as READY!
@@ -274,8 +346,9 @@ export default function ChefLayout({ setActivePage }) {
             isReady: isChecked
           };
         });
+        effectiveOrderStatus = deriveOrderStatus(updatedItems, 'Preparing');
       } else {
-        // If Chef did not check any individual checkboxes, mark all non-delivered items as ready
+        // If Chef did NOT check individual checkboxes, mark ALL non-delivered items as READY
         updatedItems = updatedItems.map(it => {
           const isDelivered = it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED';
           if (isDelivered) {
@@ -283,13 +356,9 @@ export default function ChefLayout({ setActivePage }) {
           }
           return { ...it, status: 'READY', isReady: true };
         });
+        effectiveOrderStatus = 'Ready';
       }
     }
-
-    // Determine accurate overall order status using deriveOrderStatus
-    const effectiveOrderStatus = (newStatus === 'Ready') 
-      ? deriveOrderStatus(updatedItems, 'Ready')
-      : newStatus;
 
     const updated = ordersList.map(o => {
       const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
@@ -312,8 +381,9 @@ export default function ChefLayout({ setActivePage }) {
     } catch (e) { }
 
     try {
-      const apiOrderId = targetOrder ? (targetOrder._id || targetOrder.id || targetOrder.orderId || cleanOrderId) : orderId;
-      await api.updateOrderStatus(apiOrderId, effectiveOrderStatus, { items: updatedItems });
+      const rawApiId = targetOrder ? (targetOrder.orderId || targetOrder.id || targetOrder._id || cleanOrderId) : cleanOrderId;
+      const cleanApiId = String(rawApiId).replace(/^#/i, '').trim();
+      await api.updateOrderStatus(cleanApiId, effectiveOrderStatus, { items: updatedItems, status: effectiveOrderStatus });
     } catch (e) { }
 
     if (newStatus === 'Preparing') {
@@ -400,8 +470,24 @@ export default function ChefLayout({ setActivePage }) {
       nextList = outOfStockItems.filter(i => i !== itemId && i !== itemName);
       showToast(`🟢 ${itemName} is BACK IN STOCK!`);
     } else {
-      nextList = [...outOfStockItems, itemId, itemName];
+      nextList = Array.from(new Set([...outOfStockItems.filter(i => i !== itemId && i !== itemName), itemId]));
       showToast(`🔴 ${itemName} marked OUT OF STOCK!`);
+
+      // Broadcast notification for Manager
+      try {
+        const existingNotifs = JSON.parse(localStorage.getItem('flavora_manager_notifications') || '[]');
+        const newNotif = {
+          id: `NOTIF-${Date.now()}`,
+          title: '🔴 Item Out of Stock Alert',
+          message: `Chef Ramu marked "${itemName}" as OUT OF STOCK / Sold Out.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: false,
+          timestamp: new Date().toISOString()
+        };
+        const updatedNotifs = [newNotif, ...existingNotifs];
+        localStorage.setItem('flavora_manager_notifications', JSON.stringify(updatedNotifs));
+        window.dispatchEvent(new Event('flavora_notification_created'));
+      } catch (e) { }
     }
     setOutOfStockItems(nextList);
     try {
@@ -431,14 +517,12 @@ export default function ChefLayout({ setActivePage }) {
 
   const activeKdsOrders = ordersList.filter(o => {
     const isKitchenDone = isOrderCompletedInKitchen(o);
-    if (statusFilter === 'active') {
-      return !isKitchenDone && o.status !== 'Cancelled';
-    }
-    if (statusFilter === 'placed') return !isKitchenDone && o.status === 'Placed';
-    if (statusFilter === 'preparing') return !isKitchenDone && o.status === 'Preparing';
-    if (statusFilter === 'ready') return o.status === 'Ready' || isKitchenDone;
-    if (statusFilter === 'history') return isKitchenDone || o.status === 'Completed' || o.status === 'Cancelled';
-    return !isKitchenDone;
+    // Completed/Ready orders move to Orders History and should NOT be displayed on Live KDS
+    if (isKitchenDone || o.status === 'Cancelled') return false;
+
+    if (statusFilter === 'placed') return o.status === 'Placed';
+    if (statusFilter === 'preparing') return o.status === 'Preparing';
+    return true; // 'active' -> shows all active placed & cooking tickets
   }).filter(o => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
@@ -448,9 +532,14 @@ export default function ChefLayout({ setActivePage }) {
       o.items.some(i => (i.name || '').toLowerCase().includes(q));
   });
 
+  const actualOutOfStockCount = menuItems.filter(item => {
+    const itemId = item._id || item.id;
+    return outOfStockItems.includes(itemId) || outOfStockItems.includes(item.name) || item.isAvailable === false;
+  }).length;
+
   const navigationItems = [
     { id: 'chef-kds', label: 'Live Kitchen Orders', icon: Flame, badge: activeKdsOrders.length },
-    { id: 'chef-inventory', label: "Stock Manager", icon: Utensils, badge: outOfStockItems.length },
+    { id: 'chef-inventory', label: "Stock Manager", icon: Utensils, badge: actualOutOfStockCount },
     { id: 'chef-history', label: 'Orders History', icon: CheckCircle2 },
     { id: 'chef-analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'chef-settings', label: 'Settings', icon: Settings },
@@ -483,8 +572,7 @@ export default function ChefLayout({ setActivePage }) {
                   {[
                     { id: 'active', label: 'All Active' },
                     { id: 'placed', label: '🆕 Placed' },
-                    { id: 'preparing', label: '🔥 Cooking' },
-                    { id: 'ready', label: '✅ Ready' }
+                    { id: 'preparing', label: '🔥 Cooking' }
                   ].map(st => (
                     <button
                       key={st.id}
@@ -797,7 +885,18 @@ export default function ChefLayout({ setActivePage }) {
                     <PowerOffSlide
                       duration={1500}
                       label="Logout"
-                      onPowerOff={handleLogout}
+                      onPowerOff={() => {
+                        setUserMenuOpen(false);
+                        sessionStorage.removeItem('flavora_auth_token');
+                        sessionStorage.removeItem('flavora_logged_in');
+                        sessionStorage.removeItem('flavora_user_role');
+                        localStorage.removeItem('flavora_auth_token');
+                        localStorage.removeItem('flavora_logged_in');
+                        localStorage.removeItem('flavora_user_role');
+                        localStorage.setItem('flavora_active_page', 'home');
+                        window.history.pushState({}, '', '/');
+                        setActivePage('home');
+                      }}
                     />
                   </div>
                 </div>
