@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send, Clock } from 'lucide-react';
+import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send, Clock, Lock } from 'lucide-react';
 import { api } from '../services/api';
 import MenuDishStrip from '../components/MenuDishStrip';
 import ExposureSlider from '../components/ExposureSlider';
 import { findItemInCatalog, calculateCartTotal, resolveDishImageUrl } from '../utils/menuRegistry';
 import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
+import { isRestaurantOpenNow, getRestaurantStatusDetails } from '../utils/restaurantTimings';
 
 export default function MenuPage({ onOpenDemoModal }) {
   const { brandName } = useRestaurantBranding();
@@ -114,52 +115,42 @@ export default function MenuPage({ onOpenDemoModal }) {
   }, []);
 
   useEffect(() => {
+    const fetchLatestSettings = () => {
+      api.getSettings()
+        .then((data) => {
+          if (data && typeof data === 'object') {
+            setSettings(prev => {
+              const updated = { ...prev, ...data };
+              try {
+                localStorage.setItem('flavora_restaurant_settings', JSON.stringify(updated));
+              } catch (e) {}
+              return updated;
+            });
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchLatestSettings();
+    const interval = setInterval(fetchLatestSettings, 8000);
+
     const handleSettingsSync = () => {
       try {
         const saved = localStorage.getItem('flavora_restaurant_settings');
-        setSettings(saved ? JSON.parse(saved) : {});
+        if (saved) setSettings(JSON.parse(saved));
       } catch (e) { }
     };
     window.addEventListener('flavora_settings_updated', handleSettingsSync);
-    return () => window.removeEventListener('flavora_settings_updated', handleSettingsSync);
+    window.addEventListener('storage', handleSettingsSync);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('flavora_settings_updated', handleSettingsSync);
+      window.removeEventListener('storage', handleSettingsSync);
+    };
   }, []);
 
-  const parseTimeToMinutes = (timeStr, defaultMins) => {
-    if (!timeStr) return defaultMins;
-    try {
-      const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-      if (!match) return defaultMins;
-      let hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
-      const ampm = match[3] ? match[3].toUpperCase() : null;
-      if (ampm === 'PM' && hours < 12) hours += 12;
-      if (ampm === 'AM' && hours === 12) hours = 0;
-      return hours * 60 + minutes;
-    } catch (e) {
-      return defaultMins;
-    }
-  };
-
-  const getIsRestaurantClosed = () => {
-    const statusOverride = settings.restaurantStatus || 'open';
-    if (statusOverride === 'closed') return true;
-    if (statusOverride === 'force_open') return false;
-
-    const now = new Date();
-    const day = now.getDay();
-    const isWeekend = (day === 0 || day === 6);
-    const currentMins = now.getHours() * 60 + now.getMinutes();
-
-    const hoursString = isWeekend ? (settings.weekendHours || '10:00 AM – 12:00 AM') : (settings.weekdayHours || '11:00 AM – 10:00 PM');
-    const parts = hoursString.split(/–|-/);
-
-    const openMin = parts[0] ? parseTimeToMinutes(parts[0], isWeekend ? 600 : 660) : (isWeekend ? 600 : 660);
-    const closeMin = parts[1] ? parseTimeToMinutes(parts[1], isWeekend ? 1440 : 1320) : (isWeekend ? 1440 : 1320);
-
-    return !(currentMins >= openMin && currentMins < closeMin);
-  };
-
-  const isClosedNow = getIsRestaurantClosed();
+  const isClosedNow = !isRestaurantOpenNow(settings);
+  const statusDetails = getRestaurantStatusDetails(settings);
 
   const [placedTableOrders, setPlacedTableOrders] = useState(() => {
     try {
@@ -516,7 +507,7 @@ export default function MenuPage({ onOpenDemoModal }) {
   const handleSendOrderToChefAndManager = async (e) => {
     e.preventDefault();
     if (isClosedNow) {
-      alert(settings.closedMessage || `The restaurant is currently closed for orders. Operating hours: Mon-Fri 11:00 AM - 10:00 PM | Sat-Sun 10:00 AM - 12:00 AM. Your items are saved in your cart, but orders cannot be placed while the restaurant is closed.`);
+      alert(statusDetails.closedMessage);
       return;
     }
     if (totalCartCount === 0) return;
@@ -539,6 +530,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       table: activeTable,
       type: 'Dine-In',
       customer: guestName.trim() || 'Guest Diner',
+      notes: chefNotes.trim(),
       items: orderItems,
       total: totalCartPrice,
       status: 'Placed'
@@ -782,7 +774,7 @@ export default function MenuPage({ onOpenDemoModal }) {
               <span>🔴 RESTAURANT IS CURRENTLY CLOSED FOR ORDERS</span>
             </div>
             <p style={{ fontSize: '0.82rem', color: '#7F1D1D', margin: '0.2rem 0 0 0', fontWeight: 600 }}>
-              {settings.closedMessage || 'We are currently closed for orders. Operating Hours: Mon – Fri: 11:00 AM – 10:00 PM | Sat – Sun: 10:00 AM – 12:00 AM'}
+              {statusDetails.closedMessage}
             </p>
           </div>
         </div>
@@ -1369,23 +1361,55 @@ export default function MenuPage({ onOpenDemoModal }) {
                 </div>
               </div>
 
-              {/* Table Number Input Field (Pre-filled if scanned, editable) */}
+              {/* Table Number Display (Locked from QR scan - strictly non-editable) */}
               <div className="admin-form-group mb-3">
-                <label className="form-label" style={{ fontWeight: 700 }}>
-                  Table Number {tableNum ? `(Scanned: Table ${tableNum})` : '(Optional / Enter Table)'}
+                <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Lock size={14} color="#1E4636" />
+                  <span>Assigned Dining Table</span>
                 </label>
-                <input
-                  type="text"
-                  placeholder="e.g. T-04 or Table 4"
-                  value={tableNum}
-                  onChange={(e) => {
-                    const val = e.target.value.toUpperCase();
-                    setTableNum(val);
-                    localStorage.setItem('flavora_scanned_table', val);
-                  }}
-                  className="form-control"
-                  style={{ fontWeight: 700, color: '#1E4636' }}
-                />
+
+                {tableNum ? (
+                  <div style={{
+                    backgroundColor: '#FAF6EE',
+                    border: '1.5px solid #E5DBC8',
+                    borderRadius: '10px',
+                    padding: '0.65rem 0.95rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{
+                        backgroundColor: '#E07A3C',
+                        color: '#FFFFFF',
+                        padding: '0.2rem 0.65rem',
+                        borderRadius: '6px',
+                        fontSize: '0.86rem',
+                        fontWeight: 900,
+                        letterSpacing: '0.02em'
+                      }}>
+                        Table {tableNum}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    backgroundColor: '#FEF2F2',
+                    border: '1.5px solid #FCA5A5',
+                    borderRadius: '10px',
+                    padding: '0.65rem 0.95rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    color: '#991B1B',
+                    fontSize: '0.82rem',
+                    fontWeight: 700
+                  }}>
+                    <QrCode size={16} color="#DC2626" />
+                    <span>No Table QR Code scanned. Please scan your dining table's QR code.</span>
+                  </div>
+                )}
               </div>
 
               {/* Guest Name Input / Established Diner Badge */}

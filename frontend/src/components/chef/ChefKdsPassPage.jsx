@@ -159,23 +159,25 @@ export default function ChefKdsPassPage({
                   const cleanId = String(ord.id || ord.orderId || '').replace(/^#/i, '').trim();
                   const isOrderReadyOverall = ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed' || ord.status === 'Paid';
                   const isDelivered = item.isDelivered || item.status === 'SERVED' || item.status === 'DELIVERED';
+                  const isCooking = ord.status === 'Preparing' || ord.status === 'Cooking' || ord.status === 'In-Progress' || isOrderReadyOverall;
                   const isCheckedInMap = Boolean(checkedDishItems[ord.id]?.[idx] || checkedDishItems[cleanId]?.[idx] || checkedDishItems[`#${cleanId}`]?.[idx]);
-                  const isReady = !isDelivered && (isOrderReadyOverall || item.isReady || item.status === 'READY' || isCheckedInMap);
+                  const isReady = isCooking && !isDelivered && (isOrderReadyOverall || item.isReady || item.status === 'READY' || isCheckedInMap);
                   
                   return (
                     <div
                       key={idx}
                       onClick={() => !isDelivered && handleToggleItemCheck(ord.id, idx)}
+                      title={!isCooking ? '⚠️ Click "🔥 Start Cooking" below to start preparing & ticking dishes' : (isDelivered ? 'Dish already served' : 'Click to toggle dish ready status')}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '0.55rem 0.75rem',
-                        backgroundColor: isDelivered ? '#F1F5F9' : (isReady ? '#F0FDF4' : '#F8FAFC'),
+                        backgroundColor: isDelivered ? '#F1F5F9' : (isReady ? '#F0FDF4' : (isCooking ? '#F8FAFC' : '#FAFAFA')),
                         borderRadius: '8px',
-                        border: isDelivered ? '1px solid #CBD5E1' : (isReady ? '1.5px solid #86EFAC' : '1px solid #E2E8F0'),
-                        cursor: isDelivered ? 'default' : 'pointer',
-                        opacity: isDelivered ? 0.65 : 1,
+                        border: isDelivered ? '1px solid #CBD5E1' : (isReady ? '1.5px solid #86EFAC' : (isCooking ? '1px solid #E2E8F0' : '1px dashed #CBD5E1')),
+                        cursor: isDelivered ? 'default' : (isCooking ? 'pointer' : 'not-allowed'),
+                        opacity: isDelivered ? 0.65 : (isCooking ? 1 : 0.85),
                         transition: 'all 0.2s ease'
                       }}
                     >
@@ -185,12 +187,12 @@ export default function ChefKdsPassPage({
                         ) : isReady ? (
                           <CheckSquare size={17} color="#166534" />
                         ) : (
-                          <Square size={17} color="#94A3B8" />
+                          <Square size={17} color={isCooking ? '#94A3B8' : '#CBD5E1'} />
                         )}
                         <span style={{
                           fontSize: '0.9rem',
                           fontWeight: 800,
-                          color: isDelivered ? '#64748B' : (isReady ? '#166534' : '#0F2A1D'),
+                          color: isDelivered ? '#64748B' : (isReady ? '#166534' : (isCooking ? '#0F2A1D' : '#475569')),
                           textDecoration: isDelivered ? 'line-through' : 'none'
                         }}>
                           <strong style={{ color: isDelivered ? '#64748B' : '#E07A3C', marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
@@ -202,12 +204,12 @@ export default function ChefKdsPassPage({
                         <span style={{
                           fontSize: '0.68rem',
                           fontWeight: 900,
-                          backgroundColor: isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : '#FFEDD5'),
-                          color: isDelivered ? '#475569' : (isReady ? '#166534' : '#C2410C'),
+                          backgroundColor: isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : (isCooking ? '#FFEDD5' : '#F1F5F9')),
+                          color: isDelivered ? '#475569' : (isReady ? '#166534' : (isCooking ? '#C2410C' : '#64748B')),
                           padding: '0.15rem 0.45rem',
                           borderRadius: '5px'
                         }}>
-                          {isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : 'PREPARING')}
+                          {isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : (isCooking ? 'COOKING' : 'QUEUED'))}
                         </span>
 
                         {item.price && (

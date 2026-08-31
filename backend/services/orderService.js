@@ -81,11 +81,16 @@ class OrderService {
       existingActiveOrder.total = newCalculatedTotal;
 
       // Reopen/continue order status if new unserved items are added
-      const servedCount = existingItems.filter(i => i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED').length;
-      if (servedCount > 0 && servedCount < existingItems.length) {
-        existingActiveOrder.status = 'PARTIALLY DELIVERED';
-      } else {
+      const unservedCount = existingItems.filter(i => !i.isDelivered && !i.isReady && i.status !== 'SERVED' && i.status !== 'DELIVERED' && i.status !== 'READY').length;
+      if (unservedCount > 0) {
         existingActiveOrder.status = 'Placed';
+      } else {
+        const servedCount = existingItems.filter(i => i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED').length;
+        if (servedCount > 0 && servedCount < existingItems.length) {
+          existingActiveOrder.status = 'PARTIALLY DELIVERED';
+        } else {
+          existingActiveOrder.status = 'Placed';
+        }
       }
 
       await existingActiveOrder.save();
@@ -121,8 +126,10 @@ class OrderService {
       phone: data.phone || '+91 Direct QR',
       items: newIncomingItems,
       total: Number(data.total || data.totalAmount || 0),
-      status: (data.status && ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Cancelled'].includes(data.status)) ? data.status : 'Placed',
+      status: (data.status && ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Cancelled', 'PARTIALLY DELIVERED'].includes(data.status)) ? data.status : 'Placed',
       payment: data.payment || 'Pending',
+      paymentStatus: data.paymentStatus || data.payment || 'Pending',
+      notes: (data.notes || data.chefNotes || data.instructions || '').trim(),
       time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 

@@ -1,10 +1,81 @@
 import React from 'react';
 import { Phone, Mail, MapPin, Clock, Facebook, Linkedin, Twitter, Youtube } from 'lucide-react';
 import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
+import { api } from '../services/api';
+import { isRestaurantOpenNow } from '../utils/restaurantTimings';
 
 export default function Footer({ setActivePage }) {
   const { branding, brandName, brandLogo } = useRestaurantBranding();
-  const settings = branding || {};
+
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flavora_restaurant_settings');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    api.getSettings()
+      .then((data) => {
+        if (data && typeof data === 'object') {
+          setSettings(prev => {
+            const updated = { ...prev, ...data };
+
+            try {
+              localStorage.setItem(
+                'flavora_restaurant_settings',
+                JSON.stringify(updated)
+              );
+            } catch (e) {}
+
+            return updated;
+          });
+        }
+      })
+      .catch(() => {});
+
+    const handleSettingsSync = () => {
+      try {
+        const saved = localStorage.getItem('flavora_restaurant_settings');
+
+        if (saved) {
+          setSettings(JSON.parse(saved));
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener(
+      'flavora_settings_updated',
+      handleSettingsSync
+    );
+
+    window.addEventListener(
+      'storage',
+      handleSettingsSync
+    );
+
+    return () => {
+      window.removeEventListener(
+        'flavora_settings_updated',
+        handleSettingsSync
+      );
+
+      window.removeEventListener(
+        'storage',
+        handleSettingsSync
+      );
+    };
+  }, []);
+
+  const mergedSettings = {
+    ...(settings || {}),
+    ...(branding || {}),
+  };
+
+  // rest of your existing Footer JSX...
+}
 
   const handleNavClick = (pageId) => {
     if (setActivePage) setActivePage(pageId);
@@ -20,15 +91,7 @@ export default function Footer({ setActivePage }) {
       return { label: '🟢 OPEN NOW', bg: '#064E3B', color: '#6EE7B7', border: '#047857' };
     }
 
-    const now = new Date();
-    const day = now.getDay();
-    const isWeekend = (day === 0 || day === 6);
-    const currentMins = now.getHours() * 60 + now.getMinutes();
-
-    const openMin = isWeekend ? 600 : 660; // 10:00 AM (600) vs 11:00 AM (660)
-    const closeMin = isWeekend ? 1440 : 1320; // 12:00 AM (1440) vs 10:00 PM (1320)
-
-    const isOpen = currentMins >= openMin && currentMins < closeMin;
+    const isOpen = isRestaurantOpenNow(settings);
     return isOpen
       ? { label: '🟢 OPEN NOW', bg: '#064E3B', color: '#6EE7B7', border: '#047857' }
       : { label: '🔴 CLOSED NOW', bg: '#451A1A', color: '#FCA5A5', border: '#7F1D1D' };
