@@ -96,9 +96,20 @@ const updateStaff = async (req, res) => {
     if (!member) {
       return res.status(404).json({ message: 'Staff member not found' });
     }
+
+    if (req.body.scheduledShift || req.body.shift) {
+      member.scheduledShift = req.body.scheduledShift || req.body.shift;
+    }
+    if (req.body.checkInTime) member.checkInTime = req.body.checkInTime;
+    if (req.body.checkOutTime) member.checkOutTime = req.body.checkOutTime;
+
     Object.assign(member, req.body);
     await member.save();
-    res.json(member);
+
+    const obj = member.toObject();
+    obj.id = obj._id;
+    obj.shift = obj.scheduledShift || obj.shift || '09:00 AM – 06:00 PM';
+    res.json(obj);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

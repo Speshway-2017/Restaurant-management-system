@@ -29,6 +29,30 @@ export default function WaiterProfilePage() {
 
   useEffect(() => {
     fetchProfile();
+
+    window.addEventListener('STAFF_SHIFT_UPDATED', fetchProfile);
+    const handleStorage = (e) => {
+      if (e.key === 'flavora_staff_shift_event' || e.key === 'flavora_staff_list') {
+        fetchProfile();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    let channel = null;
+    try {
+      channel = new BroadcastChannel('flavora_staff_channel');
+      channel.onmessage = (e) => {
+        if (e.data && e.data.type === 'STAFF_SHIFT_UPDATED') {
+          fetchProfile();
+        }
+      };
+    } catch (e) {}
+
+    return () => {
+      window.removeEventListener('STAFF_SHIFT_UPDATED', fetchProfile);
+      window.removeEventListener('storage', handleStorage);
+      if (channel) channel.close();
+    };
   }, []);
 
   const fetchProfile = async () => {
@@ -42,7 +66,7 @@ export default function WaiterProfilePage() {
 
       const staffList = await api.getStaff();
       if (staffList && staffList.length > 0) {
-        const waiterUser = staffList.find(s => s.role === 'Waiter' || s.email === 'waiter@flavorakitchen.in' || s.empId === 'WSM-01' || s.empId === 'RMSW-01');
+        const waiterUser = staffList.find(s => s.role === 'Waiter' || s.email === 'waiter@flavorakitchen.in' || s.empId === 'WSM-01' || s.empId === 'RMSW-01' || (s.empId && s.empId.startsWith('RMSW')));
         if (waiterUser) {
           setProfile(prev => {
             const updated = {
@@ -52,6 +76,7 @@ export default function WaiterProfilePage() {
               email: waiterUser.email || prev.email,
               phone: waiterUser.phone || prev.phone,
               empId: waiterUser.empId || prev.empId,
+              shift: waiterUser.scheduledShift || waiterUser.shift || prev.shift,
               avatarUrl: localAvatar || waiterUser.avatarUrl || prev.avatarUrl
             };
             localStorage.setItem('flavora_waiter_profile', JSON.stringify(updated));

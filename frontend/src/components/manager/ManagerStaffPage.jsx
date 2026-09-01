@@ -143,42 +143,66 @@ export default function ManagerStaffPage() {
       }
     }
 
+    const computedShift = `${format24to12(formData.shiftStart)} – ${format24to12(formData.shiftEnd)}`;
     const payload = {
       name: formData.name,
       role: formData.role,
       email: formData.email || `${formData.name.toLowerCase().replace(/[^a-z]/g, '')}@flavora.in`,
       phone: formData.phone,
-      scheduledShift: formData.shift,
+      scheduledShift: computedShift,
+      shift: computedShift,
+      checkInTime: format24to12(formData.shiftStart),
+      checkOutTime: format24to12(formData.shiftEnd),
       status: formData.status,
       password: 'password123'
     };
 
-    if (editingStaff) {
+    const broadcastShiftChange = (updatedMember) => {
       try {
-        await api.updateStaff(editingStaff.id, payload);
+        const channel = new BroadcastChannel('flavora_staff_channel');
+        channel.postMessage({ type: 'STAFF_SHIFT_UPDATED', staff: updatedMember });
+        channel.close();
+      } catch (e) {}
+
+      window.dispatchEvent(new CustomEvent('STAFF_SHIFT_UPDATED', { detail: updatedMember }));
+      localStorage.setItem('flavora_staff_shift_event', JSON.stringify({ timestamp: Date.now(), staff: updatedMember }));
+    };
+
+    if (editingStaff) {
+      let backendUpdatedMember = null;
+      try {
+        const res = await api.updateStaff(editingStaff.id, payload);
+        if (res) backendUpdatedMember = res;
       } catch (err) {
         console.warn("Backend updateStaff warning:", err.message);
       }
-      const updated = staffList.map(st => st.id === editingStaff.id ? { ...st, ...formData } : st);
+      const updatedItem = {
+        ...editingStaff,
+        ...formData,
+        shift: computedShift,
+        scheduledShift: computedShift
+      };
+      const updated = staffList.map(st => st.id === editingStaff.id ? updatedItem : st);
       saveStaffList(updated);
-      showToast(`✓ Shift timings for ${formData.name} updated to ${formData.shift}!`);
+      broadcastShiftChange(backendUpdatedMember || updatedItem);
+      showToast('Staff shift updated successfully.');
     } else {
-      let createdId = Date.now();
+      let createdItem = null;
       try {
         const createdRes = await api.createStaff(payload);
-        if (createdRes && (createdRes._id || createdRes.id)) {
-          createdId = createdRes._id || createdRes.id;
-        }
+        if (createdRes) createdItem = createdRes;
       } catch (err) {
         console.warn("Backend createStaff warning:", err.message);
       }
       const newStaffItem = {
-        id: createdId,
-        empId: `RMSW-0${staffList.length + 1}`,
-        ...formData
+        id: createdItem ? (createdItem._id || createdItem.id) : Date.now(),
+        empId: createdItem ? createdItem.empId : `RMSW-0${staffList.length + 1}`,
+        ...formData,
+        shift: computedShift
       };
       const updated = [newStaffItem, ...staffList];
       saveStaffList(updated);
+      broadcastShiftChange(newStaffItem);
       showToast(`✓ New staff member ${formData.name} saved to MongoDB!`);
     }
     setIsAddModalOpen(false);

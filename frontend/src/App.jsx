@@ -19,6 +19,7 @@ import AdminLayout from './components/admin/AdminLayout';
 import ManagerLayout from './components/manager/ManagerLayout';
 import ChefLayout from './components/chef/ChefLayout';
 import WaiterLayout from './components/waiter/WaiterLayout';
+import ReceptionistLayout from './components/receptionist/ReceptionistLayout';
 
 export default function App() {
   const getIsLoggedIn = () => Boolean(
@@ -35,6 +36,9 @@ export default function App() {
     if (path.includes('/menu') || search.includes('table=')) {
       return 'menu';
     }
+    if (path.includes('/receptionist')) {
+      return isLoggedIn ? 'receptionist' : 'login';
+    }
     if (path.includes('/chef')) {
       return isLoggedIn ? 'chef' : 'login';
     }
@@ -50,7 +54,7 @@ export default function App() {
 
     const saved = localStorage.getItem('flavora_active_page');
     if (saved) {
-      if ((saved === 'admin' || saved === 'manager' || saved === 'chef') && !isLoggedIn) {
+      if ((saved === 'admin' || saved === 'manager' || saved === 'chef' || saved === 'receptionist') && !isLoggedIn) {
         return 'home';
       }
       return saved;
@@ -67,6 +71,8 @@ export default function App() {
     const isLoggedIn = getIsLoggedIn();
     if (newPage === 'home') {
       window.history.pushState({}, '', '/');
+    } else if (newPage === 'receptionist' && isLoggedIn) {
+      window.history.pushState({}, '', '/receptionist/dashboard');
     } else if (newPage === 'admin' && isLoggedIn) {
       window.history.pushState({}, '', '/admin/dashboard');
     } else if (newPage === 'manager' && isLoggedIn) {
@@ -88,6 +94,8 @@ export default function App() {
 
       if (path.includes('/menu') || search.includes('table=')) {
         setActivePageState('menu');
+      } else if (path.includes('/receptionist')) {
+        setActivePageState(isLoggedIn ? 'receptionist' : 'login');
       } else if (path.includes('/chef')) {
         setActivePageState(isLoggedIn ? 'chef' : 'login');
       } else if (path.includes('/waiter')) {
@@ -118,24 +126,19 @@ export default function App() {
         containers.forEach(el => {
           if (el) {
             el.style.overflow = 'hidden';
-            el.style.touchAction = 'none';
           }
         });
       } else {
         containers.forEach(el => {
           if (el) {
             el.style.overflow = '';
-            el.style.touchAction = '';
           }
         });
       }
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      document.body.style.overflow = '';
-    };
+    return () => observer.disconnect();
   }, []);
 
   const renderCurrentPage = () => {
@@ -170,6 +173,8 @@ export default function App() {
         return <ChefLayout setActivePage={setActivePage} />;
       case 'waiter':
         return <WaiterLayout setActivePage={setActivePage} />;
+      case 'receptionist':
+        return <ReceptionistLayout setActivePage={setActivePage} />;
       default:
         return <HomePage setActivePage={setActivePage} onOpenDemoModal={() => setDemoModalOpen(true)} />;
     }
@@ -177,7 +182,7 @@ export default function App() {
 
   const { branding } = useRestaurantBranding();
   const isBannerVisible = branding && branding.announcementEnabled !== false && Boolean(branding.announcementMessage || branding.announcementBadge);
-  const isFullStandalonePage = activePage === 'login' || activePage === 'admin' || activePage === 'manager' || activePage === 'chef' || activePage === 'waiter';
+  const isFullStandalonePage = activePage === 'login' || activePage === 'admin' || activePage === 'manager' || activePage === 'chef' || activePage === 'waiter' || activePage === 'receptionist';
 
   return (
     <div className="app-container">

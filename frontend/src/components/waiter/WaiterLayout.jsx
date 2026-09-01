@@ -291,7 +291,7 @@ export default function WaiterLayout({ setActivePage }) {
         {/* Sidebar Footer */}
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-version" style={{ marginTop: 0 }}>
-            {brandName} Waiter • v3.4
+            {brandName} v3.4 • India
           </div>
         </div>
 
