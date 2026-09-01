@@ -175,6 +175,50 @@ export default function ChefLayout({ setActivePage }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Real-time Staff Shift Listener across tabs & window events
+  useEffect(() => {
+    const handleShiftUpdate = () => {
+      api.getStaff().then(staffList => {
+        if (Array.isArray(staffList)) {
+          const chefInDb = staffList.find(s => s.role === 'Chef' || s.role === 'Head Chef' || (s.empId && s.empId.startsWith('RMSC')));
+          if (chefInDb) {
+            setChefProfile(prev => ({
+              ...prev,
+              name: chefInDb.name || prev.name,
+              shift: chefInDb.scheduledShift || chefInDb.shift || prev.shift
+            }));
+          }
+        }
+      }).catch(() => {});
+    };
+
+    handleShiftUpdate();
+
+    window.addEventListener('STAFF_SHIFT_UPDATED', handleShiftUpdate);
+    const handleStorageChange = (e) => {
+      if (e.key === 'flavora_staff_shift_event' || e.key === 'flavora_staff_list') {
+        handleShiftUpdate();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    let channel = null;
+    try {
+      channel = new BroadcastChannel('flavora_staff_channel');
+      channel.onmessage = (e) => {
+        if (e.data && e.data.type === 'STAFF_SHIFT_UPDATED') {
+          handleShiftUpdate();
+        }
+      };
+    } catch (e) {}
+
+    return () => {
+      window.removeEventListener('STAFF_SHIFT_UPDATED', handleShiftUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+      if (channel) channel.close();
+    };
+  }, []);
+
   // Fetch Live Backend & Local Orders
   const fetchOrdersAndMenu = async () => {
     try {
@@ -776,7 +820,7 @@ export default function ChefLayout({ setActivePage }) {
                 <span className="brand-favora">{firstNamePart}</span>
                 {restNamePart && <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>{restNamePart}</span>}
               </div>
-              <div className="admin-brand-subtitle">EXECUTIVE CHEF KDS</div>
+              <div className="admin-brand-subtitle">RESTO CHEF PORTAL</div>
             </div>
           </div>
 
@@ -834,7 +878,7 @@ export default function ChefLayout({ setActivePage }) {
         {/* Sidebar Footer */}
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-version" style={{ marginTop: 0 }}>
-            {brandName} KDS • v4.2 Live
+            {brandName} v3.4 • India
           </div>
         </div>
       </aside>
@@ -1033,7 +1077,15 @@ export default function ChefLayout({ setActivePage }) {
 
               <div>
                 <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#64748B', marginBottom: '0.5rem' }}>ORDERED DISHES</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                  maxHeight: '340px',
+                  overflowY: 'auto',
+                  paddingRight: '0.25rem',
+                  scrollbarWidth: 'thin'
+                }}>
                   {selectedTicketModal.items.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0.85rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                       <span style={{ fontWeight: 800, color: '#0F2A1D' }}>

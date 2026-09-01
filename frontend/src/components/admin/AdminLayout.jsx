@@ -352,7 +352,7 @@ export default function AdminLayout({ setActivePage }) {
                 <span className="brand-favora">{firstNamePart}</span>
                 {restNamePart && <span className="brand-kitchen" style={{ color: '#FFFFFF' }}>{restNamePart}</span>}
               </div>
-              <div className="admin-brand-subtitle">RESTO PLATFORM ADMIN</div>
+              <div className="admin-brand-subtitle">RESTO ADMIN PORTAL</div>
             </div>
           </div>
 
@@ -402,7 +402,7 @@ export default function AdminLayout({ setActivePage }) {
         {/* Sidebar Footer */}
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-version" style={{ marginTop: 0 }}>
-            {brandName} RestoOS v3.4 • India
+            {brandName} v3.4 • India
           </div>
         </div>
 

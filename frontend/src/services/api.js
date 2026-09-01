@@ -204,6 +204,7 @@ export const api = {
   }),
 
   // Table QR & Management API
+  getTables: () => request('/tables'),
   generateTableQr: (tableNum, targetUrl) => request('/tables/generate-qr', {
     method: 'POST',
     body: JSON.stringify({ tableNum, targetUrl })
@@ -255,5 +256,25 @@ export const api = {
   }),
   testPaymentGateway: (gatewayId) => request(`/admin/payments/gateways/${gatewayId}/test`, {
     method: 'POST'
-  })
+  }),
+
+  // Receptionist & Host Dashboard API
+  getReceptionistKPIs: () => request('/receptionist/kpis'),
+  getFloorPlan: () => request('/receptionist/floor-plan'),
+  seatWalkIn: (data) => request('/receptionist/walk-ins/seat', { method: 'POST', body: JSON.stringify(data) }),
+  mergeTables: (primaryTableNum, secondaryTableNums) => request('/receptionist/tables/merge', { method: 'POST', body: JSON.stringify({ primaryTableNum, secondaryTableNums }) }),
+  splitTables: (tableNum) => request('/receptionist/tables/split', { method: 'POST', body: JSON.stringify({ tableNum }) }),
+  transferTable: (fromTableNum, toTableNum) => request('/receptionist/tables/transfer', { method: 'POST', body: JSON.stringify({ fromTableNum, toTableNum }) }),
+  getWaitlist: () => request('/receptionist/waitlist'),
+  createWaitlistToken: (data) => request('/receptionist/waitlist', { method: 'POST', body: JSON.stringify(data) }),
+  callWaitlistToken: (id) => request(`/receptionist/waitlist/${id}/call`, { method: 'POST' }),
+  seatWaitlistToken: (id, tableNum, mergedTableNums = []) => request(`/receptionist/waitlist/${id}/seat`, { method: 'POST', body: JSON.stringify({ tableNum, mergedTableNums }) }),
+  updateWaitlistStatus: (id, status) => request(`/receptionist/waitlist/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  getReceptionistReservations: () => request('/receptionist/reservations'),
+  createReceptionistReservation: (data) => request('/receptionist/reservations', { method: 'POST', body: JSON.stringify(data) }),
+  checkInReservation: (id, tableNo) => request(`/receptionist/reservations/${id}/check-in`, { method: 'POST', body: JSON.stringify({ tableNo }) }),
+  updateReservationStatus: (id, status, tableNo) => request(`/receptionist/reservations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, tableNo }) }),
+  getGuests: (search = '') => request(`/receptionist/guests${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  updateGuestPreferences: (id, data) => request(`/receptionist/guests/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  sendReceptionistNotification: (data) => request('/receptionist/notifications/send', { method: 'POST', body: JSON.stringify(data) })
 };

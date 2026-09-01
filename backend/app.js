@@ -36,6 +36,7 @@ app.use('/api/settings', require('./routes/settingsRoutes'));
 app.use('/api/restaurant/settings', require('./routes/settingsRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/admin/payments', require('./routes/paymentRoutes'));
+app.use('/api/receptionist', require('./routes/receptionistRoutes'));
 
 // Global Error Handler
 app.use(errorHandler);

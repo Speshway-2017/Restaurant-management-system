@@ -156,12 +156,17 @@ export default function WaiterTablesPage() {
 
   const getTableRealStatus = (tb) => {
     if (tb.status === 'Cleaning') return 'Cleaning';
+    if (tb.status === 'Reserved') return 'Reserved';
+
     const activeOrder = findTableOrder(tb);
     if (activeOrder) {
       if (activeOrder.status === 'Ready') return 'Ready';
       if (activeOrder.status === 'Bill Generated' || activeOrder.status === 'Awaiting Payment' || activeOrder.payment === 'Awaiting Payment') return 'Bill Generated';
       return 'Occupied';
     }
+
+    if (tb.status === 'Occupied' || tb.isOccupied) return 'Occupied';
+
     return 'Available';
   };
 

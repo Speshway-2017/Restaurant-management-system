@@ -8,7 +8,16 @@ const reservationSchema = new mongoose.Schema({
   date: { type: String, required: true },
   timeSlot: { type: String, required: true },
   tableNo: { type: String, default: 'Unassigned' },
-  status: { type: String, enum: ['Confirmed', 'Pending', 'Seated', 'Cancelled'], default: 'Confirmed' }
+  section: { type: String, default: 'Main Hall' },
+  specialOccasion: { type: String, default: 'None' },
+  notes: { type: String, default: '' },
+  confirmationSent: { type: Boolean, default: false },
+  reminderSent: { type: Boolean, default: false },
+  status: {
+    type: String,
+    enum: ['Pending', 'Confirmed', 'Checked_In', 'Seated', 'Completed', 'Cancelled', 'No_Show'],
+    default: 'Confirmed'
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Reservation', reservationSchema);

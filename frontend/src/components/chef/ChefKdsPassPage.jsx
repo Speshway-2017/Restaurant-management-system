@@ -154,8 +154,17 @@ export default function ChefKdsPassPage({
                 DISHES TO PREPARE ({ord.items.length})
               </div>
 
-              {/* Dish List with Checkbox Strikeout & Status Badges */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {/* Dish List with Checkbox Strikeout & Status Badges (Scrollable fixed-height list) */}
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.6rem',
+                maxHeight: isCompact ? '210px' : '280px',
+                overflowY: 'auto',
+                paddingRight: '0.35rem',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#CBD5E1 transparent'
+              }}>
                 {(() => {
                   const isPlacedOrNew = !ord.status || ord.status === 'Placed' || ord.status === 'NEW';
                   const isOrderPreparingOrCooking = ord.status === 'Preparing' || ord.status === 'Cooking' || ord.status === 'In-Progress' || ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed';

@@ -34,7 +34,10 @@ export default function LoginPage({ setActivePage }) {
         localStorage.removeItem('flavora_auth_token');
         localStorage.removeItem('flavora_logged_in');
 
-        if (res.user?.role === 'Chef' || enteredInput.includes('chef')) {
+        if (res.user?.role === 'Receptionist' || res.user?.role === 'Host' || enteredInput.includes('reception') || enteredInput.includes('host')) {
+          sessionStorage.setItem('flavora_user_role', 'receptionist');
+          setActivePage('receptionist');
+        } else if (res.user?.role === 'Chef' || enteredInput.includes('chef')) {
           sessionStorage.setItem('flavora_user_role', 'chef');
           setActivePage('chef');
         } else if (res.user?.role === 'Waiter' || enteredInput.includes('waiter')) {
@@ -53,7 +56,10 @@ export default function LoginPage({ setActivePage }) {
         localStorage.removeItem('flavora_auth_token');
         localStorage.removeItem('flavora_logged_in');
 
-        if (enteredInput.includes('chef')) {
+        if (enteredInput.includes('reception') || enteredInput.includes('host')) {
+          sessionStorage.setItem('flavora_user_role', 'receptionist');
+          setActivePage('receptionist');
+        } else if (enteredInput.includes('chef')) {
           sessionStorage.setItem('flavora_user_role', 'chef');
           setActivePage('chef');
         } else if (enteredInput.includes('waiter')) {
