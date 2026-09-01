@@ -238,13 +238,14 @@ export default function ChefLayout({ setActivePage }) {
         const finalItems = rawItems.map((it, itemIdx) => {
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
           const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || (rawStatus === 'Ready' && !hasPendingItems)));
+          const isCooking = Boolean(!isDelivered && !isReady && (it.status === 'COOKING' || it.status === 'PREPARING' || rawStatus === 'Preparing' || rawStatus === 'Cooking'));
           return {
             ...it,
             id: it.id || it._id || `item-${itemIdx}`,
             name: it.name,
             price: Number(it.price) || 0,
             quantity: Number(it.quantity || it.qty || 1),
-            status: isDelivered ? 'DELIVERED' : (isReady ? 'READY' : 'PREPARING'),
+            status: isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : 'PLACED')),
             isReady: isReady,
             isDelivered: isDelivered
           };
@@ -337,7 +338,17 @@ export default function ChefLayout({ setActivePage }) {
     const hasCheckedItems = Object.keys(orderCheckedMap).length > 0 && Object.values(orderCheckedMap).some(Boolean);
 
     let effectiveOrderStatus = newStatus;
-    if (newStatus === 'Ready' && updatedItems.length > 0) {
+    if (newStatus === 'Preparing' && updatedItems.length > 0) {
+      // Mark all non-delivered items as PREPARING when chef clicks Start Cooking
+      updatedItems = updatedItems.map(it => {
+        const isDelivered = it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED';
+        if (isDelivered) {
+          return { ...it, status: 'SERVED', isDelivered: true };
+        }
+        return { ...it, status: 'PREPARING' };
+      });
+      effectiveOrderStatus = 'Preparing';
+    } else if (newStatus === 'Ready' && updatedItems.length > 0) {
       if (hasCheckedItems) {
         // Chef explicitly checked specific dish checkboxes! Mark ONLY checked items as READY!
         updatedItems = updatedItems.map((it, idx) => {
@@ -402,8 +413,14 @@ export default function ChefLayout({ setActivePage }) {
     }
   };
 
+  const [updatingDishItems, setUpdatingDishItems] = useState({});
+
   const handleToggleItemCheck = async (orderId, itemIdx) => {
     const cleanOrderId = String(orderId).replace(/^#/i, '');
+    const itemKey = `${cleanOrderId}-${itemIdx}`;
+
+    if (updatingDishItems[itemKey]) return;
+
     const targetOrder = ordersList.find(o =>
       o.id === orderId || o.orderId === orderId || o._id === orderId ||
       o.id === cleanOrderId || o.orderId === cleanOrderId || o.id === `#${cleanOrderId}` || o.orderId === `#${cleanOrderId}`
@@ -411,71 +428,97 @@ export default function ChefLayout({ setActivePage }) {
 
     if (!targetOrder) return;
 
-    // Check if order is in cooking state
-    const isCooking = targetOrder.status === 'Preparing' || targetOrder.status === 'Cooking' || targetOrder.status === 'In-Progress' || targetOrder.status === 'Ready';
+    // Check if order or any dish is in cooking/served state
+    const hasAnyItemStarted = Array.isArray(targetOrder.items) && targetOrder.items.some(it =>
+      it.isReady || it.isDelivered || it.status === 'READY' || it.status === 'SERVED' || it.status === 'DELIVERED' || it.status === 'COOKING' || it.status === 'PREPARING'
+    );
+    const isCooking = targetOrder.status === 'Preparing' || targetOrder.status === 'Cooking' || targetOrder.status === 'In-Progress' || targetOrder.status === 'Ready' || hasAnyItemStarted;
 
     if (!isCooking) {
       showToast('⚠️ Please click "🔥 Start Cooking" first before marking dishes as ready!');
       return;
     }
 
-    let nextCheckedState = false;
-    setCheckedDishItems(prev => {
-      const orderChecked = prev[orderId] || {};
-      nextCheckedState = !orderChecked[itemIdx];
-      return {
-        ...prev,
-        [orderId]: {
-          ...orderChecked,
-          [itemIdx]: nextCheckedState
-        }
-      };
+    setUpdatingDishItems(prev => ({ ...prev, [itemKey]: true }));
+
+    const prevCheckedMap = checkedDishItems[orderId] || checkedDishItems[cleanOrderId] || {};
+    const prevOrdersList = [...ordersList];
+    const targetItem = targetOrder.items ? targetOrder.items[itemIdx] : null;
+    const isCurrentlyChecked = Boolean(prevCheckedMap[itemIdx] || (targetItem && (targetItem.isReady || targetItem.status === 'READY')));
+    const nextCheckedState = !isCurrentlyChecked;
+
+    // 1. Synchronous Optimistic UI Update (0ms delay)
+    setCheckedDishItems(prev => ({
+      ...prev,
+      [orderId]: { ...(prev[orderId] || {}), [itemIdx]: nextCheckedState },
+      [cleanOrderId]: { ...(prev[cleanOrderId] || {}), [itemIdx]: nextCheckedState },
+      [`#${cleanOrderId}`]: { ...(prev[`#${cleanOrderId}`] || {}), [itemIdx]: nextCheckedState }
+    }));
+
+    const targetItemId = targetItem ? (targetItem._id || targetItem.id || itemIdx) : itemIdx;
+    const targetItemName = targetItem ? targetItem.name : '';
+    const newStatus = nextCheckedState ? 'READY' : 'COOKING';
+
+    const updatedItems = (targetOrder.items || []).map((it, idx) => {
+      if (idx === itemIdx) {
+        return {
+          ...it,
+          status: newStatus,
+          isReady: nextCheckedState
+        };
+      }
+      return it;
     });
 
-    if (Array.isArray(targetOrder.items)) {
-      const targetItem = targetOrder.items[itemIdx];
-      const targetItemId = targetItem ? (targetItem._id || targetItem.id || itemIdx) : itemIdx;
-      const targetItemName = targetItem ? targetItem.name : '';
-      const newStatus = nextCheckedState ? 'READY' : 'PREPARING';
+    const allCheckedNow = updatedItems.length > 0 && updatedItems.every(i => i.status === 'READY' || i.isReady || i.status === 'DELIVERED' || i.isDelivered);
+    const newOrderStatus = allCheckedNow ? 'Ready' : (targetOrder.status === 'Ready' ? 'Preparing' : targetOrder.status);
 
-      const updatedItems = targetOrder.items.map((it, idx) => {
-        if (idx === itemIdx) {
-          return {
-            ...it,
-            status: newStatus,
-            isReady: nextCheckedState
-          };
-        }
-        return it;
-      });
+    const updatedOrderList = ordersList.map(o => {
+      const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
+        o.id === cleanOrderId || o.orderId === cleanOrderId;
+      if (matches) {
+        return {
+          ...o,
+          status: newOrderStatus,
+          items: updatedItems
+        };
+      }
+      return o;
+    });
 
-      const allCheckedNow = updatedItems.length > 0 && updatedItems.every(i => i.status === 'READY' || i.isReady || i.status === 'DELIVERED' || i.isDelivered);
-      const newOrderStatus = allCheckedNow ? 'Ready' : (targetOrder.status === 'Ready' ? 'Preparing' : targetOrder.status);
+    setOrdersList(updatedOrderList);
 
-      const updatedOrderList = ordersList.map(o => {
-        const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
-          o.id === cleanOrderId || o.orderId === cleanOrderId;
-        if (matches) {
-          return {
-            ...o,
-            status: newOrderStatus,
-            items: updatedItems
-          };
-        }
-        return o;
-      });
+    try {
+      localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedOrderList));
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+    } catch (e) { }
 
-      setOrdersList(updatedOrderList);
-
+    // 2. Background Persistence to MongoDB & Error Rollback
+    try {
+      const apiOrderId = targetOrder._id || targetOrder.id || targetOrder.orderId || cleanOrderId;
+      await api.updateOrderItemStatus(apiOrderId, [targetItemId, itemIdx, targetItemName], newStatus);
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+    } catch (err) {
+      console.error('Failed to update dish status on backend:', err);
+      // Rollback Optimistic Update
+      setCheckedDishItems(prev => ({
+        ...prev,
+        [orderId]: prevCheckedMap,
+        [cleanOrderId]: prevCheckedMap,
+        [`#${cleanOrderId}`]: prevCheckedMap
+      }));
+      setOrdersList(prevOrdersList);
       try {
-        localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedOrderList));
+        localStorage.setItem('flavora_manager_orders', JSON.stringify(prevOrdersList));
         window.dispatchEvent(new Event('flavora_orders_updated'));
       } catch (e) { }
-
-      try {
-        const apiOrderId = targetOrder._id || targetOrder.id || targetOrder.orderId || cleanOrderId;
-        await api.updateOrderItemStatus(apiOrderId, [targetItemId, itemIdx, targetItemName], newStatus);
-      } catch (e) { }
+      showToast('❌ Unable to update dish status. Please try again.');
+    } finally {
+      setUpdatingDishItems(prev => {
+        const next = { ...prev };
+        delete next[itemKey];
+        return next;
+      });
     }
   };
 
@@ -648,6 +691,7 @@ export default function ChefLayout({ setActivePage }) {
               activeKdsOrders={activeKdsOrders}
               getElapsedMins={getElapsedMins}
               checkedDishItems={checkedDishItems}
+              updatingDishItems={updatingDishItems}
               handleToggleItemCheck={handleToggleItemCheck}
               handleUpdateStatus={handleUpdateStatus}
               setSelectedTicketModal={setSelectedTicketModal}

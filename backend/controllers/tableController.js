@@ -152,7 +152,7 @@ const updateTableByNumber = async (req, res) => {
 const generateTableQr = async (req, res) => {
   try {
     const tableNum = req.body?.tableNum || req.params?.tableNum || 'T-01';
-    const defaultHost = (req.hostname === 'localhost' || req.hostname === '127.0.0.1') ? '192.168.1.34' : req.hostname;
+    const defaultHost = (req.hostname === 'localhost' || req.hostname === '127.0.0.1') ? '192.168.1.4' : req.hostname;
     const targetUrl = req.body?.targetUrl || `http://${defaultHost}:5173/menu?table=${tableNum}`;
     
     // Generate base64 Data URL for table QR code
@@ -176,4 +176,42 @@ const generateTableQr = async (req, res) => {
   }
 };
 
-module.exports = { getTables, updateTableStatus, updateTableByNumber, generateTableQr };
+const createTable = async (req, res) => {
+  try {
+    const { number, name, section, zone, seats, cap, status } = req.body || {};
+    const numVal = number || name || 'T-13';
+    const sectionVal = section || zone || 'Main Dining';
+    const seatsVal = Number(seats || cap || 4);
+
+    const newTbl = await Table.create({
+      number: numVal,
+      name: numVal,
+      section: sectionVal,
+      seats: seatsVal,
+      status: status || 'Available'
+    });
+
+    res.status(201).json(newTbl);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+const deleteTable = async (req, res) => {
+  try {
+    const id = req.params.id;
+    let deleted;
+    if (typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/)) {
+      deleted = await Table.findByIdAndDelete(id);
+    } else {
+      const cleanNum = String(id).replace(/[^0-9]/g, '');
+      const exactRegex = cleanNum ? new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i') : new RegExp(id, 'i');
+      deleted = await Table.findOneAndDelete({ $or: [{ name: exactRegex }, { number: exactRegex }] });
+    }
+    res.json({ message: 'Table deleted successfully', deleted });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+module.exports = { getTables, createTable, updateTableStatus, updateTableByNumber, deleteTable, generateTableQr };

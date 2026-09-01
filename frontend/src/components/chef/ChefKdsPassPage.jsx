@@ -8,6 +8,7 @@ export default function ChefKdsPassPage({
   activeKdsOrders,
   getElapsedMins,
   checkedDishItems,
+  updatingDishItems = {},
   handleToggleItemCheck,
   handleUpdateStatus,
   setSelectedTicketModal
@@ -155,126 +156,158 @@ export default function ChefKdsPassPage({
 
               {/* Dish List with Checkbox Strikeout & Status Badges */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                {ord.items.map((item, idx) => {
-                  const cleanId = String(ord.id || ord.orderId || '').replace(/^#/i, '').trim();
-                  const isOrderReadyOverall = ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed' || ord.status === 'Paid';
-                  const isDelivered = item.isDelivered || item.status === 'SERVED' || item.status === 'DELIVERED';
-                  const isCooking = ord.status === 'Preparing' || ord.status === 'Cooking' || ord.status === 'In-Progress' || isOrderReadyOverall;
-                  const isCheckedInMap = Boolean(checkedDishItems[ord.id]?.[idx] || checkedDishItems[cleanId]?.[idx] || checkedDishItems[`#${cleanId}`]?.[idx]);
-                  const isReady = isCooking && !isDelivered && (isOrderReadyOverall || item.isReady || item.status === 'READY' || isCheckedInMap);
-                  
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => !isDelivered && handleToggleItemCheck(ord.id, idx)}
-                      title={!isCooking ? '⚠️ Click "🔥 Start Cooking" below to start preparing & ticking dishes' : (isDelivered ? 'Dish already served' : 'Click to toggle dish ready status')}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0.55rem 0.75rem',
-                        backgroundColor: isDelivered ? '#F1F5F9' : (isReady ? '#F0FDF4' : (isCooking ? '#F8FAFC' : '#FAFAFA')),
-                        borderRadius: '8px',
-                        border: isDelivered ? '1px solid #CBD5E1' : (isReady ? '1.5px solid #86EFAC' : (isCooking ? '1px solid #E2E8F0' : '1px dashed #CBD5E1')),
-                        cursor: isDelivered ? 'default' : (isCooking ? 'pointer' : 'not-allowed'),
-                        opacity: isDelivered ? 0.65 : (isCooking ? 1 : 0.85),
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                        {isDelivered ? (
-                          <CheckCircle2 size={17} color="#64748B" />
-                        ) : isReady ? (
-                          <CheckSquare size={17} color="#166534" />
-                        ) : (
-                          <Square size={17} color={isCooking ? '#94A3B8' : '#CBD5E1'} />
-                        )}
-                        <span style={{
-                          fontSize: '0.9rem',
-                          fontWeight: 800,
-                          color: isDelivered ? '#64748B' : (isReady ? '#166534' : (isCooking ? '#0F2A1D' : '#475569')),
-                          textDecoration: isDelivered ? 'line-through' : 'none'
-                        }}>
-                          <strong style={{ color: isDelivered ? '#64748B' : '#E07A3C', marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
-                          {item.name}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{
-                          fontSize: '0.68rem',
-                          fontWeight: 900,
-                          backgroundColor: isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : (isCooking ? '#FFEDD5' : '#F1F5F9')),
-                          color: isDelivered ? '#475569' : (isReady ? '#166534' : (isCooking ? '#C2410C' : '#64748B')),
-                          padding: '0.15rem 0.45rem',
-                          borderRadius: '5px'
-                        }}>
-                          {isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : (isCooking ? 'COOKING' : 'QUEUED'))}
-                        </span>
-
-                        {item.price && (
-                          <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
-                            ₹{item.price * (item.quantity || 1)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                {(() => {
+                  const isPlacedOrNew = !ord.status || ord.status === 'Placed' || ord.status === 'NEW';
+                  const isOrderPreparingOrCooking = ord.status === 'Preparing' || ord.status === 'Cooking' || ord.status === 'In-Progress' || ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed';
+                  const hasAnyItemStarted = Array.isArray(ord.items) && ord.items.some(it =>
+                    it.status === 'COOKING' || it.status === 'PREPARING' || it.status === 'READY' || it.isReady
                   );
-                })}
+                  const isStarted = !isPlacedOrNew || hasAnyItemStarted;
+
+                  return ord.items.map((item, idx) => {
+                    const cleanId = String(ord.id || ord.orderId || '').replace(/^#/i, '').trim();
+                    const itemKey = `${cleanId}-${idx}`;
+                    const isUpdating = Boolean(updatingDishItems && (updatingDishItems[itemKey] || updatingDishItems[`${ord.id}-${idx}`]));
+                    const isOrderReadyOverall = ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed' || ord.status === 'Paid';
+                    const isDelivered = item.isDelivered || item.status === 'SERVED' || item.status === 'DELIVERED';
+                    const isCheckedInMap = Boolean(checkedDishItems[ord.id]?.[idx] || checkedDishItems[cleanId]?.[idx] || checkedDishItems[`#${cleanId}`]?.[idx]);
+                    const isReady = !isDelivered && (isOrderReadyOverall || item.isReady || item.status === 'READY' || isCheckedInMap);
+                    const isCooking = isStarted && !isReady && !isDelivered;
+
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          if (isDelivered || isUpdating) return;
+                          if (!isStarted) {
+                            showToast('⚠️ Click "🔥 Start Cooking" below to start preparing dishes!');
+                            return;
+                          }
+                          handleToggleItemCheck(ord.id, idx);
+                        }}
+                        title={!isStarted ? '⚠️ Click "🔥 Start Cooking" below to start preparing & ticking dishes' : (isDelivered ? 'Dish already served' : 'Click to toggle dish ready status')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.55rem 0.75rem',
+                          backgroundColor: isDelivered ? '#F1F5F9' : (isReady ? '#F0FDF4' : (isStarted ? '#F8FAFC' : '#FAFAFA')),
+                          borderRadius: '8px',
+                          border: isDelivered ? '1px solid #CBD5E1' : (isReady ? '1.5px solid #86EFAC' : (isStarted ? '1px solid #E2E8F0' : '1px dashed #CBD5E1')),
+                          cursor: isDelivered || isUpdating ? 'default' : (isStarted ? 'pointer' : 'not-allowed'),
+                          opacity: isDelivered ? 0.65 : (isStarted ? 1 : 0.65),
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          {isDelivered ? (
+                            <CheckCircle2 size={17} color="#64748B" />
+                          ) : isReady ? (
+                            <CheckSquare size={17} color="#166534" />
+                          ) : (
+                            <Square size={17} color={isStarted ? '#94A3B8' : '#CBD5E1'} />
+                          )}
+                          <span style={{
+                            fontSize: '0.9rem',
+                            fontWeight: 800,
+                            color: isDelivered ? '#64748B' : (isReady ? '#166534' : (isStarted ? '#0F2A1D' : '#64748B')),
+                            textDecoration: isDelivered ? 'line-through' : 'none'
+                          }}>
+                            <strong style={{ color: isDelivered ? '#64748B' : (isStarted ? '#E07A3C' : '#94A3B8'), marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
+                            {item.name}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {isUpdating && (
+                            <span style={{ fontSize: '0.65rem', color: '#0284C7', fontWeight: 700, fontStyle: 'italic' }}>
+                              Updating...
+                            </span>
+                          )}
+
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 900,
+                            backgroundColor: isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : (isStarted ? '#FFEDD5' : '#F1F5F9')),
+                            color: isDelivered ? '#475569' : (isReady ? '#166534' : (isStarted ? '#C2410C' : '#64748B')),
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: '5px'
+                          }}>
+                            {isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : (isStarted ? 'COOKING' : 'PLACED'))}
+                          </span>
+
+                          {item.price && (
+                            <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
+                              ₹{item.price * (item.quantity || 1)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
 
             {/* Ticket Footer Action Controls */}
             <div style={{ padding: '0.85rem 1.15rem', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', gap: '0.6rem' }}>
-              {(ord.status === 'Placed' || ord.status === 'NEW' || !ord.status) ? (
-                <button
-                  type="button"
-                  onClick={() => handleUpdateStatus(ord.id, 'Preparing')}
-                  style={{
-                    flex: 1,
-                    padding: '0.7rem',
-                    borderRadius: '10px',
-                    border: 'none',
-                    backgroundColor: '#E07A3C',
-                    color: '#FFFFFF',
-                    fontSize: '0.86rem',
-                    fontWeight: 900,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.45rem',
-                    boxShadow: '0 4px 12px rgba(224, 122, 60, 0.35)'
-                  }}
-                >
-                  <Flame size={18} />
-                  <span>🔥 Start Cooking</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleUpdateStatus(ord.id, 'Ready')}
-                  style={{
-                    flex: 1,
-                    padding: '0.7rem',
-                    borderRadius: '10px',
-                    border: 'none',
-                    backgroundColor: '#166534',
-                    color: '#FFFFFF',
-                    fontSize: '0.86rem',
-                    fontWeight: 900,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.45rem',
-                    boxShadow: '0 4px 12px rgba(22, 101, 52, 0.4)'
-                  }}
-                >
-                  <CheckCircle2 size={18} />
-                  <span>✅ Mark Ready for Pass</span>
-                </button>
-              )}
+              {(() => {
+                const isPlacedOrNew = !ord.status || ord.status === 'Placed' || ord.status === 'NEW';
+                const hasAnyItemStarted = Array.isArray(ord.items) && ord.items.some(it =>
+                  it.status === 'COOKING' || it.status === 'PREPARING' || it.status === 'READY' || it.isReady
+                );
+                const isStarted = !isPlacedOrNew || hasAnyItemStarted;
+
+                return !isStarted ? (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus(ord.id, 'Preparing')}
+                    style={{
+                      flex: 1,
+                      padding: '0.7rem',
+                      borderRadius: '10px',
+                      border: 'none',
+                      backgroundColor: '#E07A3C',
+                      color: '#FFFFFF',
+                      fontSize: '0.86rem',
+                      fontWeight: 900,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.45rem',
+                      boxShadow: '0 4px 12px rgba(224, 122, 60, 0.35)'
+                    }}
+                  >
+                    <Flame size={18} />
+                    <span>🔥 Start Cooking</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus(ord.id, 'Ready')}
+                    style={{
+                      flex: 1,
+                      padding: '0.7rem',
+                      borderRadius: '10px',
+                      border: 'none',
+                      backgroundColor: '#166534',
+                      color: '#FFFFFF',
+                      fontSize: '0.86rem',
+                      fontWeight: 900,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.45rem',
+                      boxShadow: '0 4px 12px rgba(22, 101, 52, 0.4)'
+                    }}
+                  >
+                    <CheckCircle2 size={18} />
+                    <span>✅ Mark Ready for Pass</span>
+                  </button>
+                );
+              })()}
 
               <button
                 type="button"

@@ -11,11 +11,19 @@ const orderSchema = new mongoose.Schema({
     name: String,
     price: Number,
     quantity: Number,
-    status: { type: String, default: 'PREPARING' },
+    status: { type: String, default: 'PLACED' },
     isReady: { type: Boolean, default: false },
     isDelivered: { type: Boolean, default: false }
   }],
   total: { type: Number, required: true },
+  originalTotal: { type: Number },
+  originalAmount: { type: Number },
+  couponCode: { type: String, default: '' },
+  discountAmount: { type: Number, default: 0 },
+  finalAmount: { type: Number },
+  tip: { type: Number, default: 0 },
+  tipAmount: { type: Number, default: 0 },
+  paymentMethod: { type: String, default: 'UPI' },
   status: { 
     type: String, 
     default: 'Placed' 

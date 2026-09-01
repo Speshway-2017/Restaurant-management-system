@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Table2, Plus, Sparkles, RefreshCw, CheckCircle2, User, Clock, UtensilsCrossed, Eye, X, Bell, DollarSign, AlertCircle, Search, Filter, Receipt, CreditCard, QrCode, Check } from 'lucide-react';
+import { Table2, Plus, Sparkles, RefreshCw, CheckCircle2, User, Clock, UtensilsCrossed, Eye, X, Bell, DollarSign, AlertCircle, Search, Filter, Receipt, CreditCard, QrCode, Check, Ticket, Coins } from 'lucide-react';
 import { api } from '../../services/api';
+import { clearTableSessionStorage } from '../../utils/orderUtils';
 
 const BASE_DEFAULT_TABLES = [
   { id: 1, num: 'T-01', zone: 'Main Dining', cap: 4, status: 'Available' },
@@ -28,6 +29,48 @@ export default function WaiterTablesPage() {
   const [tipInput, setTipInput] = useState('');
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [currentTimeStr, setCurrentTimeStr] = useState('');
+
+  // Coupon state for payment modal
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState('');
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
+  const handleApplyCoupon = async (rawSubtotal) => {
+    if (!couponInput || !couponInput.trim()) {
+      setCouponError('Please enter a coupon code');
+      return;
+    }
+    setValidatingCoupon(true);
+    setCouponError('');
+    try {
+      const res = await api.validateCoupon(couponInput.trim(), Number(rawSubtotal || 0));
+      if (res && res.valid) {
+        setAppliedCoupon({
+          code: res.code,
+          discountType: res.discountType,
+          discountVal: res.discountVal,
+          discountAmount: res.discountAmount,
+          finalAmount: res.finalAmount
+        });
+        showNotification(`✓ Coupon "${res.code}" applied! Saved ₹${res.discountAmount}`);
+      } else {
+        setCouponError(res ? res.message : 'Invalid or expired coupon');
+        setAppliedCoupon(null);
+      }
+    } catch (err) {
+      setCouponError(err.message || 'Invalid or expired coupon');
+      setAppliedCoupon(null);
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+  };
   const [toastMsg, setToastMsg] = useState(null);
 
   const showNotification = (msg) => {
@@ -172,23 +215,39 @@ export default function WaiterTablesPage() {
     try {
       const orderId = order._id || order.id || order.orderId;
       const tableNum = order.table || order.tableNumber || 'T-01';
+      const originalTotal = Number(order.originalTotal || order.originalAmount || order.total || order.totalAmount || 0);
+      const discountAmount = appliedCoupon ? Number(appliedCoupon.discountAmount || 0) : Number(order.discountAmount || 0);
+      const finalAmount = appliedCoupon ? Number(appliedCoupon.finalAmount || (originalTotal - discountAmount)) : (order.finalAmount !== undefined ? Number(order.finalAmount) : originalTotal);
+      const couponCode = appliedCoupon ? appliedCoupon.code : (order.couponCode || '');
+      const tipVal = Number(tipInput || 0);
 
       // 1. Update Order in Backend & Memory (Payment Confirmed -> Paid)
       await api.updateOrderStatus(orderId, 'Paid', {
         status: 'Paid',
         payment: 'Completed',
+        paymentStatus: 'Paid',
         paymentMethod: paymentMethod,
-        total: Number(order.total || 0) // Revenue Rule: Exact bill total ONLY
+        originalTotal: originalTotal,
+        originalAmount: originalTotal,
+        couponCode: couponCode,
+        discountAmount: discountAmount,
+        finalAmount: finalAmount,
+        total: finalAmount,
+        totalAmount: finalAmount,
+        tip: tipVal,
+        tipAmount: tipVal
       }).catch(() => { });
 
       setOrders(prev => prev.map(o => (o._id === orderId || o.id === orderId) ? { ...o, status: 'Completed', payment: 'Completed' } : o));
 
-      // 2. Table AUTOMATICALLY transitions to CLEANING
+      // 2. Table AUTOMATICALLY transitions to CLEANING & session is closed
+      clearTableSessionStorage(tableNum);
       await handleSetTableCleaning(tableNum);
 
       setPaymentModalOrder(null);
       setBillingOrder(null);
       setSelectedTable(null);
+      handleRemoveCoupon();
       showNotification(`🎉 Payment Confirmed Success! Table ${tableNum} moved AUTOMATICALLY to CLEANING.`);
     } catch (e) {
       console.error('Payment confirmation error:', e);
@@ -359,49 +418,144 @@ export default function WaiterTablesPage() {
             </div>
 
             {/* Food Bill Revenue Banner */}
-            <div style={{ textAlign: 'center', backgroundColor: '#F8FAFC', padding: '1.75rem', borderRadius: '18px', border: '1.5px solid #E2E8F0', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                FOOD BILL AMOUNT (RESTAURANT REVENUE)
-              </div>
-              <div style={{ fontSize: '3rem', fontWeight: 900, color: '#166534', fontFamily: 'var(--font-heading)', margin: '0.25rem 0' }}>
-                ₹{paymentModalOrder.total || 0}
-              </div>
-              <div style={{ fontSize: '0.9rem', color: '#0F2A1D', fontWeight: 700 }}>
-                Customer Name: <span style={{ color: '#E07A3C', fontWeight: 800 }}>{paymentModalOrder.customer || 'Guest Diner'}</span>
-              </div>
-            </div>
+            {(() => {
+              const origTotal = Number(paymentModalOrder.total || paymentModalOrder.totalAmount || 0);
+              const discAmt = appliedCoupon ? Number(appliedCoupon.discountAmount || 0) : 0;
+              const finalPayable = appliedCoupon ? Number(appliedCoupon.finalAmount || (origTotal - discAmt)) : origTotal;
 
-            {/* Manual Tip Entry Section */}
-            <div style={{ marginBottom: '1.5rem', backgroundColor: '#FFFFFF', padding: '1.25rem', borderRadius: '16px', border: '1.5px solid #E2E8F0', boxShadow: '0 4px 14px rgba(0,0,0,0.02)' }}>
-              <label style={{ display: 'block', fontSize: '0.92rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.5rem' }}>
-                🪙 Optional Customer Tip (Manual Entry)
-              </label>
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>₹</span>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Enter tip amount (e.g. 50, 100, 200)"
-                  value={tipInput}
-                  onChange={e => setTipInput(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem 1rem',
-                    borderRadius: '10px',
-                    border: '1.5px solid #CBD5E1',
-                    fontSize: '1rem',
-                    fontWeight: 700,
-                    outline: 'none',
-                    backgroundColor: '#FAFAFA'
-                  }}
-                />
-              </div>
-              <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600, marginTop: '0.65rem', lineHeight: '1.5' }}>
-                💡 Total Paid by Customer: <strong style={{ color: '#0F2A1D', fontSize: '1rem' }}>₹{(Number(paymentModalOrder.total || 0) + Number(tipInput || 0))}</strong>
-                <br />
-                <span style={{ color: '#166534', fontWeight: 800 }}>✓ Restaurant Revenue Recorded: ₹{paymentModalOrder.total || 0} ONLY</span> (Tip amount is excluded from restaurant revenue).
-              </div>
-            </div>
+              return (
+                <>
+                  <div style={{ textAlign: 'center', backgroundColor: '#F8FAFC', padding: '1.75rem', borderRadius: '18px', border: '1.5px solid #E2E8F0', marginBottom: '1.5rem' }}>
+                    <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      FOOD BILL AMOUNT (RESTAURANT REVENUE)
+                    </div>
+                    <div style={{ fontSize: '3rem', fontWeight: 900, color: '#166534', fontFamily: 'var(--font-heading)', margin: '0.25rem 0' }}>
+                      ₹{finalPayable}
+                    </div>
+                    {appliedCoupon && (
+                      <div style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 800 }}>
+                        (Discounted from Original ₹{origTotal} using coupon {appliedCoupon.code})
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.9rem', color: '#0F2A1D', fontWeight: 700, marginTop: '0.25rem' }}>
+                      Customer Name: <span style={{ color: '#E07A3C', fontWeight: 800 }}>{paymentModalOrder.customer || 'Guest Diner'}</span>
+                    </div>
+                  </div>
+
+                  {/* Apply Coupon Section */}
+                  <div style={{ marginBottom: '1.5rem', backgroundColor: '#F8FAFC', padding: '1.25rem', borderRadius: '16px', border: '1.5px solid #E2E8F0' }}>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Ticket size={18} color="#E07A3C" />
+                      <span>Apply Coupon</span>
+                    </div>
+
+                    {!appliedCoupon ? (
+                      <div>
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                          <input
+                            type="text"
+                            placeholder="Enter coupon code (e.g. ROYAL20)"
+                            value={couponInput}
+                            onChange={(e) => {
+                              setCouponInput(e.target.value.toUpperCase());
+                              setCouponError('');
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleApplyCoupon(origTotal);
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '0.75rem 1rem',
+                              borderRadius: '10px',
+                              border: couponError ? '1.5px solid #EF4444' : '1.5px solid #CBD5E1',
+                              fontSize: '0.95rem',
+                              fontWeight: 700,
+                              color: '#0F2A1D',
+                              textTransform: 'uppercase',
+                              outline: 'none'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            disabled={validatingCoupon || !couponInput.trim()}
+                            onClick={() => handleApplyCoupon(origTotal)}
+                            style={{
+                              padding: '0.75rem 1.4rem',
+                              backgroundColor: validatingCoupon || !couponInput.trim() ? '#94A3B8' : '#0F2A1D',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontSize: '0.9rem',
+                              fontWeight: 800,
+                              cursor: validatingCoupon || !couponInput.trim() ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            {validatingCoupon ? 'Validating...' : 'Apply'}
+                          </button>
+                        </div>
+
+                        {couponError && (
+                          <div style={{ fontSize: '0.8rem', color: '#DC2626', fontWeight: 700, marginTop: '0.5rem' }}>
+                            ⚠️ {couponError}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ backgroundColor: '#F0FDF4', padding: '0.85rem 1.1rem', borderRadius: '14px', border: '1.5px solid #86EFAC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            ✓ Coupon Applied
+                          </div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0F2A1D', marginTop: '0.15rem' }}>
+                            {appliedCoupon.code} <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>({appliedCoupon.discountType === 'PERCENTAGE' ? `${appliedCoupon.discountVal}% OFF` : `₹${appliedCoupon.discountVal} OFF`})</span>
+                          </div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 900, color: '#166534', marginTop: '0.15rem' }}>
+                            Coupon Discount: -₹{discAmt}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveCoupon}
+                          style={{
+                            backgroundColor: '#FEE2E2',
+                            color: '#991B1B',
+                            border: '1px solid #FCA5A5',
+                            borderRadius: '8px',
+                            padding: '0.4rem 0.85rem',
+                            fontSize: '0.8rem',
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Price Breakdown */}
+                    {appliedCoupon && (
+                      <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #CBD5E1', display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.85rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', fontWeight: 700 }}>
+                          <span>Original Total:</span>
+                          <span>₹{origTotal}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#166534', fontWeight: 800 }}>
+                          <span>Coupon Discount ({appliedCoupon.code}):</span>
+                          <span>-₹{discAmt}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#0F2A1D', fontWeight: 900, fontSize: '0.98rem', paddingTop: '0.4rem', borderTop: '1px solid #E2E8F0' }}>
+                          <span>Final Payable Amount:</span>
+                          <span style={{ color: '#166534' }}>₹{finalPayable}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Payment Method Selector */}
             <div style={{ marginBottom: '1.5rem' }}>
@@ -855,37 +1009,6 @@ export default function WaiterTablesPage() {
                   </div>
                 </div>
 
-                {/* Manual Customer Tip Entry Section (Req: Tip excluded from revenue) */}
-                <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '1.25rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
-                    🪙 Optional Customer Tip (Manual Entry)
-                  </label>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <span style={{ fontSize: '1rem', fontWeight: 900, color: '#0F2A1D' }}>₹</span>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="Enter tip (e.g. 50, 100)"
-                      value={tipInput}
-                      onChange={e => setTipInput(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem 0.75rem',
-                        borderRadius: '8px',
-                        border: '1px solid #CBD5E1',
-                        fontSize: '0.9rem',
-                        fontWeight: 700,
-                        outline: 'none'
-                      }}
-                    />
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, marginTop: '0.35rem' }}>
-                    💡 Total to Collect from Diner: <b>₹{(Number(billingOrder.total || 0) + Number(tipInput || 0))}</b>
-                    <br />
-                    <span style={{ color: '#166534', fontWeight: 800 }}>✓ Restaurant Revenue: ₹{billingOrder.total || 0} ONLY</span> (Tip amount is excluded from revenue).
-                  </div>
-                </div>
-
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
                     onClick={() => {
@@ -894,7 +1017,7 @@ export default function WaiterTablesPage() {
                     }}
                     style={{ flex: 1, backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
                   >
-                    💳 Process Customer Payment (₹{(Number(billingOrder.total || 0) + Number(tipInput || 0))})
+                    💳 Process Customer Payment (₹{billingOrder.total || 0})
                   </button>
                   <button
                     onClick={() => setBillingOrder(null)}
@@ -935,19 +1058,38 @@ export default function WaiterTablesPage() {
                   </div>
                 </div>
 
-                {/* Tip Summary Badge (No duplicate editable input box in payment confirmation modal) */}
-                <div style={{ marginBottom: '1.15rem', backgroundColor: '#F8FAFC', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                  {Number(tipInput || 0) > 0 ? (
-                    <div style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: 800, marginBottom: '0.25rem' }}>
-                      🪙 Customer Tip Included: <b>+₹{tipInput}</b>
+                {/* Customer Tip Section */}
+                <div style={{ marginBottom: '1.15rem', backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', border: '1.5px solid #E2E8F0' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <Coins size={15} color="#B45309" />
+                    <span>Optional Customer Tip</span>
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#0F2A1D' }}>₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Enter tip (e.g. 50, 100)"
+                      value={tipInput}
+                      onChange={(e) => setTipInput(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '0.45rem 0.65rem',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        color: '#0F2A1D',
+                        outline: 'none',
+                        backgroundColor: '#FFFFFF'
+                      }}
+                    />
+                  </div>
+                  {Number(tipInput || 0) > 0 && (
+                    <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: 800, marginTop: '0.35rem' }}>
+                      🪙 Tip Added: <b>+₹{tipInput}</b> • Total: <b style={{ color: '#166534' }}>₹{(Number(paymentModalOrder.total || 0) + Number(tipInput || 0))}</b>
                     </div>
-                  ) : null}
-                  <div style={{ fontSize: '0.82rem', color: '#0F2A1D', fontWeight: 800 }}>
-                    💡 Total to Collect from Diner: <b style={{ color: '#166534', fontSize: '0.95rem' }}>₹{(Number(paymentModalOrder.total || 0) + Number(tipInput || 0))}</b>
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600, marginTop: '0.2rem' }}>
-                    ✓ Restaurant Revenue: ₹{paymentModalOrder.total || 0} ONLY (Tip excluded from revenue).
-                  </div>
+                  )}
                 </div>
 
                 <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D' }}>Select Payment Method</h4>
@@ -994,7 +1136,7 @@ export default function WaiterTablesPage() {
                     onClick={() => handleConfirmPayment(paymentModalOrder)}
                     style={{ flex: 1, backgroundColor: '#166534', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 900, cursor: 'pointer' }}
                   >
-                    ✓ Confirm Successful Payment
+                    ✓ Confirm Payment (₹{(Number(paymentModalOrder.total || 0) + Number(tipInput || 0))})
                   </button>
                   <button
                     onClick={() => {
@@ -1040,6 +1182,59 @@ export default function WaiterTablesPage() {
                       <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
                         Status: <span style={{ color: '#E07A3C', fontWeight: 800 }}>{selectedTable.activeOrder.status}</span>
                       </div>
+
+                      {(() => {
+                        const ord = selectedTable.activeOrder;
+                        const isPaid = ord.status === 'Completed' || ord.status === 'Paid' || ord.payment === 'Paid' || ord.payment === 'Completed';
+                        const displayPaidVal = Number(ord.finalAmount ?? ord.total ?? ord.totalAmount ?? 0);
+                        const origVal = Number(ord.originalTotal ?? ord.originalAmount ?? 0);
+                        const discVal = Number(ord.discountAmount ?? 0);
+                        const couponName = ord.couponCode || '';
+                        const tipVal = Number(ord.tip ?? ord.tipAmount ?? 0);
+
+                        const hasOriginal = Boolean(origVal > 0 && origVal > displayPaidVal);
+                        const actualDiscount = discVal > 0 ? discVal : (origVal > displayPaidVal ? origVal - displayPaidVal : 0);
+                        const hasDiscount = Boolean(actualDiscount > 0);
+                        const hasTip = Boolean(tipVal > 0);
+
+                        return (
+                          <div style={{ marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: '1px dashed #CBD5E1' }}>
+                            <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <span>Paid Revenue: ₹{displayPaidVal}</span>
+                              {isPaid && (
+                                <span style={{ fontSize: '0.66rem', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid #86EFAC' }}>
+                                  ✓ PAID
+                                </span>
+                              )}
+                            </div>
+
+                            {(hasOriginal || hasDiscount || hasTip) && (
+                              <div style={{ marginTop: '0.25rem', display: 'flex', flexDirection: 'column', gap: '0.12rem', fontSize: '0.74rem' }}>
+                                {hasOriginal && (
+                                  <div style={{ color: '#64748B', fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Original Bill Total:</span>
+                                    <span style={{ textDecoration: 'line-through' }}>₹{origVal}</span>
+                                  </div>
+                                )}
+
+                                {hasDiscount && (
+                                  <div style={{ color: '#DC2626', fontWeight: 800, display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Coupon ({couponName || 'Applied'}):</span>
+                                    <span>-₹{actualDiscount}</span>
+                                  </div>
+                                )}
+
+                                {hasTip && (
+                                  <div style={{ color: '#EA580C', fontWeight: 800, display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Customer Tip:</span>
+                                    <span>+₹{tipVal}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 800, color: '#0F2A1D' }}>Ordered Items:</h4>

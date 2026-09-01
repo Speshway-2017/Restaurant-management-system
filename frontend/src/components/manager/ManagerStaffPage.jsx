@@ -2,6 +2,42 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical, ShieldCheck, Mail, Phone, RefreshCw, Eye, Ban } from 'lucide-react';
 import { api } from '../../services/api';
 
+const format24to12 = (time24) => {
+  if (!time24) return '';
+  const [hStr, mStr] = String(time24).split(':');
+  let h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  if (isNaN(h)) return time24;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  const hFormatted = String(h).padStart(2, '0');
+  return `${hFormatted}:${m} ${ampm}`;
+};
+
+const parseShiftTo24 = (shiftStr) => {
+  if (!shiftStr) return { start: '09:00', end: '17:00' };
+  const parts = String(shiftStr).split(/[-–—]/);
+  if (parts.length < 2) return { start: '09:00', end: '17:00' };
+
+  const parseSingle = (str, fallback) => {
+    const trimmed = (str || '').trim();
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return fallback;
+    let h = parseInt(match[1], 10);
+    const m = match[2];
+    const ampm = (match[3] || '').toUpperCase();
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2, '0')}:${m}`;
+  };
+
+  return {
+    start: parseSingle(parts[0], '09:00'),
+    end: parseSingle(parts[1], '17:00')
+  };
+};
+
 export default function ManagerStaffPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
@@ -23,7 +59,7 @@ export default function ManagerStaffPage() {
           role: stf.role || 'Waiter',
           email: stf.email || '',
           phone: stf.phone || '',
-          shift: stf.scheduledShift || stf.shift || 'Morning (09:00 AM - 05:00 PM)',
+          shift: stf.scheduledShift || stf.shift || '09:00 AM – 05:00 PM',
           status: stf.status || 'On Shift'
         }));
         setStaffList(mapped);
@@ -39,10 +75,12 @@ export default function ManagerStaffPage() {
 
   const [formData, setFormData] = useState({
     name: '',
-    role: 'Head Waiter',
+    role: 'Waiter',
     email: '',
     phone: '',
-    shift: 'Morning (09:00 AM - 05:00 PM)',
+    shiftStart: '09:00',
+    shiftEnd: '17:00',
+    shift: '09:00 AM – 05:00 PM',
     status: 'On Shift'
   });
 
@@ -62,9 +100,11 @@ export default function ManagerStaffPage() {
     setEditingStaff(null);
     setFormData({
       name: '',
-      role: 'Head Waiter',
+      role: 'Waiter',
       email: '',
       phone: '',
+      shiftStart: '09:00',
+      shiftEnd: '17:00',
       shift: '09:00 AM – 05:00 PM',
       status: 'On Shift'
     });
@@ -73,12 +113,15 @@ export default function ManagerStaffPage() {
 
   const handleOpenEditModal = (stf) => {
     setEditingStaff(stf);
+    const parsedTimes = parseShiftTo24(stf.shift || '09:00 AM – 05:00 PM');
     setFormData({
       name: stf.name || '',
-      role: stf.role || 'Head Waiter',
+      role: stf.role || 'Waiter',
       email: stf.email || '',
       phone: stf.phone || '',
-      shift: stf.shift || '09:00 AM – 05:00 PM',
+      shiftStart: parsedTimes.start,
+      shiftEnd: parsedTimes.end,
+      shift: stf.shift || `${format24to12(parsedTimes.start)} – ${format24to12(parsedTimes.end)}`,
       status: stf.status || 'On Shift'
     });
     setOpenMenuId(null);
@@ -91,9 +134,13 @@ export default function ManagerStaffPage() {
       alert('Please enter staff name.');
       return;
     }
-    if (formData.phone && formData.phone.length !== 10) {
-      alert('Mobile number must be exactly 10 digits.');
-      return;
+    // Only validate phone when creating a new staff member and phone is entered
+    if (!editingStaff && formData.phone) {
+      const digitsOnly = String(formData.phone).replace(/[^0-9]/g, '');
+      if (digitsOnly.length > 0 && digitsOnly.length < 10) {
+        alert('Mobile number must be at least 10 digits.');
+        return;
+      }
     }
 
     const payload = {
@@ -186,7 +233,9 @@ export default function ManagerStaffPage() {
     fetchBackendStaff();
   };
 
-  const filteredStaff = staffList.filter(stf => {
+  const nonManagerStaff = staffList.filter(stf => !String(stf.role || '').toLowerCase().includes('manager'));
+
+  const filteredStaff = nonManagerStaff.filter(stf => {
     const matchesSearch = !searchQuery || 
       (stf.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (stf.role || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -201,7 +250,7 @@ export default function ManagerStaffPage() {
     return matchesSearch && matchesRole;
   });
 
-  const onShiftCount = staffList.filter(s => s.status === 'On Shift').length;
+  const onShiftCount = nonManagerStaff.filter(s => s.status === 'On Shift').length;
 
   return (
     <div className="admin-subpage-container" style={{ paddingBottom: '3rem' }}>
@@ -613,32 +662,6 @@ export default function ManagerStaffPage() {
 
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
-                    Assigned Shift Hours
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 09:00 AM – 05:00 PM or 02:00 PM – 11:00 PM"
-                    value={formData.shift}
-                    onChange={(e) => setFormData({ ...formData, shift: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '0.6rem 0.85rem',
-                      borderRadius: '10px',
-                      border: '2px solid #059669',
-                      fontSize: '0.85rem',
-                      outline: 'none',
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F2A1D',
-                      fontWeight: 700
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
                     Mobile Number (10 Digits)
                   </label>
                   <input
@@ -660,28 +683,142 @@ export default function ManagerStaffPage() {
                     }}
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
-                    Email Address
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  disabled={Boolean(editingStaff)}
+                  placeholder="e.g. name@flavora.in"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: '10px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                    backgroundColor: editingStaff ? '#F1F5F9' : '#F8FAFC',
+                    cursor: editingStaff ? 'not-allowed' : 'text'
+                  }}
+                />
+              </div>
+
+              {/* Dedicated Full-Width Assigned Shift Hours Section */}
+              <div style={{
+                backgroundColor: '#F8FAFC',
+                borderRadius: '14px',
+                border: '1px solid #E2E8F0',
+                padding: '0.85rem 1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Clock size={16} color="#059669" />
+                    <span>Assigned Shift Hours</span>
                   </label>
-                  <input
-                    type="email"
-                    disabled={Boolean(editingStaff)}
-                    placeholder="e.g. name@flavora.in"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '0.6rem 0.85rem',
-                      borderRadius: '10px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '0.85rem',
-                      outline: 'none',
-                      backgroundColor: editingStaff ? '#F1F5F9' : '#F8FAFC',
-                      cursor: editingStaff ? 'not-allowed' : 'text'
-                    }}
-                  />
+                  <span style={{ fontSize: '0.74rem', color: '#166534', backgroundColor: '#DCFCE7', padding: '0.15rem 0.55rem', borderRadius: '6px', fontWeight: 800, border: '1px solid #86EFAC' }}>
+                    🕒 {format24to12(formData.shiftStart || '09:00')} – {format24to12(formData.shiftEnd || '17:00')}
+                  </span>
+                </div>
+
+                {/* Clock Time Pickers (Start & End Time) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700, display: 'block', marginBottom: '0.25rem' }}>Start Time</span>
+                    <input
+                      type="time"
+                      required
+                      value={formData.shiftStart || '09:00'}
+                      onChange={(e) => {
+                        const newStart = e.target.value;
+                        const formattedShift = `${format24to12(newStart)} – ${format24to12(formData.shiftEnd || '17:00')}`;
+                        setFormData({ ...formData, shiftStart: newStart, shift: formattedShift });
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '8px',
+                        border: '1.5px solid #059669',
+                        fontSize: '0.86rem',
+                        fontWeight: 800,
+                        color: '#0F2A1D',
+                        outline: 'none',
+                        backgroundColor: '#FFFFFF',
+                        cursor: 'pointer',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700, display: 'block', marginBottom: '0.25rem' }}>End Time</span>
+                    <input
+                      type="time"
+                      required
+                      value={formData.shiftEnd || '17:00'}
+                      onChange={(e) => {
+                        const newEnd = e.target.value;
+                        const formattedShift = `${format24to12(formData.shiftStart || '09:00')} – ${format24to12(newEnd)}`;
+                        setFormData({ ...formData, shiftEnd: newEnd, shift: formattedShift });
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '8px',
+                        border: '1.5px solid #059669',
+                        fontSize: '0.86rem',
+                        fontWeight: 800,
+                        color: '#0F2A1D',
+                        outline: 'none',
+                        backgroundColor: '#FFFFFF',
+                        cursor: 'pointer',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Shift Presets */}
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center', paddingTop: '0.2rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700, marginRight: '0.2rem' }}>Quick Presets:</span>
+                  {[
+                    { label: 'Morning (9am - 5pm)', start: '09:00', end: '17:00' },
+                    { label: 'Full Day (11am - 10pm)', start: '11:00', end: '22:00' },
+                    { label: 'Evening (2pm - 10pm)', start: '14:00', end: '22:00' }
+                  ].map(preset => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          shiftStart: preset.start,
+                          shiftEnd: preset.end,
+                          shift: `${format24to12(preset.start)} – ${format24to12(preset.end)}`
+                        });
+                      }}
+                      style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        padding: '0.22rem 0.55rem',
+                        borderRadius: '6px',
+                        border: '1px solid #CBD5E1',
+                        backgroundColor: formData.shiftStart === preset.start && formData.shiftEnd === preset.end ? '#1E4636' : '#FFFFFF',
+                        color: formData.shiftStart === preset.start && formData.shiftEnd === preset.end ? '#FFFFFF' : '#475569',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 

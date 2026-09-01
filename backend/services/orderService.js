@@ -19,7 +19,7 @@ class OrderService {
       name: item.name || item.dishId || 'Delicious Item',
       price: Number(item.price) || 0,
       quantity: Number(item.quantity || item.qty || 1),
-      status: item.status || (item.isDelivered ? 'DELIVERED' : (item.isReady ? 'READY' : 'PREPARING')),
+      status: item.status || (item.isDelivered ? 'DELIVERED' : (item.isReady ? 'READY' : 'PLACED')),
       isReady: Boolean(item.isReady || item.status === 'READY' || item.status === 'DELIVERED'),
       isDelivered: Boolean(item.isDelivered || item.status === 'DELIVERED')
     })) : [];
@@ -63,7 +63,7 @@ class OrderService {
           name: newItem.name,
           price: Number(newItem.price) || 0,
           quantity: Number(newItem.quantity || newItem.qty || 1),
-          status: 'PREPARING',
+          status: 'PLACED',
           isReady: false,
           isDelivered: false
         });
@@ -241,12 +241,6 @@ class OrderService {
   }
 
   async updateOrderStatus(id, status, fullOrderData = {}) {
-    // Revenue Rule: Strictly strip tips or extra payment fields
-    if (fullOrderData.tip || fullOrderData.tipAmount) {
-      delete fullOrderData.tip;
-      delete fullOrderData.tipAmount;
-    }
-
     const isPaid = status === 'Paid' || status === 'Completed' || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid' || fullOrderData.paymentStatus === 'Paid';
     const isBillGenerated = status === 'Bill Generated' || status === 'Awaiting Payment' || fullOrderData.payment === 'Bill Generated' || fullOrderData.payment === 'Awaiting Payment';
 
@@ -255,8 +249,30 @@ class OrderService {
       status: isPaid ? 'Completed' : (status || 'Placed'),
       orderStatus: isPaid ? 'Completed' : (status || 'Placed'),
       payment: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.payment || 'Pending')),
-      paymentStatus: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.paymentStatus || 'Pending'))
+      paymentStatus: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.paymentStatus || 'Pending')),
+      ...(fullOrderData.originalTotal !== undefined && { originalTotal: Number(fullOrderData.originalTotal) }),
+      ...(fullOrderData.originalAmount !== undefined && { originalAmount: Number(fullOrderData.originalAmount) }),
+      ...(fullOrderData.couponCode !== undefined && { couponCode: String(fullOrderData.couponCode) }),
+      ...(fullOrderData.discountAmount !== undefined && { discountAmount: Number(fullOrderData.discountAmount) }),
+      ...(fullOrderData.tip !== undefined && { tip: Number(fullOrderData.tip) }),
+      ...(fullOrderData.tipAmount !== undefined && { tipAmount: Number(fullOrderData.tipAmount) }),
+      ...(fullOrderData.paymentMethod !== undefined && { paymentMethod: String(fullOrderData.paymentMethod) }),
+      ...(fullOrderData.finalAmount !== undefined && { finalAmount: Number(fullOrderData.finalAmount), total: Number(fullOrderData.finalAmount) })
     };
+
+    if (isPaid && fullOrderData.couponCode) {
+      try {
+        const Coupon = require('../models/Coupon');
+        const cleanCode = String(fullOrderData.couponCode).trim().toUpperCase();
+        const foundCoupon = await Coupon.findOne({ code: { $regex: new RegExp(`^${cleanCode}$`, 'i') } });
+        if (foundCoupon && foundCoupon.isActive) {
+          foundCoupon.usedCount = (foundCoupon.usedCount || 0) + 1;
+          await foundCoupon.save();
+        }
+      } catch (err) {
+        console.warn('Coupon usage update error:', err.message);
+      }
+    }
 
     const updatedOrder = await orderRepository.updateStatus(id, updatePayload.status, updatePayload);
     const tableId = (updatedOrder && updatedOrder.table) || (fullOrderData && fullOrderData.table);
@@ -336,7 +352,7 @@ class OrderService {
     } else if (readyCount > 0) {
       derivedOrderStatus = 'Preparing';
     } else {
-      derivedOrderStatus = 'Preparing';
+      derivedOrderStatus = (order.status === 'Placed' || order.status === 'NEW') ? 'Placed' : 'Preparing';
     }
 
     const updatedOrder = await orderRepository.updateStatus(order.orderId || order._id || id, derivedOrderStatus, {

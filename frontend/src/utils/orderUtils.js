@@ -21,7 +21,14 @@ export const normalizeOrderItem = (item) => {
     )
   );
 
-  const status = isDelivered ? 'SERVED' : (isReady ? 'READY' : 'PREPARING');
+  const isCooking = Boolean(
+    !isDelivered && !isReady && (
+      statusStr === 'COOKING' ||
+      statusStr === 'PREPARING'
+    )
+  );
+
+  const status = isDelivered ? 'SERVED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : 'PLACED'));
 
   return {
     ...item,
@@ -33,8 +40,8 @@ export const normalizeOrderItem = (item) => {
 
 /**
  * Merges item arrays from DB and local storage using strict status precedence:
- * SERVED (DELIVERED) > READY > PREPARING.
- * Stale data with 'PREPARING' will never overwrite 'READY' or 'SERVED'.
+ * SERVED (DELIVERED) > READY > COOKING > PLACED.
+ * Stale data will never overwrite higher precedence status.
  */
 export const mergeOrderItems = (dbItems = [], localItems = []) => {
   const maxLength = Math.max(dbItems.length, localItems.length);
@@ -50,7 +57,8 @@ export const mergeOrderItems = (dbItems = [], localItems = []) => {
     if (normDb && normLocal) {
       const isDelivered = normDb.isDelivered || normLocal.isDelivered;
       const isReady = isDelivered || normDb.isReady || normLocal.isReady;
-      const status = isDelivered ? 'SERVED' : (isReady ? 'READY' : 'PREPARING');
+      const isCooking = !isDelivered && !isReady && (normDb.status === 'COOKING' || normDb.status === 'PREPARING' || normLocal.status === 'COOKING' || normLocal.status === 'PREPARING');
+      const status = isDelivered ? 'SERVED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : 'PLACED'));
 
       result.push({
         ...normDb,
@@ -108,4 +116,65 @@ export const formatTableNumber = (rawTable) => {
   if (!digits) return 'T-01';
   const num = parseInt(digits, 10);
   return `T-${String(num).padStart(2, '0')}`;
+};
+
+/**
+ * Clears all active table order, cart, and guest session local/session storage keys
+ * when a dining session closes or when a table moves to Available/Cleaning.
+ */
+export const clearTableSessionStorage = (rawTable) => {
+  if (!rawTable) return;
+  const str = String(rawTable).trim();
+  const digits = str.replace(/[^0-9]/g, '');
+  const cleanTbl = str.toUpperCase().replace('TABLE', '').replace('T-', '').trim();
+
+  const keysToRemove = [
+    `flavora_table_orders_${str}`,
+    `flavora_table_orders_${cleanTbl}`,
+    `flavora_table_orders_T-${cleanTbl}`,
+    `flavora_cart_${str}`,
+    `flavora_cart_${cleanTbl}`,
+    `flavora_cart_T-${cleanTbl}`
+  ];
+
+  if (digits) {
+    const pad = digits.padStart(2, '0');
+    keysToRemove.push(
+      `flavora_table_orders_T-${pad}`,
+      `flavora_table_orders_${digits}`,
+      `flavora_cart_T-${pad}`,
+      `flavora_cart_${digits}`
+    );
+  }
+
+  keysToRemove.forEach(k => {
+    try { localStorage.removeItem(k); } catch (e) {}
+  });
+
+  const sessionKeysToRemove = [
+    `flavora_guest_name_${cleanTbl}`,
+    `flavora_guest_name_${str}`,
+    `flavora_order_submitted_${cleanTbl}`,
+    `flavora_order_submitted_${str}`
+  ];
+
+  if (digits) {
+    const pad = digits.padStart(2, '0');
+    sessionKeysToRemove.push(
+      `flavora_guest_name_T-${pad}`,
+      `flavora_guest_name_${digits}`,
+      `flavora_order_submitted_T-${pad}`,
+      `flavora_order_submitted_${digits}`
+    );
+  }
+
+  sessionKeysToRemove.forEach(k => {
+    try { sessionStorage.removeItem(k); } catch (e) {}
+  });
+
+  try {
+    window.dispatchEvent(new Event('flavora_cart_updated'));
+    window.dispatchEvent(new Event('flavora_orders_updated'));
+    window.dispatchEvent(new Event('flavora_tables_updated'));
+  } catch (e) {}
 };

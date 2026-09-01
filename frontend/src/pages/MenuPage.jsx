@@ -53,14 +53,14 @@ export default function MenuPage({ onOpenDemoModal }) {
 
   const [cart, setCart] = useState(() => {
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const tableParam = urlParams.get('table') || localStorage.getItem('flavora_scanned_table') || '';
-      const key = tableParam ? `flavora_cart_${String(tableParam).toUpperCase().replace(/[^A-Z0-9-]/g, '')}` : 'flavora_cart_GENERAL';
-      const saved = localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
+      const t = tableNum || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('table') : '') || localStorage.getItem('flavora_scanned_table') || '';
+      if (t) {
+        const clean = String(t).toUpperCase().replace(/[^A-Z0-9-]/g, '');
+        const saved = localStorage.getItem(`flavora_cart_${clean}`);
+        return saved ? JSON.parse(saved) : {};
+      }
+    } catch (e) {}
+    return {};
   });
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [isCustomerOrdersModalOpen, setIsCustomerOrdersModalOpen] = useState(false);
@@ -157,7 +157,15 @@ export default function MenuPage({ onOpenDemoModal }) {
       const currentTable = tableNum || localStorage.getItem('flavora_scanned_table');
       if (currentTable) {
         const saved = localStorage.getItem(`flavora_table_orders_${currentTable}`);
-        return saved ? JSON.parse(saved) : [];
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(o => {
+              const isClosedOrPaid = o.status === 'Completed' || o.status === 'Paid' || o.status === 'Cancelled' || o.status === 'Served' || o.payment === 'Paid' || o.payment === 'Completed' || o.paymentStatus === 'Paid';
+              return o.status && !isClosedOrPaid;
+            });
+          }
+        }
       }
     } catch (e) { }
     return [];
@@ -173,28 +181,41 @@ export default function MenuPage({ onOpenDemoModal }) {
       try {
         const cleanTableNum = String(tableNum).replace(/[^0-9]/g, '');
 
-        // 1. Check active order status first across backend orders & local table orders
+        // 1. Check active order status first across backend orders
         const orders = await api.getOrders();
-        let activeOrd = null;
+        let activeBackendOrders = [];
         if (Array.isArray(orders) && orders.length > 0) {
-          activeOrd = orders.find(ord => {
+          activeBackendOrders = orders.filter(ord => {
             const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
             const isMatch = ordTableDigits && cleanTableNum && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
             const isClosedOrPaid = ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled' || ord.status === 'Served' || ord.payment === 'Paid' || ord.payment === 'Completed' || ord.paymentStatus === 'Paid';
-            const isActiveStatus = ord.status && !isClosedOrPaid;
-            return isMatch && isActiveStatus;
+            return isMatch && !isClosedOrPaid;
           });
         }
 
-        if (activeOrd) {
+        if (activeBackendOrders.length > 0) {
+          const primaryActive = activeBackendOrders[0];
           setTableOccupiedInfo({
             isOccupied: true,
-            orderId: activeOrd.orderId || activeOrd.id || activeOrd._id,
-            status: activeOrd.status || 'Placed'
+            orderId: primaryActive.orderId || primaryActive.id || primaryActive._id,
+            status: primaryActive.status || 'Placed'
           });
           setTableCleaningInfo(null);
+
+          const mappedActive = activeBackendOrders.map(ao => ({
+            orderId: ao.orderId || ao.id || ao._id,
+            table: ao.table || tableNum,
+            customer: ao.customer || 'Guest Diner',
+            status: ao.status || 'Placed',
+            items: ao.items || [],
+            totalAmount: ao.total || 0,
+            chefNotes: ao.notes || ''
+          }));
+          setPlacedTableOrders(mappedActive);
         } else {
+          // NO ACTIVE ORDERS EXIST FOR THIS TABLE
           setTableOccupiedInfo(null);
+          setPlacedTableOrders([]);
 
           // 2. If NO active order exists, check if table is currently in Cleaning timer state
           const dbTables = await api.getTables();
@@ -222,18 +243,6 @@ export default function MenuPage({ onOpenDemoModal }) {
             setTableCleaningInfo(null);
           }
         }
-
-        // Sync placedTableOrders with live backend statuses for this table
-        setPlacedTableOrders(prev => {
-          if (!Array.isArray(prev) || prev.length === 0) return prev;
-          return prev.map(pOrd => {
-            const matchedBackend = orders.find(o => (o.orderId || o._id) === (pOrd.orderId || pOrd.id));
-            if (matchedBackend && matchedBackend.status) {
-              return { ...pOrd, status: matchedBackend.status };
-            }
-            return pOrd;
-          });
-        });
       } catch (err) {
         console.warn("Could not fetch backend table status:", err);
       }
@@ -262,12 +271,11 @@ export default function MenuPage({ onOpenDemoModal }) {
       try {
         const key = getCartStorageKey(tableNum);
         const saved = localStorage.getItem(key);
-        setCart(saved ? JSON.parse(saved) : {});
-      } catch (e) {
-        setCart({});
-      }
+        if (saved) {
+          setCart(JSON.parse(saved));
+        }
+      } catch (e) { }
     };
-    handleCartSync();
     window.addEventListener('flavora_cart_updated', handleCartSync);
     return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
   }, [tableNum]);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Phone, Mail, MapPin, Clock, Facebook, Linkedin, Twitter, Youtube } from 'lucide-react';
 import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 import { api } from '../services/api';
@@ -73,9 +73,6 @@ export default function Footer({ setActivePage }) {
     ...(settings || {}),
     ...(branding || {}),
   };
-
-  // rest of your existing Footer JSX...
-}
 
   const handleNavClick = (pageId) => {
     if (setActivePage) setActivePage(pageId);
