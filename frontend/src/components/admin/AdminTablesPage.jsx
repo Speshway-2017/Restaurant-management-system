@@ -58,9 +58,9 @@ export default function AdminTablesPage() {
       const sanitized = sanitizeTableItem(tbl);
       try {
         const numDigits = String(sanitized.num || '').replace(/[^0-9]/g, '');
-        const savedOrderStr = localStorage.getItem(`flavora_table_orders_${sanitized.num}`) || 
-                              (numDigits ? localStorage.getItem(`flavora_table_orders_${numDigits}`) : null) ||
-                              (numDigits ? localStorage.getItem(`flavora_table_orders_T-${numDigits.padStart(2, '0')}`) : null);
+        const savedOrderStr = localStorage.getItem(`flavora_table_orders_${sanitized.num}`) ||
+          (numDigits ? localStorage.getItem(`flavora_table_orders_${numDigits}`) : null) ||
+          (numDigits ? localStorage.getItem(`flavora_table_orders_T-${numDigits.padStart(2, '0')}`) : null);
 
         if (savedOrderStr) {
           const orderItems = JSON.parse(savedOrderStr);
@@ -78,7 +78,7 @@ export default function AdminTablesPage() {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
       return sanitized;
     });
   };
@@ -92,7 +92,7 @@ export default function AdminTablesPage() {
           return syncTableOrdersWithLocalStorage(parsed);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return defaultTables;
   });
 
@@ -133,7 +133,7 @@ export default function AdminTablesPage() {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     };
     handleTablesSync();
     const interval = setInterval(handleTablesSync, 1000);
@@ -149,7 +149,7 @@ export default function AdminTablesPage() {
     try {
       localStorage.setItem('flavora_tables', JSON.stringify(updatedList));
       window.dispatchEvent(new Event('flavora_tables_updated'));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const showToast = (msg) => {
@@ -283,7 +283,7 @@ export default function AdminTablesPage() {
 
   return (
     <div className="admin-subpage-container" style={{ paddingBottom: '3rem' }}>
-      
+
       {/* Toast Notification Banner */}
       {toastMessage && (
         <div style={{
@@ -318,8 +318,8 @@ export default function AdminTablesPage() {
           <p className="admin-page-subtitle">Configure table seating, floor layout zones, and active customer order QR codes.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="btn btn-primary"
             onClick={() => setIsAddTableModalOpen(true)}
             style={{ backgroundColor: '#1E4636', borderColor: '#1E4636' }}
@@ -531,7 +531,7 @@ export default function AdminTablesPage() {
               {/* Action Bar: View QR Button + 3-Dots Hover Options */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.9rem' }}>
                 {tbl.qrPlaced ? (
-                  <button 
+                  <button
                     type="button"
                     className="btn btn-primary"
                     onClick={() => handleOpenQrModal(tbl)}
@@ -541,7 +541,7 @@ export default function AdminTablesPage() {
                     <span>View QR</span>
                   </button>
                 ) : (
-                  <button 
+                  <button
                     type="button"
                     className="btn btn-primary"
                     disabled
@@ -566,7 +566,7 @@ export default function AdminTablesPage() {
 
                 {/* Three-Dots Action Menu */}
                 <div className="table-card-more-menu-wrap">
-                  <button 
+                  <button
                     type="button"
                     className="table-card-dots-btn"
                     title="More Table Options"
@@ -575,7 +575,7 @@ export default function AdminTablesPage() {
                   </button>
                   <div className="table-card-dropdown-menu">
                     {tbl.qrPlaced ? (
-                      <button 
+                      <button
                         type="button"
                         className="table-card-dropdown-item"
                         onClick={() => handleToggleBlockQr(tbl.id)}
@@ -585,7 +585,7 @@ export default function AdminTablesPage() {
                         <span>Block QR</span>
                       </button>
                     ) : (
-                      <button 
+                      <button
                         type="button"
                         className="table-card-dropdown-item"
                         onClick={() => handleToggleBlockQr(tbl.id)}
@@ -596,7 +596,7 @@ export default function AdminTablesPage() {
                       </button>
                     )}
 
-                    <button 
+                    <button
                       type="button"
                       className="table-card-dropdown-item"
                       onClick={() => handleOpenEditModal(tbl)}
@@ -607,7 +607,7 @@ export default function AdminTablesPage() {
 
                     <div style={{ height: '1px', backgroundColor: '#F1F5F9', margin: '0.25rem 0' }} />
 
-                    <button 
+                    <button
                       type="button"
                       className="table-card-dropdown-item is-danger"
                       onClick={() => handleDeleteTable(tbl.id, tbl.num)}

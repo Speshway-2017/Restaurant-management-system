@@ -59,7 +59,7 @@ export default function ManagerTablesPage() {
           });
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return rawTables.map(tbl => {
       const cleanNum = (tbl.num || '').toUpperCase().replace('TABLE', '').replace('T-', '').trim();
@@ -81,7 +81,7 @@ export default function ManagerTablesPage() {
               break;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // Filter out completed and cancelled orders (check BOTH order status AND managerStatusMap)
@@ -134,14 +134,14 @@ export default function ManagerTablesPage() {
           try {
             const raw = localStorage.getItem('flavora_tables');
             if (raw) savedLocalTables = JSON.parse(raw);
-          } catch (e) {}
+          } catch (e) { }
 
           const mapped = baseList.map(dbT => {
             const cleanT = extractDigits(dbT.number || dbT.name);
 
             // Preserve QR placement state from localStorage or default to TRUE
-            const savedT = savedLocalTables.find(st => 
-              (st.id && dbT._id && String(st.id) === String(dbT._id)) || 
+            const savedT = savedLocalTables.find(st =>
+              (st.id && dbT._id && String(st.id) === String(dbT._id)) ||
               (st.num && dbT.number && extractDigits(st.num) === cleanT)
             );
 
@@ -156,7 +156,7 @@ export default function ManagerTablesPage() {
             if (activeOrder) {
               const custName = activeOrder.customer || activeOrder.guestName || 'Guest Diner';
               const amtVal = `₹${activeOrder.total || activeOrder.totalAmount || 0}`;
-              
+
               return {
                 id: dbT._id || dbT.id,
                 num: dbT.number || dbT.name || `T-${cleanT}`,
@@ -190,7 +190,12 @@ export default function ManagerTablesPage() {
             };
           });
 
-          setTables(mapped);
+          // Combine dbTables with any extra locally created tables from localStorage
+          const mappedNumbers = new Set(mapped.map(m => m.num));
+          const extraLocal = savedLocalTables.filter(st => st && st.num && !mappedNumbers.has(st.num));
+          const finalMergedList = [...mapped, ...extraLocal];
+
+          setTables(finalMergedList);
         });
     };
 
@@ -211,7 +216,7 @@ export default function ManagerTablesPage() {
     try {
       localStorage.setItem('flavora_tables', JSON.stringify(newTablesList));
       window.dispatchEvent(new Event('flavora_tables_updated'));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const [newTableData, setNewTableData] = useState({
@@ -240,7 +245,7 @@ export default function ManagerTablesPage() {
 
     // Default dynamic scannable QR link (Uses local Wi-Fi IP address 192.168.1.34 for mobile accessibility)
     const host = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? '192.168.1.34'
+      ? '192.168.1.4'
       : window.location.hostname;
     const port = window.location.port ? `:${window.location.port}` : ':5173';
     const targetLink = `${window.location.protocol}//${host}${port}/menu?table=${encodeURIComponent(tbl.num)}`;
@@ -346,7 +351,7 @@ export default function ManagerTablesPage() {
   };
 
   // Delete Table
-  const handleDeleteTable = (tblId, tblNum) => {
+  const handleDeleteTable = async (tblId, tblNum) => {
     const target = tables.find(t => t.id === tblId);
     if (target && target.status === 'Occupied') {
       alert(`⚠️ Cannot delete ${tblNum}. Table is currently OCCUPIED by active dining session!`);
@@ -354,6 +359,11 @@ export default function ManagerTablesPage() {
       return;
     }
     if (window.confirm(`Are you sure you want to delete ${tblNum}?`)) {
+      try {
+        await api.deleteTable(tblId);
+      } catch (err) {
+        console.warn("Backend delete table warning:", err.message);
+      }
       const updated = tables.filter(t => t.id !== tblId);
       updateAndSaveTables(updated);
       showToast(`${tblNum} has been deleted.`);
@@ -361,20 +371,38 @@ export default function ManagerTablesPage() {
   };
 
   // Create Table
-  const handleCreateNewTable = (e) => {
+  const handleCreateNewTable = async (e) => {
     e.preventDefault();
     if (!newTableData.num) {
       alert('Please enter a Table Number (e.g., T-13).');
       return;
     }
-    const nextNum = newTableData.num.startsWith('T-') ? newTableData.num : `T-${newTableData.num}`;
-    const finalZone = isCustomZone ? customZoneName.trim() : (newTableData.zone ? newTableData.zone.trim() : '');
+    const rawNumStr = String(newTableData.num).trim();
+    const nextNum = rawNumStr.toUpperCase().startsWith('T-') ? rawNumStr.toUpperCase() : `T-${rawNumStr}`;
+    const finalZone = isCustomZone ? customZoneName.trim() : (newTableData.zone ? newTableData.zone.trim() : 'Main Dining');
+    const seatingCap = Number(newTableData.cap) || 4;
+
+    let createdId = Date.now();
+    try {
+      const createdRes = await api.createTable({
+        number: nextNum,
+        name: nextNum,
+        section: finalZone,
+        seats: seatingCap,
+        status: newTableData.status || 'Available'
+      });
+      if (createdRes && (createdRes._id || createdRes.id)) {
+        createdId = createdRes._id || createdRes.id;
+      }
+    } catch (err) {
+      console.warn("Backend create table warning:", err.message);
+    }
 
     const newTbl = {
-      id: Date.now(),
+      id: createdId,
       num: nextNum,
       zone: finalZone,
-      cap: Number(newTableData.cap) || 4,
+      cap: seatingCap,
       status: newTableData.status || 'Available',
       orderId: null,
       amount: '-',
@@ -383,7 +411,8 @@ export default function ManagerTablesPage() {
       qrPlaced: true,
       customQrUrl: ''
     };
-    const updated = [newTbl, ...tables];
+
+    const updated = [newTbl, ...tables.filter(t => t.num !== nextNum)];
     updateAndSaveTables(updated);
     setIsAddTableModalOpen(false);
     setIsCustomZone(false);
@@ -395,9 +424,9 @@ export default function ManagerTablesPage() {
   const filteredTables = tables.filter(t => {
     const matchesStatus = selectedStatusFilter === 'All' || t.status === selectedStatusFilter;
     const matchesZone = selectedZoneFilter === 'All' || t.zone === selectedZoneFilter;
-    const matchesSearch = t.num.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          t.zone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (t.customer && t.customer.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = t.num.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.zone.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.customer && t.customer.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesStatus && matchesZone && matchesSearch;
   });
 
@@ -408,7 +437,7 @@ export default function ManagerTablesPage() {
 
   return (
     <div className="admin-subpage-container">
-      
+
       {/* Toast Notification */}
       {toastMessage && (
         <div style={{
@@ -487,7 +516,7 @@ export default function ManagerTablesPage() {
       </div>
 
       {/* ================= 2. UNIFIED SINGLE-LINE CONTROL TOOLBAR ================= */}
-      <div 
+      <div
         style={{
           backgroundColor: '#FFFFFF',
           borderRadius: '16px',
@@ -583,7 +612,7 @@ export default function ManagerTablesPage() {
       <div className="admin-floor-plan-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1.25rem' }}>
         {filteredTables.map((tbl) => (
           <div key={tbl.num} className={`trendy-table-card is-status-${tbl.status.toLowerCase()}`}>
-            
+
             {/* Header: Table Number Badge (Left) & Status Selector (Right) */}
             <div className="trendy-card-header">
               <div className="tbl-badge-circle">
@@ -626,7 +655,7 @@ export default function ManagerTablesPage() {
 
               {/* Cleaning State Live Ticking Countdown Box */}
               {tbl.status === 'Cleaning' && (
-                <div 
+                <div
                   onClick={async () => {
                     try {
                       await api.updateTableStatus(tbl.id, 'Available');
@@ -692,7 +721,7 @@ export default function ManagerTablesPage() {
             {/* Perfectly Aligned Action Bar: View QR Button + 3-Dots Hover Options */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.9rem' }}>
               {tbl.qrPlaced ? (
-                <button 
+                <button
                   className="trendy-btn-primary-full"
                   onClick={() => handleOpenQrModal(tbl)}
                   style={{ flex: 1 }}
@@ -701,7 +730,7 @@ export default function ManagerTablesPage() {
                   <span>View QR</span>
                 </button>
               ) : (
-                <button 
+                <button
                   className="trendy-btn-primary-full"
                   disabled
                   title="No QR code placed on this table. Use the 3-dots menu to generate & place QR code."
@@ -722,7 +751,7 @@ export default function ManagerTablesPage() {
 
               {/* Three-Dots Action Menu (Hover to reveal Edit, Place QR & Delete options) */}
               <div className="table-card-more-menu-wrap">
-                <button 
+                <button
                   type="button"
                   className="table-card-dots-btn"
                   title="More Table Options"
@@ -731,7 +760,7 @@ export default function ManagerTablesPage() {
                 </button>
                 <div className="table-card-dropdown-menu">
                   {tbl.qrPlaced ? (
-                    <button 
+                    <button
                       type="button"
                       className="table-card-dropdown-item"
                       onClick={() => handleToggleBlockQr(tbl.id)}
@@ -743,7 +772,7 @@ export default function ManagerTablesPage() {
                       <span>Block QR {tbl.status === 'Occupied' ? '🔒' : ''}</span>
                     </button>
                   ) : (
-                    <button 
+                    <button
                       type="button"
                       className="table-card-dropdown-item"
                       onClick={() => handleToggleBlockQr(tbl.id)}
@@ -756,7 +785,7 @@ export default function ManagerTablesPage() {
                     </button>
                   )}
 
-                  <button 
+                  <button
                     type="button"
                     className="table-card-dropdown-item"
                     onClick={() => handleOpenEditModal(tbl)}
@@ -770,7 +799,7 @@ export default function ManagerTablesPage() {
 
                   <div style={{ height: '1px', backgroundColor: '#F1F5F9', margin: '0.25rem 0' }} />
 
-                  <button 
+                  <button
                     type="button"
                     className="table-card-dropdown-item is-danger"
                     onClick={() => handleDeleteTable(tbl.id, tbl.num)}
@@ -793,7 +822,7 @@ export default function ManagerTablesPage() {
       {selectedQrTable && (
         <div className="admin-modal-backdrop" onClick={() => setSelectedQrTable(null)}>
           <div className="admin-modal-card text-center" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
-            
+
             {/* Modal Header */}
             <div className="admin-modal-header">
               <h3 className="admin-modal-title">Table QR Code — {selectedQrTable.num}</h3>
@@ -853,16 +882,16 @@ export default function ManagerTablesPage() {
 
             {/* Modal Body */}
             <div className="admin-modal-body" style={{ padding: '1.25rem 1.4rem' }}>
-              
+
               {/* TAB 1: VIEW AUTO GENERATED QR CODE */}
               {qrModalTab === 'generated' && (
                 <>
-                  <div 
-                    className="qr-box-frame" 
-                    style={{ 
-                      border: '2.5px solid #0F2A1D', 
-                      borderRadius: '14px', 
-                      padding: '1rem 1.25rem', 
+                  <div
+                    className="qr-box-frame"
+                    style={{
+                      border: '2.5px solid #0F2A1D',
+                      borderRadius: '14px',
+                      padding: '1rem 1.25rem',
                       backgroundColor: '#FFFFFF',
                       boxShadow: '0 8px 24px rgba(15, 42, 29, 0.12)',
                       display: 'inline-block',
@@ -870,15 +899,15 @@ export default function ManagerTablesPage() {
                     }}
                   >
                     {selectedQrTable.customQrUrl ? (
-                      <img 
-                        src={selectedQrTable.customQrUrl} 
-                        alt={`Custom QR Code for ${selectedQrTable.num}`} 
+                      <img
+                        src={selectedQrTable.customQrUrl}
+                        alt={`Custom QR Code for ${selectedQrTable.num}`}
                         style={{ width: '135px', height: '135px', objectFit: 'contain', margin: '0 auto', display: 'block' }}
                       />
                     ) : backendQrDataUrl ? (
-                      <img 
-                        src={backendQrDataUrl} 
-                        alt={`Backend Generated QR Code for ${selectedQrTable.num}`} 
+                      <img
+                        src={backendQrDataUrl}
+                        alt={`Backend Generated QR Code for ${selectedQrTable.num}`}
                         style={{ width: '135px', height: '135px', objectFit: 'contain', margin: '0 auto', display: 'block' }}
                       />
                     ) : (
@@ -1006,9 +1035,9 @@ export default function ManagerTablesPage() {
               <button className="btn btn-outline" onClick={() => setSelectedQrTable(null)} style={{ padding: '0.55rem 1.25rem' }}>
                 Close
               </button>
-              
+
               {qrModalTab === 'custom' ? (
-                <button 
+                <button
                   className="btn btn-primary"
                   onClick={() => handleSaveCustomQr(selectedQrTable.id)}
                   style={{ backgroundColor: '#FF8A00', color: '#FFFFFF', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.4rem' }}
@@ -1017,7 +1046,7 @@ export default function ManagerTablesPage() {
                   <span>Save Custom QR</span>
                 </button>
               ) : (
-                <button 
+                <button
                   className="btn btn-primary"
                   onClick={() => {
                     handlePlaceQrOnTable(selectedQrTable.id);

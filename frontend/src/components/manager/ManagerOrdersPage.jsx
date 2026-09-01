@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingBag, Search, CheckCircle2, Clock, XCircle, AlertCircle, ChefHat, Eye, RefreshCw, MoreVertical, Printer, X } from 'lucide-react';
 import { api } from '../../services/api';
+import { clearTableSessionStorage } from '../../utils/orderUtils';
 
 export default function ManagerOrdersPage() {
   const [activeStatusFilter, setActiveStatusFilter] = useState('All');
@@ -21,7 +22,15 @@ export default function ManagerOrdersPage() {
           type: o.type || 'Dine-In',
           customer: o.customer || 'Guest',
           phone: o.phone || '',
-          total: o.total || 0,
+          originalTotal: o.originalTotal || o.originalAmount || o.total || 0,
+          originalAmount: o.originalAmount || o.originalTotal || o.total || 0,
+          couponCode: o.couponCode || '',
+          discountAmount: Number(o.discountAmount || 0),
+          finalAmount: o.finalAmount !== undefined ? Number(o.finalAmount) : Number(o.total || 0),
+          tip: Number(o.tip || o.tipAmount || 0),
+          tipAmount: Number(o.tipAmount || o.tip || 0),
+          paymentMethod: o.paymentMethod || 'UPI / QR',
+          total: o.finalAmount !== undefined ? Number(o.finalAmount) : Number(o.total || 0),
           payment: o.payment || 'Pending',
           status: o.status || 'Placed',
           time: o.time || 'Just now',
@@ -123,12 +132,7 @@ export default function ManagerOrdersPage() {
           // Clear local storage order keys & update flavora_tables to Cleaning
           try {
             if (ord.table) {
-              localStorage.removeItem(`flavora_table_orders_${ord.table}`);
-              if (cleanNum) {
-                localStorage.removeItem(`flavora_table_orders_T-${cleanNum.padStart(2, '0')}`);
-                localStorage.removeItem(`flavora_table_orders_T-${cleanNum}`);
-                localStorage.removeItem(`flavora_table_orders_${cleanNum}`);
-              }
+              clearTableSessionStorage(ord.table);
             }
 
             const savedTables = localStorage.getItem('flavora_tables');
@@ -166,7 +170,7 @@ export default function ManagerOrdersPage() {
   });
 
   return (
-    <div className="admin-subpage-container" style={{ paddingBottom: '3rem' }}>
+    <div className="admin-subpage-container" style={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box', paddingBottom: '3rem' }}>
       
       {/* Header */}
       <div className="admin-dashboard-header">
@@ -200,7 +204,10 @@ export default function ManagerOrdersPage() {
         flexWrap: 'wrap',
         gap: '1rem',
         alignItems: 'center',
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box'
       }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
           {['All', 'Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Completed'].map(st => (
@@ -224,7 +231,7 @@ export default function ManagerOrdersPage() {
           ))}
         </div>
 
-        <div style={{ position: 'relative', width: '260px' }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: '260px', minWidth: '180px' }}>
           <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
           <input
             type="text"
@@ -239,7 +246,8 @@ export default function ManagerOrdersPage() {
               borderRadius: '10px',
               border: '1px solid #E2E8F0',
               fontSize: '0.85rem',
-              outline: 'none'
+              outline: 'none',
+              boxSizing: 'border-box'
             }}
           />
         </div>
@@ -250,20 +258,23 @@ export default function ManagerOrdersPage() {
         backgroundColor: '#FFFFFF',
         borderRadius: '16px',
         border: '1px solid #F0EAE1',
-        overflow: 'visible',
-        position: 'relative',
+        width: '100%',
+        maxWidth: '100%',
+        minWidth: 0,
+        overflowX: 'auto',
+        boxSizing: 'border-box',
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.03)'
       }}>
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0', textAlign: 'left' }}>
+        <table style={{ width: '100%', maxWidth: '100%', borderCollapse: 'separate', borderSpacing: '0', textAlign: 'left' }}>
           <thead>
             <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              <th style={{ padding: '0.75rem 1rem', borderTopLeftRadius: '15px', whiteSpace: 'nowrap' }}>ORDER ID</th>
-              <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>TABLE & TYPE</th>
-              <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>CUSTOMER</th>
-              <th style={{ padding: '0.75rem 1rem' }}>ITEMS ORDERED</th>
-              <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>TOTAL</th>
-              <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>STATUS</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', borderTopRightRadius: '15px', whiteSpace: 'nowrap' }}>ACTIONS</th>
+              <th style={{ padding: '0.7rem 0.75rem', borderTopLeftRadius: '15px', whiteSpace: 'nowrap' }}>ORDER ID</th>
+              <th style={{ padding: '0.7rem 0.75rem', whiteSpace: 'nowrap' }}>TABLE & TYPE</th>
+              <th style={{ padding: '0.7rem 0.75rem', whiteSpace: 'nowrap' }}>CUSTOMER</th>
+              <th style={{ padding: '0.7rem 0.75rem' }}>ITEMS ORDERED</th>
+              <th style={{ padding: '0.7rem 0.75rem', whiteSpace: 'nowrap' }}>TOTAL</th>
+              <th style={{ padding: '0.7rem 0.75rem', whiteSpace: 'nowrap' }}>STATUS</th>
+              <th style={{ padding: '0.7rem 0.75rem', textAlign: 'center', borderTopRightRadius: '15px', whiteSpace: 'nowrap' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -294,13 +305,13 @@ export default function ManagerOrdersPage() {
                     className="order-table-row-hover"
                   >
                     {/* 1. ORDER ID (SINGLE LINE, NO WRAPPING) */}
-                    <td style={{ padding: '0.75rem 1rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.65rem 0.75rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       <span style={{ 
-                        fontSize: '0.84rem', 
+                        fontSize: '0.82rem', 
                         fontWeight: 900, 
                         color: '#1C130E',
                         backgroundColor: '#F5F0E8',
-                        padding: '0.25rem 0.6rem',
+                        padding: '0.2rem 0.55rem',
                         borderRadius: '6px',
                         border: '1px solid #EAE3D2',
                         fontFamily: 'monospace',
@@ -312,60 +323,60 @@ export default function ManagerOrdersPage() {
                     </td>
 
                     {/* 2. TABLE & TYPE (SINGLE LINE, NO WRAPPING) */}
-                    <td style={{ padding: '0.75rem 1rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.65rem 0.75rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>
                         <span style={{ 
-                          fontSize: '0.8rem', 
+                          fontSize: '0.78rem', 
                           fontWeight: 800, 
                           color: '#92400E', 
                           backgroundColor: '#FFF5ED', 
-                          padding: '0.25rem 0.6rem', 
+                          padding: '0.2rem 0.55rem', 
                           borderRadius: '6px',
                           border: '1px solid #FDE68A',
                           whiteSpace: 'nowrap'
                         }}>
                           🪑 {ord.table}
                         </span>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748B', whiteSpace: 'nowrap' }}>
                           ({ord.type || 'Dine-In'})
                         </span>
                       </div>
                     </td>
 
                     {/* 3. CUSTOMER */}
-                    <td style={{ padding: '0.7rem 1rem', verticalAlign: 'middle' }}>
-                      <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#1C130E' }}>
+                    <td style={{ padding: '0.65rem 0.75rem', verticalAlign: 'middle' }}>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#1C130E' }}>
                         {ord.customer || 'Guest Diner'}
                       </span>
                     </td>
 
-                    {/* 4. ITEMS ORDERED (COMPACT MAX 2 ITEMS + COUNT) */}
-                    <td style={{ padding: '0.7rem 1rem', verticalAlign: 'middle', maxWidth: '340px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'nowrap', overflow: 'hidden' }}>
+                    {/* 4. ITEMS ORDERED (RESPONSIVE FLEX WRAPPING) */}
+                    <td style={{ padding: '0.65rem 0.75rem', verticalAlign: 'middle', maxWidth: '280px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
                         {visibleItems.map((it, idx) => (
                           <span 
                             key={idx} 
                             style={{ 
                               backgroundColor: '#FFFFFF', 
                               color: '#2D231E', 
-                              padding: '0.2rem 0.5rem', 
+                              padding: '0.18rem 0.45rem', 
                               borderRadius: '6px', 
-                              fontSize: '0.76rem', 
+                              fontSize: '0.74rem', 
                               fontWeight: 700, 
                               border: '1px solid #E8E2D5',
                               whiteSpace: 'nowrap',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '0.3rem'
+                              gap: '0.25rem'
                             }}
                           >
                             <span>{it.name}</span>
                             <span style={{ 
                               backgroundColor: '#7A1C1C', 
                               color: '#FFFFFF', 
-                              fontSize: '0.66rem', 
+                              fontSize: '0.64rem', 
                               fontWeight: 800, 
-                              padding: '0.02rem 0.35rem', 
+                              padding: '0.02rem 0.32rem', 
                               borderRadius: '9999px' 
                             }}>
                               x{it.quantity || it.qty || 1}
@@ -381,9 +392,9 @@ export default function ManagerOrdersPage() {
                               backgroundColor: '#F1F5F9',
                               color: '#475569',
                               border: '1px solid #CBD5E1',
-                              fontSize: '0.72rem',
+                              fontSize: '0.7rem',
                               fontWeight: 800,
-                              padding: '0.2rem 0.5rem',
+                              padding: '0.18rem 0.45rem',
                               borderRadius: '6px',
                               cursor: 'pointer',
                               whiteSpace: 'nowrap'
@@ -397,14 +408,37 @@ export default function ManagerOrdersPage() {
                     </td>
 
                     {/* 5. TOTAL BILL */}
-                    <td style={{ padding: '0.7rem 1rem', verticalAlign: 'middle' }}>
-                      <span style={{ fontSize: '0.96rem', fontWeight: 900, color: '#1C130E' }}>
-                        ₹{ord.total}
-                      </span>
+                    <td style={{ padding: '0.65rem 0.75rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                      {(() => {
+                        const isPaid = ord.status === 'Completed' || ord.status === 'Paid' || ord.payment === 'Paid' || ord.payment === 'Completed';
+                        const displayPaidVal = Number(ord.finalAmount ?? ord.total ?? 0);
+                        const origVal = Number(ord.originalTotal ?? ord.originalAmount ?? 0);
+                        const discVal = Number(ord.discountAmount ?? 0);
+                        const couponName = ord.couponCode || '';
+                        const tipVal = Number(ord.tip ?? ord.tipAmount ?? 0);
+
+                        const hasOriginal = Boolean(origVal > 0 && origVal > displayPaidVal);
+                        const actualDiscount = discVal > 0 ? discVal : (origVal > displayPaidVal ? origVal - displayPaidVal : 0);
+                        const hasDiscount = Boolean(actualDiscount > 0);
+                        const hasTip = Boolean(tipVal > 0);
+
+                        return (
+                          <div>
+                            <div style={{ fontSize: '0.96rem', fontWeight: 900, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <span>₹{displayPaidVal}</span>
+                              {isPaid && (
+                                <span style={{ fontSize: '0.66rem', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid #86EFAC' }}>
+                                  ✓ PAID
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* 6. STATUS */}
-                    <td style={{ padding: '0.7rem 1rem', verticalAlign: 'middle' }}>
+                    <td style={{ padding: '0.65rem 0.75rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       <span style={{
                         padding: '0.25rem 0.65rem',
                         borderRadius: '9999px',
@@ -423,7 +457,7 @@ export default function ManagerOrdersPage() {
                     </td>
 
                     {/* 7. ACTIONS (THREE-DOTS DROPDOWN MENU - CENTERED) */}
-                    <td style={{ padding: '0.7rem 1rem', verticalAlign: 'middle', textAlign: 'center', position: 'relative' }}>
+                    <td style={{ padding: '0.65rem 0.75rem', verticalAlign: 'middle', textAlign: 'center', position: 'relative', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'inline-flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
                         <button
                           type="button"
@@ -618,9 +652,53 @@ export default function ManagerOrdersPage() {
                 ))}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.85rem', borderTop: '2px solid #EAE3D2' }}>
-                <span style={{ fontWeight: 800, fontSize: '1rem', color: '#1C130E' }}>Total Amount</span>
-                <span style={{ fontWeight: 900, fontSize: '1.25rem', color: '#7A1C1C' }}>₹{selectedOrderTicketModal.total}</span>
+              {/* Complete Financial & Payment Breakdown in Manager Ticket View Modal */}
+              <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '2px solid #EAE3D2', display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.84rem' }}>
+                {(() => {
+                  const orig = Number(selectedOrderTicketModal.originalTotal ?? selectedOrderTicketModal.originalAmount ?? selectedOrderTicketModal.total ?? 0);
+                  const disc = Number(selectedOrderTicketModal.discountAmount ?? 0);
+                  const finalNet = Number(selectedOrderTicketModal.finalAmount ?? selectedOrderTicketModal.total ?? 0);
+                  const code = selectedOrderTicketModal.couponCode || '';
+                  const tip = Number(selectedOrderTicketModal.tip ?? selectedOrderTicketModal.tipAmount ?? 0);
+
+                  const subtotal = orig > 0 ? orig : (disc > 0 ? finalNet + disc : finalNet);
+
+                  return (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', fontWeight: 700 }}>
+                        <span>Subtotal (Without Discount):</span>
+                        <span>₹{subtotal}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: disc > 0 ? '#DC2626' : '#64748B', fontWeight: 800 }}>
+                        <span>Coupon Discount Applied:</span>
+                        <span>{disc > 0 ? `-₹${disc} (${code || 'Coupon'})` : '₹0 (No Coupon)'}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#166534', fontWeight: 900, fontSize: '0.95rem', paddingTop: '0.35rem', borderTop: '1px solid #EAE3D2' }}>
+                        <span>Food Revenue (Net Paid):</span>
+                        <span>₹{finalNet}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: tip > 0 ? '#EA580C' : '#64748B', fontWeight: 800 }}>
+                        <span>Customer Tip Collected:</span>
+                        <span>{tip > 0 ? `+₹${tip}` : '₹0 (No Tip)'}</span>
+                      </div>
+
+                      {tip > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#1C130E', fontWeight: 900, fontSize: '0.95rem', paddingTop: '0.35rem', borderTop: '1px dashed #CBD5E1' }}>
+                          <span>Total Collected from Diner:</span>
+                          <span style={{ color: '#166534' }}>₹{finalNet + tip}</span>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#1C130E', fontWeight: 800, paddingTop: '0.35rem', borderTop: '1px solid #EAE3D2' }}>
+                        <span>Payment Method:</span>
+                        <span>{selectedOrderTicketModal.paymentMethod || 'UPI / QR'}</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 

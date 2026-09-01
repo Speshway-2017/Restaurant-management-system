@@ -65,11 +65,28 @@ class OrderRepository {
     if (doc) {
       doc.status = targetStatus;
       doc.payment = targetPayment;
+      doc.paymentStatus = targetPayment;
+
+      // Persist coupon and financial settlement fields to MongoDB document
+      if (fullOrderData.originalTotal !== undefined) doc.originalTotal = Number(fullOrderData.originalTotal);
+      if (fullOrderData.originalAmount !== undefined) doc.originalAmount = Number(fullOrderData.originalAmount);
+      if (fullOrderData.couponCode !== undefined) doc.couponCode = String(fullOrderData.couponCode);
+      if (fullOrderData.discountAmount !== undefined) doc.discountAmount = Number(fullOrderData.discountAmount);
+      if (fullOrderData.tip !== undefined) doc.tip = Number(fullOrderData.tip);
+      if (fullOrderData.tipAmount !== undefined) doc.tipAmount = Number(fullOrderData.tipAmount);
+      if (fullOrderData.paymentMethod !== undefined) doc.paymentMethod = String(fullOrderData.paymentMethod);
+      if (fullOrderData.finalAmount !== undefined) {
+        doc.finalAmount = Number(fullOrderData.finalAmount);
+        doc.total = Number(fullOrderData.finalAmount);
+      } else if (fullOrderData.total !== undefined) {
+        doc.total = Number(fullOrderData.total);
+      }
+
       if (fullOrderData.items && Array.isArray(fullOrderData.items)) {
         doc.items = fullOrderData.items.map((it, idx) => {
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
           const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || targetStatus === 'Ready'));
-          const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : 'PREPARING');
+          const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (targetStatus === 'Preparing' || targetStatus === 'Cooking' || it.status === 'PREPARING' || it.status === 'COOKING' ? 'PREPARING' : (it.status || 'PLACED')));
 
           return {
             id: String(it.id || it._id || `item-${idx}`),
@@ -93,16 +110,22 @@ class OrderRepository {
       type: fullOrderData.type || 'Dine-In',
       customer: fullOrderData.customer || 'Guest Diner',
       phone: fullOrderData.phone || '',
-      total: Number(fullOrderData.total || fullOrderData.totalAmount || 0),
+      originalTotal: Number(fullOrderData.originalTotal || fullOrderData.originalAmount || fullOrderData.total || 0),
+      originalAmount: Number(fullOrderData.originalAmount || fullOrderData.originalTotal || fullOrderData.total || 0),
+      couponCode: fullOrderData.couponCode || '',
+      discountAmount: Number(fullOrderData.discountAmount || 0),
+      finalAmount: fullOrderData.finalAmount !== undefined ? Number(fullOrderData.finalAmount) : Number(fullOrderData.total || 0),
+      total: fullOrderData.finalAmount !== undefined ? Number(fullOrderData.finalAmount) : Number(fullOrderData.total || fullOrderData.totalAmount || 0),
       status: targetStatus,
       payment: targetPayment,
+      paymentStatus: targetPayment,
       time: fullOrderData.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       items: (fullOrderData.items || []).map((it, idx) => ({
         id: it.id || `item-${idx}`,
         name: it.name || 'Dish Item',
         price: Number(it.price) || 0,
         quantity: Number(it.quantity || it.qty || 1),
-        status: (targetStatus === 'Ready' || it.status === 'READY' || it.isReady) ? 'READY' : (it.status || 'PREPARING'),
+        status: (targetStatus === 'Ready' || it.status === 'READY' || it.isReady) ? 'READY' : (targetStatus === 'Preparing' || targetStatus === 'Cooking' || it.status === 'PREPARING' || it.status === 'COOKING' ? 'PREPARING' : (it.status || 'PLACED')),
         isReady: targetStatus === 'Ready' || Boolean(it.isReady || it.status === 'READY' || it.status === 'DELIVERED'),
         isDelivered: Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED')
       }))

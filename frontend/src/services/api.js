@@ -117,6 +117,78 @@ export const api = {
 
   // Coupons API
   getCoupons: () => request('/coupons'),
+  validateCoupon: async (code, subtotal) => {
+    try {
+      return await request('/coupons/validate', { method: 'POST', body: JSON.stringify({ code, subtotal }) });
+    } catch (err) {
+      if (err.message && (err.message.includes('404') || err.message.includes('Not Found'))) {
+        // Fallback: fetch coupons list from GET /coupons and validate locally!
+        const allCoupons = await request('/coupons').catch(() => []);
+        let localSaved = [];
+        try {
+          const raw = localStorage.getItem('flavora_coupons');
+          if (raw) localSaved = JSON.parse(raw);
+        } catch (e) {}
+
+        const combined = [...(Array.isArray(allCoupons) ? allCoupons : []), ...(Array.isArray(localSaved) ? localSaved : [])];
+        const cleanCode = String(code).trim().toUpperCase();
+        const found = combined.find(c => c && String(c.code || '').trim().toUpperCase() === cleanCode);
+
+        if (!found) {
+          return { valid: false, message: 'Invalid or expired coupon' };
+        }
+
+        const isInactive = found.isActive === false || found.status === 'Inactive' || found.status === 'INACTIVE';
+        if (isInactive) {
+          return { valid: false, message: 'Coupon is currently inactive' };
+        }
+
+        // Check validity date if configured
+        if (found.validTill && found.validTill !== 'Never') {
+          const expiry = new Date(found.validTill);
+          if (!isNaN(expiry.getTime()) && new Date() > expiry) {
+            return { valid: false, message: 'Coupon has expired' };
+          }
+        }
+        if (found.expiryDate && new Date() > new Date(found.expiryDate)) {
+          return { valid: false, message: 'Coupon has expired' };
+        }
+
+        const orderTotal = Number(subtotal || 0);
+        const minOrderVal = Number(found.minOrder || found.minOrderAmount || 0);
+        if (minOrderVal > 0 && orderTotal < minOrderVal) {
+          return { valid: false, message: `Coupon is valid only for orders above ₹${minOrderVal}.` };
+        }
+
+        let discountAmount = 0;
+        const discountVal = Number(found.discount || found.discountValue || 0);
+        const discountType = String(found.discountType || (discountVal <= 100 ? 'PERCENTAGE' : 'FIXED')).toUpperCase();
+
+        if (discountType === 'PERCENTAGE' || discountType === 'PERCENT') {
+          discountAmount = Math.round((orderTotal * discountVal) / 100);
+          const maxCap = Number(found.maxDiscount || found.maxDiscountLimit || 0);
+          if (maxCap > 0 && discountAmount > maxCap) {
+            discountAmount = maxCap;
+          }
+        } else {
+          discountAmount = Math.min(discountVal, orderTotal);
+        }
+
+        const finalAmount = Math.max(0, orderTotal - discountAmount);
+
+        return {
+          valid: true,
+          code: found.code,
+          discountType,
+          discountVal,
+          discountAmount,
+          finalAmount,
+          message: `✓ Coupon ${found.code} applied successfully!`
+        };
+      }
+      throw err;
+    }
+  },
   createCoupon: (data) => request('/coupons', { method: 'POST', body: JSON.stringify(data) }),
   updateCoupon: (id, data) => request(`/coupons/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCoupon: (id) => request(`/coupons/${id}`, { method: 'DELETE' }),
@@ -152,6 +224,13 @@ export const api = {
       body: JSON.stringify(payload)
     });
   },
+  createTable: (tableData) => request('/tables', {
+    method: 'POST',
+    body: JSON.stringify(tableData)
+  }),
+  deleteTable: (tableId) => request(`/tables/${tableId}`, {
+    method: 'DELETE'
+  }),
 
   // Reports & Analytics API
   getReportAnalytics: (params = {}) => {

@@ -10,6 +10,7 @@ import WaiterOrdersPage from './WaiterOrdersPage';
 import WaiterProfilePage from './WaiterProfilePage';
 import WaiterSettingsPage from './WaiterSettingsPage';
 import { api } from '../../services/api';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 const WAITER_PATH_TO_TAB = {
   '/waiter': 'waiter-dashboard',

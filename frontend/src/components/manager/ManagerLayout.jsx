@@ -17,6 +17,7 @@ import ManagerAnalyticsPage from './ManagerAnalyticsPage';
 import ManagerSettingsPage from './ManagerSettingsPage';
 import ManagerProfilePage from './ManagerProfilePage';
 import { api } from '../../services/api';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 const MANAGER_PATH_TO_TAB = {
   '/manager': 'manager-dashboard',
