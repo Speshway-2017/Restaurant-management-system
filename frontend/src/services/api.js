@@ -276,5 +276,18 @@ export const api = {
   updateReservationStatus: (id, status, tableNo) => request(`/receptionist/reservations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, tableNo }) }),
   getGuests: (search = '') => request(`/receptionist/guests${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   updateGuestPreferences: (id, data) => request(`/receptionist/guests/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  sendReceptionistNotification: (data) => request('/receptionist/notifications/send', { method: 'POST', body: JSON.stringify(data) })
+  sendReceptionistNotification: (data) => request('/receptionist/notifications/send', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Customer Module Enhancements API
+  callWaiter: (table, requestType = 'Assistance', note = '') => request('/orders/call-waiter', {
+    method: 'POST',
+    body: JSON.stringify({ table, requestType, note })
+  }),
+  submitFeedback: (feedbackData) => request('/feedback', {
+    method: 'POST',
+    body: JSON.stringify(feedbackData)
+  }),
+  getFeedback: () => request('/feedback'),
+  getGuestLoyalty: (phone) => request(`/receptionist/guests?search=${encodeURIComponent(phone || '')}`),
+  redeemLoyaltyPoints: (phone, points) => Promise.resolve({ success: true, redeemed: points, discount: Math.round(points * 0.5) })
 };

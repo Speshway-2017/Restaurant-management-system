@@ -259,7 +259,7 @@ export default function ReceptionistWaitlistPage() {
             }}
           >
             <Plus size={18} />
-            <span>+ Issue New Token</span>
+            <span> Issue New Token</span>
           </button>
         </div>
       </div>

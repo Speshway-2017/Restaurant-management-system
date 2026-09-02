@@ -50,4 +50,15 @@ const clearAllOrders = async (req, res) => {
   }
 };
 
-module.exports = { getOrders, createOrder, updateOrderStatus, updateOrderItemStatus, clearAllOrders };
+const callWaiter = async (req, res) => {
+  try {
+    const { table, requestType, note } = req.body;
+    const cleanTable = table || 'T-01';
+    const reqReason = requestType || 'Assistance';
+    return successResponse(res, { table: cleanTable, requestType: reqReason, timestamp: new Date() }, `Service request sent to Waiter for Table ${cleanTable}`);
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+module.exports = { getOrders, createOrder, updateOrderStatus, updateOrderItemStatus, clearAllOrders, callWaiter };

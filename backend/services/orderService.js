@@ -281,6 +281,26 @@ class OrderService {
       if (isPaid) {
         // Successful payment -> Table AUTOMATICALLY changes to Cleaning
         await this.syncTableStatusForOrder(tableId, 'Cleaning');
+
+        // Update Guest Loyalty Points & Visit Count in MongoDB
+        try {
+          const Guest = require('../models/Guest');
+          const phoneNum = updatedOrder?.phone || fullOrderData?.phone || '';
+          const customerName = updatedOrder?.customer || fullOrderData?.customer || 'Guest Diner';
+          if (phoneNum && phoneNum.length >= 10) {
+            const pointsEarned = Math.floor((updatedOrder?.total || fullOrderData?.finalAmount || 100) / 10);
+            await Guest.findOneAndUpdate(
+              { phone: phoneNum },
+              {
+                $set: { name: customerName, lastVisitDate: new Date() },
+                $inc: { visitCount: 1, loyaltyPoints: pointsEarned }
+              },
+              { upsert: true, new: true }
+            );
+          }
+        } catch (e) {
+          console.warn('Could not update guest loyalty points in DB:', e.message);
+        }
       } else if (isBillGenerated) {
         // Bill Generated -> Table STAYS Occupied
         await this.syncTableStatusForOrder(tableId, 'Occupied');
