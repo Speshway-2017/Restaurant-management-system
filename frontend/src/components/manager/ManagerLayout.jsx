@@ -124,8 +124,18 @@ export default function ManagerLayout({ setActivePage }) {
   const [managerProfile, setManagerProfile] = useState(() => {
     const saved = localStorage.getItem('flavora_profile_manager');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.name) return parsed;
+      } catch (e) {}
     }
+    return {
+      name: 'Resto Manager',
+      email: 'manager@flavorakitchen.in',
+      phone: '9876512345',
+      role: 'Restaurant Manager',
+      empId: 'RMSM-01'
+    };
   });
 
   useEffect(() => {
@@ -526,11 +536,11 @@ export default function ManagerLayout({ setActivePage }) {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
               >
                 <div className="admin-user-avatar">
-                  {getInitials(managerProfile.name)}
+                  {getInitials(managerProfile?.name)}
                 </div>
                 <div className="admin-user-info-text">
-                  <div className="admin-user-name">{managerProfile.name}</div>
-                  <div className="admin-user-role">{managerProfile.empId || 'RMSM-01'} • Manager</div>
+                  <div className="admin-user-name">{managerProfile?.name || 'Resto Manager'}</div>
+                  <div className="admin-user-role">{managerProfile?.empId || 'RMSM-01'} • Manager</div>
                 </div>
                 <ChevronDown size={14} color="#5C5C5C" />
               </div>
@@ -539,8 +549,8 @@ export default function ManagerLayout({ setActivePage }) {
               {userMenuOpen && (
                 <div className="admin-profile-dropdown-menu">
                   <div className="admin-dropdown-user-info">
-                    <div className="user-info-name">{managerProfile.name}</div>
-                    <div className="user-info-email">{managerProfile.email}</div>
+                    <div className="user-info-name">{managerProfile?.name || 'Resto Manager'}</div>
+                    <div className="user-info-email">{managerProfile?.email || 'manager@flavorakitchen.in'}</div>
                   </div>
                   <button
                     className="admin-dropdown-item"

@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send, Clock, Lock } from 'lucide-react';
+import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send, Clock, Lock, Filter, Flame, Globe } from 'lucide-react';
 import { api } from '../services/api';
 import MenuDishStrip from '../components/MenuDishStrip';
 import ExposureSlider from '../components/ExposureSlider';
 import { findItemInCatalog, calculateCartTotal, resolveDishImageUrl } from '../utils/menuRegistry';
 import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 import { isRestaurantOpenNow, getRestaurantStatusDetails } from '../utils/restaurantTimings';
+
+// Customer Enhancement Components
+import CustomerDishDetailModal from '../components/customer/CustomerDishDetailModal';
+import CustomerOrderTrackingModal from '../components/customer/CustomerOrderTrackingModal';
+import CustomerBillModal from '../components/customer/CustomerBillModal';
+import CustomerEngagementModal from '../components/customer/CustomerEngagementModal';
+import CustomerBottomNav from '../components/customer/CustomerBottomNav';
 
 export default function MenuPage({ onOpenDemoModal }) {
   const { brandName } = useRestaurantBranding();
@@ -79,6 +86,18 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderSuccessMsg, setOrderSuccessMsg] = useState(null);
   const [tableOccupiedInfo, setTableOccupiedInfo] = useState(null);
+
+  // New Customer Enhancement States
+  const [selectedDishForDetail, setSelectedDishForDetail] = useState(null);
+  const [isOrderTrackingOpen, setIsOrderTrackingOpen] = useState(false);
+  const [isBillModalOpen, setIsBillModalOpen] = useState(false);
+  const [isEngagementModalOpen, setIsEngagementModalOpen] = useState(false);
+  const [engagementTab, setEngagementTab] = useState('rating');
+  const [currentLanguage, setCurrentLanguage] = useState('en');
+  const [priceFilter, setPriceFilter] = useState('all'); // 'all', 'under200', 'under500', '500plus', 'lowHigh', 'highLow'
+  const [spiceFilter, setSpiceFilter] = useState('all'); // 'all', 'Mild', 'Medium', 'Spicy'
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [customerNavTab, setCustomerNavTab] = useState('menu');
 
   const [settings, setSettings] = useState(() => {
     try {
@@ -474,7 +493,26 @@ export default function MenuPage({ onOpenDemoModal }) {
     const matchesVeg = vegOnly ? item.isVeg : true;
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.desc && item.desc.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCategory && matchesVeg && matchesSearch;
+    
+    // Price filter matching
+    let matchesPrice = true;
+    const price = Number(item.price || 0);
+    if (priceFilter === 'under200') matchesPrice = price <= 200;
+    else if (priceFilter === 'under500') matchesPrice = price <= 500;
+    else if (priceFilter === '500plus') matchesPrice = price > 500;
+
+    // Spice filter matching
+    let matchesSpice = true;
+    if (spiceFilter !== 'all') {
+      const itemSpice = String(item.spice || item.spiceLevel || 'Medium').toLowerCase();
+      matchesSpice = itemSpice.includes(spiceFilter.toLowerCase());
+    }
+
+    return matchesCategory && matchesVeg && matchesSearch && matchesPrice && matchesSpice;
+  }).sort((a, b) => {
+    if (priceFilter === 'lowHigh') return (Number(a.price) || 0) - (Number(b.price) || 0);
+    if (priceFilter === 'highLow') return (Number(b.price) || 0) - (Number(a.price) || 0);
+    return 0;
   });
 
   const totalCartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
@@ -971,6 +1009,54 @@ export default function MenuPage({ onOpenDemoModal }) {
             </div>
           </div>
 
+          {/* Price Range Filter Dropdown */}
+          <select
+            value={priceFilter}
+            onChange={(e) => setPriceFilter(e.target.value)}
+            style={{
+              padding: '0.45rem 0.85rem',
+              borderRadius: '16px',
+              border: '1.5px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: '#334155',
+              cursor: 'pointer',
+              outline: 'none',
+              height: '42px'
+            }}
+          >
+            <option value="all">💰 All Prices</option>
+            <option value="under200">Under ₹200</option>
+            <option value="under500">Under ₹500</option>
+            <option value="500plus">₹500+</option>
+            <option value="lowHigh">Price: Low to High</option>
+            <option value="highLow">Price: High to Low</option>
+          </select>
+
+          {/* Spice Level Filter Dropdown */}
+          <select
+            value={spiceFilter}
+            onChange={(e) => setSpiceFilter(e.target.value)}
+            style={{
+              padding: '0.45rem 0.85rem',
+              borderRadius: '16px',
+              border: '1.5px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: '#334155',
+              cursor: 'pointer',
+              outline: 'none',
+              height: '42px'
+            }}
+          >
+            <option value="all">🌶️ All Spice Levels</option>
+            <option value="Mild">Mild</option>
+            <option value="Medium">Medium</option>
+            <option value="Spicy">Spicy</option>
+          </select>
+
         </div>
       </section>
 
@@ -1031,7 +1117,10 @@ export default function MenuPage({ onOpenDemoModal }) {
                           }}
                         >
                           {/* Left: Thumbnail Image */}
-                          <div style={{ width: '68px', height: '68px', borderRadius: '12px', overflow: 'hidden', flexShrink: 0, position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
+                          <div
+                            onClick={() => setSelectedDishForDetail(item)}
+                            style={{ width: '68px', height: '68px', borderRadius: '12px', overflow: 'hidden', flexShrink: 0, position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', cursor: 'pointer' }}
+                          >
                             <img
                               src={resolveDishImageUrl(item)}
                               alt=""
@@ -1056,7 +1145,10 @@ export default function MenuPage({ onOpenDemoModal }) {
                                 <span style={{ position: 'absolute', inset: '2px', backgroundColor: item.isVeg ? '#166534' : '#DC2626', borderRadius: '50%' }}></span>
                               </span>
 
-                              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0F2A1D', margin: 0, fontFamily: "var(--font-heading), 'Poppins', 'Inter', sans-serif", lineHeight: 1.25 }}>
+                              <h3
+                                onClick={() => setSelectedDishForDetail(item)}
+                                style={{ fontSize: '1rem', fontWeight: 800, color: '#0F2A1D', margin: 0, fontFamily: "var(--font-heading), 'Poppins', 'Inter', sans-serif", lineHeight: 1.25, cursor: 'pointer' }}
+                              >
                                 {item.name}
                               </h3>
 
@@ -1644,6 +1736,89 @@ export default function MenuPage({ onOpenDemoModal }) {
           </div>
         </div>
       )}
+
+      {/* ================= 9. NEW CUSTOMER ENHANCEMENT MODALS ================= */}
+
+      {/* Dish Detailed Info Modal */}
+      {selectedDishForDetail && (
+        <CustomerDishDetailModal
+          dish={selectedDishForDetail}
+          onClose={() => setSelectedDishForDetail(null)}
+          onAddToCart={(dishObj, qty, options) => {
+            const id = dishObj.id || dishObj._id;
+            const currentQty = cart[id] || 0;
+            const newCart = { ...cart, [id]: currentQty + qty };
+            updateCartState(newCart);
+          }}
+          language={currentLanguage}
+        />
+      )}
+
+      {/* Real-time Order Tracking Modal */}
+      {isOrderTrackingOpen && (
+        <CustomerOrderTrackingModal
+          activeOrder={placedTableOrders[0] || null}
+          tableNum={tableNum}
+          onClose={() => setIsOrderTrackingOpen(false)}
+          onAddMoreItems={() => {
+            setIsOrderTrackingOpen(false);
+            window.scrollTo({ top: 400, behavior: 'smooth' });
+          }}
+          onViewBill={() => {
+            setIsOrderTrackingOpen(false);
+            setIsBillModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Live Running Bill & Settlement Modal */}
+      {isBillModalOpen && (
+        <CustomerBillModal
+          activeOrder={placedTableOrders[0] || null}
+          tableNum={tableNum}
+          onClose={() => setIsBillModalOpen(false)}
+          onPaymentSuccess={() => {
+            setAppliedCoupon(null);
+          }}
+          appliedCoupon={appliedCoupon}
+          setAppliedCoupon={setAppliedCoupon}
+          loyaltyPoints={250}
+          brandSettings={{ brandName }}
+        />
+      )}
+
+      {/* Engagement Modal (Rating, Table Booking, Referral, Language) */}
+      {isEngagementModalOpen && (
+        <CustomerEngagementModal
+          activeTab={engagementTab}
+          onClose={() => setIsEngagementModalOpen(false)}
+          activeOrder={placedTableOrders[0] || null}
+          tableNum={tableNum}
+          currentLanguage={currentLanguage}
+          onLanguageChange={(lang) => setCurrentLanguage(lang)}
+        />
+      )}
+
+      {/* Customer Mobile Bottom Navigation Bar */}
+      <CustomerBottomNav
+        activeTab={customerNavTab}
+        onSelectTab={(tab) => {
+          setCustomerNavTab(tab);
+          if (tab === 'menu') {
+            window.scrollTo({ top: 400, behavior: 'smooth' });
+          } else if (tab === 'orders') {
+            setIsOrderTrackingOpen(true);
+          } else if (tab === 'bill') {
+            setIsBillModalOpen(true);
+          } else if (tab === 'more') {
+            setEngagementTab('rating');
+            setIsEngagementModalOpen(true);
+          }
+        }}
+        cartCount={totalCartCount}
+        cartTotal={totalCartPrice}
+        onOpenCart={() => setIsCheckoutModalOpen(true)}
+      />
 
     </div>
   );

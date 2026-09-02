@@ -989,7 +989,7 @@ export default function WaiterOrdersPage() {
 
                   {/* Customer Tip Section */}
                   <div style={{ marginBottom: '1.25rem', backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0' }}>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <label style={{ display: 'flex', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.4rem', alignItems: 'center', gap: '0.35rem' }}>
                       <Coins size={16} color="#B45309" />
                       <span>Optional Customer Tip</span>
                     </label>

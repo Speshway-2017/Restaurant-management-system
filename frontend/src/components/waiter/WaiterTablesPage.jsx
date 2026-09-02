@@ -1065,7 +1065,7 @@ export default function WaiterTablesPage() {
 
                 {/* Customer Tip Section */}
                 <div style={{ marginBottom: '1.15rem', backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', border: '1.5px solid #E2E8F0' }}>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <label style={{ display: 'flex', fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem', alignItems: 'center', gap: '0.3rem' }}>
                     <Coins size={15} color="#B45309" />
                     <span>Optional Customer Tip</span>
                   </label>

@@ -61,8 +61,16 @@ export default function ReceptionistReservationsPage() {
 
   const handleCreateReservation = async (e) => {
     e.preventDefault();
-    if (!resvForm.guestName || !resvForm.phone) {
+    const cleanName = (resvForm.guestName || '').trim();
+    const cleanPhone = (resvForm.phone || '').trim();
+
+    if (!cleanName || !cleanPhone) {
       alert('Please enter guest name and phone number.');
+      return;
+    }
+
+    if (cleanPhone.length < 10) {
+      alert('Phone number must be exactly 10 digits.');
       return;
     }
 
@@ -382,11 +390,26 @@ export default function ReceptionistReservationsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>Guest Name</label>
-                  <input type="text" required placeholder="e.g. Ramana" value={resvForm.guestName} onChange={e => setResvForm({ ...resvForm, guestName: e.target.value })} style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.85rem', outline: 'none' }} />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ramana"
+                    value={resvForm.guestName}
+                    onChange={e => setResvForm({ ...resvForm, guestName: e.target.value.replace(/[^a-zA-Z\s]/g, '') })}
+                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.85rem', outline: 'none' }}
+                  />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>Phone Number</label>
-                  <input type="tel" maxLength={10} required placeholder="10-digit mobile" value={resvForm.phone} onChange={e => setResvForm({ ...resvForm, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })} style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.85rem', outline: 'none' }} />
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    required
+                    placeholder="10-digit mobile"
+                    value={resvForm.phone}
+                    onChange={e => setResvForm({ ...resvForm, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })}
+                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.85rem', outline: 'none' }}
+                  />
                 </div>
               </div>
 

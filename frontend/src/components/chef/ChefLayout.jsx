@@ -85,10 +85,15 @@ export default function ChefLayout({ setActivePage }) {
       const saved = localStorage.getItem('flavora_profile_chef');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (parsed && typeof parsed === 'object' && parsed.name) return parsed;
       }
     } catch (e) { }
-
+    return {
+      name: 'Chef Vikrant',
+      email: 'chef@flavorakitchen.in',
+      role: 'Executive Chef',
+      empId: 'CHEF-01'
+    };
   });
 
   useEffect(() => {
