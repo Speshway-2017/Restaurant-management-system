@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   User, Lock, Eye, EyeOff, Globe, ChevronDown, ArrowRight, ArrowLeft,
   Phone, Utensils, ChefHat, LayoutGrid, BarChart3, Building2, Mail,
-  ShieldCheck, PieChart, Headset, CheckCircle2, X, Table2, UtensilsCrossed, Sparkles, Leaf
+  ShieldCheck, PieChart, Headset, CheckCircle2, X, Table2, UtensilsCrossed, Sparkles, Leaf, AlertCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 import AnimatedInput from '../components/AnimatedInput';
@@ -15,6 +15,7 @@ export default function LoginPage({ setActivePage }) {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const nameParts = brandName.trim().split(' ');
   const firstNamePart = nameParts[0] || 'Flavora';
@@ -22,55 +23,73 @@ export default function LoginPage({ setActivePage }) {
 
   const handleLoginSubmit = (e) => {
     e.preventDefault();
+    setErrorMessage('');
     setIsLoggingIn(true);
-    const enteredInput = (emailOrPhone || '').toLowerCase();
 
-    api.login(emailOrPhone || 'admin@flavorakitchen.in', password || 'admin123password')
+    if (!emailOrPhone || !password) {
+      setErrorMessage('Invalid email or password.');
+      setIsLoggingIn(false);
+      return;
+    }
+
+    api.login(emailOrPhone.trim(), password)
       .then((res) => {
-        if (res.token) {
-          sessionStorage.setItem('flavora_auth_token', res.token);
-        }
-        sessionStorage.setItem('flavora_logged_in', 'true');
-        localStorage.removeItem('flavora_auth_token');
-        localStorage.removeItem('flavora_logged_in');
+        const userObj = res.user || res;
+        const role = userObj.role || res.role;
+        const token = res.token || userObj.token;
 
-        if (res.user?.role === 'Receptionist' || res.user?.role === 'Host' || enteredInput.includes('reception') || enteredInput.includes('host')) {
-          sessionStorage.setItem('flavora_user_role', 'receptionist');
-          setActivePage('receptionist');
-        } else if (res.user?.role === 'Chef' || enteredInput.includes('chef')) {
-          sessionStorage.setItem('flavora_user_role', 'chef');
-          setActivePage('chef');
-        } else if (res.user?.role === 'Waiter' || enteredInput.includes('waiter')) {
-          sessionStorage.setItem('flavora_user_role', 'waiter');
-          setActivePage('waiter');
-        } else if (res.user?.role === 'Manager' || res.user?.role === 'Resto Manager' || enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
-          sessionStorage.setItem('flavora_user_role', 'manager');
-          setActivePage('manager');
-        } else {
-          sessionStorage.setItem('flavora_user_role', 'admin');
+        if (!token || !role) {
+          throw new Error('Invalid email or password.');
+        }
+
+        const normRole = String(role).toLowerCase().trim();
+
+        // Save session credentials
+        sessionStorage.setItem('flavora_auth_token', token);
+        sessionStorage.setItem('flavora_logged_in', 'true');
+        sessionStorage.setItem('flavora_user_role', normRole);
+        sessionStorage.setItem('flavora_user_data', JSON.stringify(userObj));
+
+        if (rememberMe) {
+          localStorage.setItem('flavora_auth_token', token);
+          localStorage.setItem('flavora_logged_in', 'true');
+          localStorage.setItem('flavora_user_role', normRole);
+          localStorage.setItem('flavora_user_data', JSON.stringify(userObj));
+        }
+
+        // Role-based routing strictly from backend user.role
+        if (normRole === 'admin') {
           setActivePage('admin');
+        } else if (normRole === 'manager' || normRole === 'resto manager') {
+          setActivePage('manager');
+        } else if (normRole === 'chef' || normRole === 'head chef') {
+          setActivePage('chef');
+        } else if (normRole === 'waiter') {
+          setActivePage('waiter');
+        } else if (normRole === 'receptionist' || normRole === 'host') {
+          setActivePage('receptionist');
+        } else {
+          setActivePage('home');
         }
       })
-      .catch(() => {
-        sessionStorage.setItem('flavora_logged_in', 'true');
+      .catch((err) => {
+        // ALWAYS REMAIN ON LOGIN PAGE & CLEAR ALL AUTH STORAGE ON FAILURE
+        sessionStorage.removeItem('flavora_auth_token');
+        sessionStorage.removeItem('flavora_logged_in');
+        sessionStorage.removeItem('flavora_user_role');
+        sessionStorage.removeItem('flavora_user_data');
         localStorage.removeItem('flavora_auth_token');
         localStorage.removeItem('flavora_logged_in');
+        localStorage.removeItem('flavora_user_role');
+        localStorage.removeItem('flavora_user_data');
 
-        if (enteredInput.includes('reception') || enteredInput.includes('host')) {
-          sessionStorage.setItem('flavora_user_role', 'receptionist');
-          setActivePage('receptionist');
-        } else if (enteredInput.includes('chef')) {
-          sessionStorage.setItem('flavora_user_role', 'chef');
-          setActivePage('chef');
-        } else if (enteredInput.includes('waiter')) {
-          sessionStorage.setItem('flavora_user_role', 'waiter');
-          setActivePage('waiter');
-        } else if (enteredInput.includes('manager') || enteredInput.includes('rmsm')) {
-          sessionStorage.setItem('flavora_user_role', 'manager');
-          setActivePage('manager');
+        const rawMsg = (err && err.message) ? String(err.message) : '';
+        if (rawMsg.includes('403') || rawMsg.toLowerCase().includes('permission')) {
+          setErrorMessage('You do not have permission to access this dashboard.');
+        } else if (rawMsg.toLowerCase().includes('failed to fetch') || rawMsg.toLowerCase().includes('network')) {
+          setErrorMessage('Unable to connect to the server. Please try again.');
         } else {
-          sessionStorage.setItem('flavora_user_role', 'admin');
-          setActivePage('admin');
+          setErrorMessage('Invalid email or password.');
         }
       })
       .finally(() => {
@@ -209,6 +228,27 @@ export default function LoginPage({ setActivePage }) {
             <h2 className="ref-welcome-title">Welcome Back!</h2>
             <p className="ref-welcome-subtitle">Sign in to continue to your account</p>
           </div>
+
+          {/* Invalid Login Credentials Error Alert */}
+          {errorMessage && (
+            <div style={{
+              backgroundColor: '#FEF2F2',
+              border: '1.5px solid #FCA5A5',
+              color: '#991B1B',
+              padding: '0.75rem 1rem',
+              borderRadius: '10px',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.55rem',
+              boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
+            }}>
+              <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
           {/* SmoothUI Animated Input Form */}
           <form className="form" onSubmit={handleLoginSubmit} autoComplete="off">

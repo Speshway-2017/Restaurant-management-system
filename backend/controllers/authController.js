@@ -7,7 +7,28 @@ const loginUser = async (req, res) => {
     const result = await authService.login(email, password);
     return successResponse(res, result, 'Login successful');
   } catch (error) {
-    return errorResponse(res, error.message, 401);
+    return errorResponse(res, error.message || 'Invalid email or password', 401);
+  }
+};
+
+const getMe = async (req, res) => {
+  try {
+    if (!req.user) {
+      return errorResponse(res, 'Not authorized', 401);
+    }
+    return successResponse(res, {
+      user: {
+        _id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        phone: req.user.phone || '',
+        branch: req.user.branch || ''
+      },
+      role: req.user.role
+    }, 'Session active');
+  } catch (error) {
+    return errorResponse(res, error.message || 'Not authorized', 401);
   }
 };
 
@@ -21,4 +42,4 @@ const getProfile = async (req, res) => {
   }
 };
 
-module.exports = { loginUser, getProfile };
+module.exports = { loginUser, getMe, getProfile };
