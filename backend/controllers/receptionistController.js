@@ -63,15 +63,29 @@ const getFloorPlan = async (req, res) => {
     const todayReservations = await Reservation.find({ date: todayStr, status: { $in: ['Confirmed', 'Checked_In'] } });
 
     const mappedTables = tables.map(tbl => {
-      const activeSession = tbl.status !== 'Available' ? activeSessions.find(s => s.tableNum === tbl.number) : null;
+      // 1. Resolve active session ONLY if table status is not Available/Cleaning AND has an ACTIVE session
+      const activeSession = (tbl.status !== 'Available' && tbl.status !== 'Cleaning') ? activeSessions.find(s => 
+        s.tableNum === tbl.number || 
+        (Array.isArray(s.mergedTableNums) && s.mergedTableNums.includes(tbl.number)) || 
+        (tbl.activeSessionId && s._id.toString() === tbl.activeSessionId)
+      ) : null;
+
       const resv = tbl.status === 'Reserved' ? todayReservations.find(r => r.tableNo === tbl.number) : null;
 
-      // Find matching live MongoDB order for this table
-      const tblOrder = activeOrders.find(o => {
-        const orderTableNum = o.table ? String(o.table).replace(/[^0-9]/g, '') : (o.tableNum ? String(o.tableNum) : '');
-        const targetTableNum = String(tbl.number).replace(/[^0-9]/g, '');
-        return orderTableNum === targetTableNum;
-      });
+      // 2. Find live order ONLY if there is an activeSession (or active session token / session ID match)
+      let tblOrder = null;
+      if (activeSession) {
+        tblOrder = activeOrders.find(o => {
+          if (activeSession.sessionToken && o.sessionToken === activeSession.sessionToken) return true;
+          if (activeSession._id && o.sessionId === activeSession._id.toString()) return true;
+
+          const orderTableNum = o.table ? String(o.table).replace(/[^0-9]/g, '') : (o.tableNum ? String(o.tableNum) : '');
+          const targetTableNum = String(tbl.number).replace(/[^0-9]/g, '');
+          if (orderTableNum && targetTableNum && orderTableNum === targetTableNum) return true;
+          if (tbl.mergedWith && tbl.mergedWith.some(m => String(m).replace(/[^0-9]/g, '') === orderTableNum)) return true;
+          return false;
+        });
+      }
 
       return {
         _id: tbl._id,
@@ -81,6 +95,7 @@ const getFloorPlan = async (req, res) => {
         section: tbl.section,
         status: tbl.status,
         mergedWith: tbl.mergedWith || [],
+        mergeGroupId: tbl.mergeGroupId || (activeSession ? activeSession.mergeGroupId : ''),
         activeSession: activeSession || null,
         reservation: resv || null,
         activeOrder: tblOrder || null
@@ -209,36 +224,49 @@ const createOrUpdateGuestProfile = async ({ name, phone, specialOccasion, notes 
   }
 };
 
-// 4. Merge Tables
+// 4. Merge Tables (Physical Merge Only - Preserves Table Availability & Isolated Sessions)
 const mergeTables = async (req, res) => {
   try {
-    const { primaryTableNum, secondaryTableNums } = req.body; // e.g. primary 'T-05', secondary ['T-06']
+    const { primaryTableNum, secondaryTableNums } = req.body; // e.g. primary 'T-02', secondary ['T-03']
     if (!primaryTableNum || !Array.isArray(secondaryTableNums) || secondaryTableNums.length === 0) {
       return res.status(400).json({ success: false, message: 'Primary table and secondary tables are required.' });
     }
 
-    const allTableNums = [primaryTableNum, ...secondaryTableNums];
+    const allTableNums = Array.from(new Set([primaryTableNum, ...secondaryTableNums]));
     const tables = await Table.find({ number: { $in: allTableNums } });
 
     const primaryTable = tables.find(t => t.number === primaryTableNum);
     if (!primaryTable) return res.status(404).json({ success: false, message: 'Primary table not found.' });
 
-    const activeSession = await TableSession.findOne({ tableNum: primaryTableNum, status: 'ACTIVE' });
-    const mergeGroupId = `MG-${Date.now()}`;
+    // Check if an active session exists on ANY of the merged tables
+    const activeSession = await TableSession.findOne({ 
+      $or: [{ tableNum: { $in: allTableNums } }, { mergedTableNums: { $in: allTableNums } }], 
+      status: 'ACTIVE' 
+    });
 
-    // Link secondary tables and set status to Occupied for all merged tables
+    const mergeGroupId = `MG-${Date.now()}`;
+    const targetStatus = activeSession ? 'Occupied' : (tables.every(t => t.status === 'Available') ? 'Available' : primaryTable.status);
+
     for (let t of tables) {
-      t.status = 'Occupied';
-      if (activeSession) {
-        t.activeSessionId = activeSession._id.toString();
-        t.mergeGroupId = mergeGroupId;
+      t.status = targetStatus;
+      t.mergeGroupId = mergeGroupId;
+      t.activeSessionId = activeSession ? activeSession._id.toString() : null;
+      if (!activeSession) {
+        t.currentOrder = '';
       }
-      if (t.number !== primaryTableNum) {
-        t.mergedWith = [primaryTableNum, ...secondaryTableNums.filter(n => n !== t.number)];
-      } else {
+      if (t.number === primaryTableNum) {
         t.mergedWith = secondaryTableNums;
+      } else {
+        t.mergedWith = [primaryTableNum, ...secondaryTableNums.filter(n => n !== t.number)];
       }
       await t.save();
+    }
+
+    // Update activeSession to list all mergedTableNums if an active session exists
+    if (activeSession) {
+      activeSession.mergedTableNums = secondaryTableNums;
+      activeSession.mergeGroupId = mergeGroupId;
+      await activeSession.save();
     }
 
     res.json({ success: true, message: `Tables ${allTableNums.join(' + ')} merged successfully!`, primaryTable });
@@ -255,11 +283,29 @@ const splitTables = async (req, res) => {
     if (!table) return res.status(404).json({ success: false, message: 'Table not found.' });
 
     const mergedList = table.mergedWith || [];
-    table.mergedWith = [];
-    await table.save();
+    const allTableNums = [tableNum, ...mergedList];
 
-    if (mergedList.length > 0) {
-      await Table.updateMany({ number: { $in: mergedList } }, { mergedWith: [], status: 'Available' });
+    const activeSession = await TableSession.findOne({ 
+      $or: [{ tableNum: { $in: allTableNums } }, { mergedTableNums: { $in: allTableNums } }], 
+      status: 'ACTIVE' 
+    });
+
+    for (let tNum of allTableNums) {
+      const t = await Table.findOne({ number: tNum });
+      if (t) {
+        t.mergedWith = [];
+        t.mergeGroupId = '';
+        if (!activeSession) {
+          t.status = 'Available';
+          t.activeSessionId = null;
+          t.currentOrder = '';
+        } else if (t.number !== activeSession.tableNum) {
+          t.status = 'Available';
+          t.activeSessionId = null;
+          t.currentOrder = '';
+        }
+        await t.save();
+      }
     }
 
     res.json({ success: true, message: `Merged table ${tableNum} split successfully into individual tables!` });
@@ -564,9 +610,79 @@ const sendNotification = async (req, res) => {
   }
 };
 
+// 11. Get Active Session for a Table (Source of truth for QR scans)
+const getActiveTableSession = async (req, res) => {
+  try {
+    const rawNum = req.params.tableNum || req.query.tableNum || '';
+    const cleanNum = String(rawNum).trim();
+    if (!cleanNum) {
+      return res.status(400).json({ success: false, message: 'Table number is required.' });
+    }
+
+    const cleanDigits = cleanNum.replace(/[^0-9]/g, '');
+    const formattedNum = cleanDigits ? `T-${cleanDigits.padStart(2, '0')}` : cleanNum;
+
+    // Find table in DB first to resolve merged partner tables
+    const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanDigits}$`, 'i');
+    const table = await Table.findOne({
+      $or: [
+        { number: formattedNum },
+        { number: cleanNum },
+        { name: exactRegex },
+        { number: exactRegex }
+      ]
+    });
+
+    const searchNums = [cleanNum, formattedNum];
+    if (table && table.number) searchNums.push(table.number);
+    if (table && Array.isArray(table.mergedWith)) {
+      table.mergedWith.forEach(m => {
+        searchNums.push(m);
+        const d = String(m).replace(/[^0-9]/g, '');
+        if (d) searchNums.push(`T-${d.padStart(2, '0')}`);
+      });
+    }
+
+    const uniqueNums = Array.from(new Set(searchNums));
+
+    // Match ACTIVE session ONLY
+    const activeSession = await TableSession.findOne({
+      $or: [
+        { tableNum: { $in: uniqueNums } },
+        { mergedTableNums: { $in: uniqueNums } }
+      ],
+      status: 'ACTIVE'
+    });
+
+    if (!activeSession) {
+      return res.json({ success: true, data: null, isOccupied: false });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        _id: activeSession._id,
+        tableNum: activeSession.tableNum,
+        mergedTableNums: activeSession.mergedTableNums || [],
+        sessionToken: activeSession.sessionToken,
+        guestName: activeSession.guestName,
+        phone: activeSession.phone || '',
+        partySize: activeSession.partySize || 2,
+        specialOccasion: activeSession.specialOccasion || 'None',
+        notes: activeSession.notes || '',
+        seatedAt: activeSession.seatedAt
+      },
+      isOccupied: true
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getReceptionistKPIs,
   getFloorPlan,
+  getActiveTableSession,
   seatWalkIn,
   mergeTables,
   splitTables,

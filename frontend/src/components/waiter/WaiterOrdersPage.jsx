@@ -154,10 +154,12 @@ export default function WaiterOrdersPage() {
     const interval = setInterval(fetchOrders, 3000);
     const handleSync = () => fetchOrders();
     window.addEventListener('flavora_orders_updated', handleSync);
+    window.addEventListener('flavora_payment_completed', handleSync);
     window.addEventListener('storage', handleSync);
     return () => {
       clearInterval(interval);
       window.removeEventListener('flavora_orders_updated', handleSync);
+      window.removeEventListener('flavora_payment_completed', handleSync);
       window.removeEventListener('storage', handleSync);
     };
   }, []);
@@ -354,9 +356,15 @@ export default function WaiterOrdersPage() {
   };
 
   const handleGenerateBill = async (order) => {
-    const orderId = order._id || order.id || order.orderId;
-    await handleUpdateStatus(orderId, 'Bill Generated', { payment: 'Awaiting Payment' });
-    setBillingOrder({ ...order, status: 'Bill Generated', payment: 'Awaiting Payment' });
+    try {
+      const orderId = order._id || order.id || order.orderId;
+      await handleUpdateStatus(orderId, 'Bill Generated', { payment: 'Awaiting Payment' });
+      setBillingOrder(null);
+      setPaymentModalOrder(null);
+      showNotification(`✓ Bill Presented for Table ${order.table || 'T-01'}! Waiting for customer payment.`);
+    } catch (e) {
+      console.warn("Failed to generate bill:", e);
+    }
   };
 
   const handleConfirmPayment = async (order) => {
@@ -1405,50 +1413,80 @@ export default function WaiterOrdersPage() {
                         </div>
                       </div>
 
-                      {/* Confirm Action Button */}
-                      <div style={{ display: 'flex', gap: '0.75rem' }}>
-                        <button
-                          disabled={isProcessingPayment}
-                          onClick={() => handleConfirmPayment(paymentModalOrder)}
-                          style={{
-                            flex: 1,
-                            backgroundColor: isProcessingPayment ? '#94A3B8' : '#166534',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            padding: '0.85rem',
-                            borderRadius: '12px',
-                            fontSize: '0.9rem',
-                            fontWeight: 900,
-                            cursor: isProcessingPayment ? 'not-allowed' : 'pointer',
-                            boxShadow: '0 4px 12px rgba(22, 101, 52, 0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.4rem'
-                          }}
-                        >
-                          <CheckCircle2 size={18} />
-                          {isProcessingPayment ? 'Processing Payment...' : `CONFIRM PAYMENT (₹${customerPaid})`}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPaymentModalOrder(null);
-                            setTipInput('');
-                            handleRemoveCoupon();
-                          }}
-                          style={{
-                            backgroundColor: '#F1F5F9',
-                            color: '#475569',
-                            border: '1px solid #CBD5E1',
-                            padding: '0.85rem 1.25rem',
-                            borderRadius: '12px',
-                            fontSize: '0.88rem',
-                            fontWeight: 800,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Cancel
-                        </button>
+                      {/* Confirm Action Buttons */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                        {paymentModalOrder.status !== 'Bill Generated' && paymentModalOrder.payment !== 'Awaiting Payment' && (
+                          <button
+                            disabled={isProcessingPayment}
+                            onClick={() => handleGenerateBill(paymentModalOrder)}
+                            style={{
+                              width: '100%',
+                              backgroundColor: '#E07A3C',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              padding: '0.85rem',
+                              borderRadius: '12px',
+                              fontSize: '0.88rem',
+                              fontWeight: 900,
+                              cursor: 'pointer',
+                              boxShadow: '0 4px 12px rgba(224, 122, 60, 0.25)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.4rem'
+                            }}
+                          >
+                            <Receipt size={18} />
+                            <span>📄 Present Bill to Table & Wait for Customer Payment</span>
+                          </button>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '0.65rem' }}>
+                          <button
+                            disabled={isProcessingPayment}
+                            onClick={() => handleConfirmPayment(paymentModalOrder)}
+                            style={{
+                              flex: 1,
+                              backgroundColor: isProcessingPayment ? '#94A3B8' : '#166534',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              padding: '0.85rem',
+                              borderRadius: '12px',
+                              fontSize: '0.88rem',
+                              fontWeight: 900,
+                              cursor: isProcessingPayment ? 'not-allowed' : 'pointer',
+                              boxShadow: '0 4px 12px rgba(22, 101, 52, 0.3)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.4rem'
+                            }}
+                          >
+                            <CheckCircle2 size={18} />
+                            {isProcessingPayment ? 'Processing...' : `Confirm Cash Payment (₹${customerPaid})`}
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setPaymentModalOrder(null);
+                              setBillingOrder(null);
+                              setTipInput('');
+                              handleRemoveCoupon();
+                            }}
+                            style={{
+                              backgroundColor: '#F1F5F9',
+                              color: '#475569',
+                              border: '1px solid #CBD5E1',
+                              padding: '0.85rem 1.1rem',
+                              borderRadius: '12px',
+                              fontSize: '0.85rem',
+                              fontWeight: 800,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ← Back
+                          </button>
+                        </div>
                       </div>
                     </>
                   ) : (

@@ -27,6 +27,24 @@ class OrderService {
     const OrderModel = require('../models/Order');
     const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i');
 
+    // 0. Resolve current ACTIVE receptionist session as single source of truth for customer name
+    const TableSession = require('../models/TableSession');
+    const searchNums = [formattedTable, cleanNum, `T-${cleanNum.padStart(2, '0')}`];
+    const activeSession = await TableSession.findOne({
+      $or: [
+        { tableNum: { $in: searchNums } },
+        { mergedTableNums: { $in: searchNums } }
+      ],
+      status: 'ACTIVE'
+    });
+
+    let verifiedCustomerName = 'Guest Diner';
+    if (activeSession && activeSession.guestName && activeSession.guestName !== 'Guest Diner') {
+      verifiedCustomerName = String(activeSession.guestName).trim();
+    } else if (data.customer || data.guestName) {
+      verifiedCustomerName = String(data.customer || data.guestName).trim();
+    }
+
     // 1. Check if an ACTIVE (open/unpaid) order already exists for this table
     let existingActiveOrder = await OrderModel.findOne({
       $or: [
@@ -40,12 +58,12 @@ class OrderService {
     });
 
     if (existingActiveOrder) {
-      // Preserve original customer details established in first order
-      const originalCustomer = (existingActiveOrder.customer && existingActiveOrder.customer !== 'Guest Diner' && existingActiveOrder.customer !== 'Guest')
-        ? existingActiveOrder.customer
-        : (data.customer || data.guestName || existingActiveOrder.customer || 'Guest Diner');
-
-      existingActiveOrder.customer = String(originalCustomer).trim();
+      // Active session guestName is single source of truth! Client cannot override!
+      existingActiveOrder.customer = verifiedCustomerName;
+      if (activeSession) {
+        existingActiveOrder.sessionId = activeSession._id.toString();
+        existingActiveOrder.sessionToken = activeSession.sessionToken;
+      }
 
       // Append new chef notes if provided
       const newNotes = (data.notes || data.chefNotes || data.instructions || '').trim();
@@ -122,8 +140,10 @@ class OrderService {
       orderId: orderId,
       table: formattedTable,
       type: (data.type === 'Takeaway' || data.type === 'Delivery') ? data.type : 'Dine-In',
-      customer: data.customer || data.guestName || 'Guest Diner',
-      phone: data.phone || '+91 Direct QR',
+      customer: verifiedCustomerName,
+      sessionId: activeSession ? activeSession._id.toString() : '',
+      sessionToken: activeSession ? activeSession.sessionToken : '',
+      phone: (activeSession && activeSession.phone) || data.phone || '+91 Direct QR',
       items: newIncomingItems,
       total: Number(data.total || data.totalAmount || 0),
       status: (data.status && ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Cancelled', 'PARTIALLY DELIVERED'].includes(data.status)) ? data.status : 'Placed',
@@ -241,8 +261,41 @@ class OrderService {
   }
 
   async updateOrderStatus(id, status, fullOrderData = {}) {
+    const OrderModel = require('../models/Order');
+    let existingOrder = null;
+    try {
+      existingOrder = await orderRepository.findById(id);
+    } catch (e) { }
+
+    if (!existingOrder && (fullOrderData.table || id)) {
+      const rawNum = String(fullOrderData.table || id).replace(/[^0-9]/g, '');
+      if (rawNum) {
+        const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${rawNum}$`, 'i');
+        existingOrder = await OrderModel.findOne({
+          $or: [{ table: exactRegex }, { tableNumber: exactRegex }],
+          status: { $nin: ['Completed', 'Paid', 'Cancelled'] }
+        });
+      }
+    }
+
     const isPaid = status === 'Paid' || status === 'Completed' || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid' || fullOrderData.paymentStatus === 'Paid';
     const isBillGenerated = status === 'Bill Generated' || status === 'Awaiting Payment' || fullOrderData.payment === 'Bill Generated' || fullOrderData.payment === 'Awaiting Payment';
+
+    // BLOCK PAYMENT if waiter has not generated the bill yet
+    if (isPaid && !isBillGenerated && existingOrder) {
+      const isAlreadyBillGenerated = Boolean(
+        existingOrder.isBillGenerated ||
+        existingOrder.billGenerated ||
+        existingOrder.status === 'Bill Generated' ||
+        existingOrder.status === 'Billing' ||
+        existingOrder.payment === 'Awaiting Payment' ||
+        existingOrder.paymentStatus === 'Awaiting Payment'
+      );
+
+      if (!isAlreadyBillGenerated) {
+        throw new Error(`Payment is blocked for Table ${existingOrder.table || 'this table'}. The waiter must generate the bill before payment can be completed.`);
+      }
+    }
 
     const txnId = fullOrderData.transactionId || (isPaid ? `TXN-${Date.now().toString().slice(-8)}` : '');
     const paidTimestamp = fullOrderData.paidAt || (isPaid ? new Date() : null);
@@ -253,6 +306,8 @@ class OrderService {
       orderStatus: isPaid ? 'Completed' : (status || 'Placed'),
       payment: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.payment || 'Pending')),
       paymentStatus: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.paymentStatus || 'Pending')),
+      isBillGenerated: isBillGenerated || existingOrder?.isBillGenerated || false,
+      billGenerated: isBillGenerated || existingOrder?.billGenerated || false,
       ...(fullOrderData.originalTotal !== undefined && { originalTotal: Number(fullOrderData.originalTotal) }),
       ...(fullOrderData.originalAmount !== undefined && { originalAmount: Number(fullOrderData.originalAmount) }),
       ...(fullOrderData.subtotal !== undefined && { subtotal: Number(fullOrderData.subtotal) }),
@@ -284,7 +339,8 @@ class OrderService {
       }
     }
 
-    const updatedOrder = await orderRepository.updateStatus(id, updatePayload.status, updatePayload);
+    const targetId = existingOrder ? (existingOrder._id || existingOrder.orderId || id) : id;
+    const updatedOrder = await orderRepository.updateStatus(targetId, updatePayload.status, updatePayload);
     const tableId = (updatedOrder && updatedOrder.table) || (fullOrderData && fullOrderData.table);
 
     if (tableId) {
@@ -333,9 +389,9 @@ class OrderService {
     const updatedItems = rawItems.map((item, idx) => {
       const itemObj = item.toObject ? item.toObject() : item;
       const itemIdStr = String(itemObj._id || itemObj.id || itemObj.itemId || `item-${idx}`);
-      const isTarget = itemIdsToUpdate.includes(itemIdStr) || 
-                       itemIdsToUpdate.includes(String(idx)) || 
-                       itemIdsToUpdate.includes(String(itemObj.name));
+      const isTarget = itemIdsToUpdate.includes(itemIdStr) ||
+        itemIdsToUpdate.includes(String(idx)) ||
+        itemIdsToUpdate.includes(String(itemObj.name));
 
       if (isTarget) {
         if (targetStatus === 'DELIVERED') {

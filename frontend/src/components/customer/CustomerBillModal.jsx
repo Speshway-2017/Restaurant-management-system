@@ -60,6 +60,33 @@ export default function CustomerBillModal({
   const [showInvoice, setShowInvoice] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [showItemDetails, setShowItemDetails] = useState(true);
+  const [isRequestingBill, setIsRequestingBill] = useState(false);
+  const [requestBillSent, setRequestBillSent] = useState(false);
+
+  const isBillGenerated = Boolean(
+    activeOrder?.isBillGenerated ||
+    activeOrder?.billGenerated ||
+    activeOrder?.status === 'Bill Generated' ||
+    activeOrder?.status === 'Billing' ||
+    activeOrder?.payment === 'Awaiting Payment' ||
+    activeOrder?.paymentStatus === 'Awaiting Payment' ||
+    activeOrder?.status === 'Paid' ||
+    activeOrder?.payment === 'Paid' ||
+    activeOrder?.status === 'Completed'
+  );
+
+  const handleRequestBillFromWaiter = async () => {
+    setIsRequestingBill(true);
+    try {
+      await api.callWaiter(tableNum || activeOrder?.table || 'T-01', 'Bill Generation Request', 'Customer requested final bill generation.');
+      setRequestBillSent(true);
+      setTimeout(() => setRequestBillSent(false), 5000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsRequestingBill(false);
+    }
+  };
 
   // Items fetched strictly from MongoDB active order
   const items = Array.isArray(activeOrder?.items) ? activeOrder.items : [];
@@ -130,28 +157,86 @@ export default function CustomerBillModal({
   const handlePayOrder = async () => {
     setIsProcessingPayment(true);
     try {
+      const activeTableStr = tableNum || activeOrder?.table || 'T-01';
+      const targetOrderId = activeOrder?._id || activeOrder?.orderId || activeOrder?.id || activeTableStr;
+
       const payData = {
         status: 'Paid',
+        orderStatus: 'Completed',
         payment: 'Paid',
         paymentStatus: 'Paid',
-        paymentMethod,
+        isBillGenerated: true,
+        billGenerated: true,
+        paymentMethod: paymentMethod || 'UPI',
         originalTotal: foodTotal,
+        originalAmount: foodTotal,
+        subtotal: foodTotal,
+        gstAmount: gstAmount,
+        totalBeforeDiscount: totalBeforeDiscount,
         discountAmount: totalDiscount,
         couponCode: appliedCoupon?.code || '',
         tip: tipAmount,
-        tipAmount,
+        tipAmount: tipAmount,
+        customerPaidAmount: grandTotal,
         finalAmount: grandTotal,
-        table: tableNum || activeOrder?.table || 'T-01'
+        total: grandTotal,
+        table: activeTableStr,
+        transactionId: `TXN-${Date.now().toString().slice(-8)}`,
+        paidAt: new Date().toISOString()
       };
-      if (activeOrder && (activeOrder._id || activeOrder.orderId)) {
-        await api.updateOrderStatus(activeOrder._id || activeOrder.orderId, 'Paid', payData);
-      }
+
+      // 1. Update backend MongoDB database
+      await api.updateOrderStatus(targetOrderId, 'Paid', payData);
+
+      // 2. Sync local manager storage if stored in localStorage
+      try {
+        let localOrders = [];
+        const raw = localStorage.getItem('flavora_manager_orders');
+        if (raw) localOrders = JSON.parse(raw);
+
+        const cleanTargetId = String(targetOrderId).replace(/^#/i, '').trim();
+        const updatedLocal = localOrders.map(lo => {
+          const loId = String(lo.orderId || lo._id || lo.id || lo.table || '').replace(/^#/i, '').trim();
+          if (loId === cleanTargetId || lo.table === activeTableStr) {
+            return {
+              ...lo,
+              status: 'Completed',
+              orderStatus: 'Completed',
+              payment: 'Paid',
+              paymentStatus: 'Paid',
+              paymentMethod: payData.paymentMethod,
+              discountAmount: totalDiscount,
+              tip: tipAmount,
+              customerPaidAmount: grandTotal,
+              finalAmount: grandTotal,
+              transactionId: payData.transactionId,
+              paidAt: payData.paidAt
+            };
+          }
+          return lo;
+        });
+
+        localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedLocal));
+      } catch (e) { }
+
+      // 3. Emit real-time synchronization events for Waiter & Receptionist dashboards
+      try {
+        window.dispatchEvent(new Event('flavora_orders_updated'));
+        window.dispatchEvent(new Event('flavora_tables_updated'));
+        window.dispatchEvent(new CustomEvent('flavora_payment_completed', { detail: { orderId: targetOrderId, table: activeTableStr } }));
+      } catch (e) { }
+
       setIsProcessingPayment(false);
       setShowInvoice(true);
       if (onPaymentSuccess) onPaymentSuccess();
     } catch (err) {
+      console.warn("Payment submission error:", err);
+      try {
+        window.dispatchEvent(new Event('flavora_orders_updated'));
+        window.dispatchEvent(new Event('flavora_tables_updated'));
+      } catch (e) { }
       setIsProcessingPayment(false);
-      setShowInvoice(true); // Fallback so guest gets invoice
+      setShowInvoice(true);
       if (onPaymentSuccess) onPaymentSuccess();
     }
   };
@@ -180,7 +265,7 @@ export default function CustomerBillModal({
         inset: 0,
         backgroundColor: 'rgba(15, 23, 42, 0.65)',
         backdropFilter: 'blur(8px)',
-        zIndex: 9999,
+        zIndex: 999999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -605,106 +690,174 @@ export default function CustomerBillModal({
                   marginTop: '0.5rem'
                 }}>
                   <div>
-                    <div>Customer Paid </div>
+                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#334155' }}>Total Amount Payable</div>
                   </div>
-                  <span style={{ fontSize: '1.35rem', color: '#166534' }}>
+                  <span style={{ fontSize: '1.35rem', color: '#166534', fontWeight: 900 }}>
                     ₹{grandTotal}
                   </span>
                 </div>
               </div>
 
-              {/* 7. Payment Modes Selector */}
-              <div style={{ marginBottom: '1.35rem' }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '0.5rem' }}>
-                  Select Payment Method
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
-                  {[
-                    { key: 'UPI', label: 'UPI / Dynamic QR', icon: QrCode, desc: 'GPay, PhonePe, Paytm' },
-                    { key: 'CARD', label: 'Credit / Debit Card', icon: CreditCard, desc: 'Visa, MasterCard, Amex' },
-                    { key: 'CASH', label: 'Pay at Counter', icon: Coins, desc: 'Cash payment to cashier' }
-                  ].map(pm => {
-                    const IconComp = pm.icon;
-                    const isSel = paymentMethod === pm.key;
-                    return (
-                      <button
-                        key={pm.key}
-                        type="button"
-                        onClick={() => setPaymentMethod(pm.key)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.65rem',
-                          padding: '0.75rem 0.85rem',
-                          borderRadius: '14px',
-                          border: isSel ? '2px solid #166534' : '1px solid #CBD5E1',
-                          backgroundColor: isSel ? '#F0FDF4' : '#FAFAFA',
-                          color: isSel ? '#166534' : '#334155',
-                          fontWeight: 700,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          boxShadow: isSel ? '0 4px 12px rgba(22, 101, 52, 0.15)' : 'none',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <div style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '10px',
-                          backgroundColor: isSel ? '#166534' : '#E2E8F0',
-                          color: isSel ? '#FFFFFF' : '#475569',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0
-                        }}>
-                          <IconComp size={16} />
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 800 }}>{pm.label}</div>
-                          <div style={{ fontSize: '0.68rem', color: isSel ? '#15803D' : '#64748B', fontWeight: 500 }}>{pm.desc}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
+              {/* 7. Payment Mode & Complete Payment — Blocked until Waiter generates Bill */}
+              {!isBillGenerated ? (
+                <div style={{
+                  backgroundColor: '#FEF3C7',
+                  border: '1.5px solid #FCD34D',
+                  borderRadius: '20px',
+                  padding: '1.5rem 1.25rem',
+                  marginBottom: '1.25rem',
+                  textAlign: 'center',
+                  boxShadow: '0 4px 14px rgba(217, 119, 6, 0.12)'
+                }}>
+                  <div style={{
+                    width: '45px',
+                    height: '45px',
+                    borderRadius: '50%',
+                    backgroundColor: '#D97706',
+                    color: '#FFFFFF',
+                    display: 'grid',
+                    placeItems: 'center',
+                    margin: '0 auto 0.85rem auto',
+                    flexShrink: 0,
+                    boxShadow: '0 4px 12px rgba(217, 119, 6, 0.25)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px' }}>
+                      <Lock size={20} color="#FFFFFF" style={{ display: 'block' }} />
+                    </div>
+                  </div>
+                  <h3 style={{ margin: '0 0 0.35rem 0', color: '#78350F', fontWeight: 900, fontSize: '1.1rem' }}>
+                    Payment Blocked — Waiter Bill Pending
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.84rem', color: '#92400E', fontWeight: 600, lineHeight: 1.45 }}>
+                    Payment cannot be processed until your waiter generates and verifies your final bill for Table {tableNum || activeOrder?.table || 'T-01'}.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleRequestBillFromWaiter}
+                    disabled={isRequestingBill}
+                    style={{
+                      marginTop: '1.1rem',
+                      backgroundColor: '#B45309',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      padding: '0.75rem 1.35rem',
+                      borderRadius: '12px',
+                      fontWeight: 800,
+                      fontSize: '0.88rem',
+                      cursor: isRequestingBill ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justify: 'center',
+                      gap: '0.5rem',
+                      boxShadow: '0 4px 12px rgba(180, 83, 9, 0.25)'
+                    }}
+                  >
+                    <Receipt size={18} style={{ flexShrink: 0 }} />
+                    <span>{isRequestingBill ? 'Sending Request...' : 'Request Bill Generation from Waiter'}</span>
+                  </button>
+                  {requestBillSent && (
+                    <div style={{ marginTop: '0.65rem', fontSize: '0.78rem', color: '#15803D', fontWeight: 800 }}>
+                      ✓ Request sent to Waiter! Waiter notified to generate your bill.
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <>
+                  {/* Payment Modes Selector */}
+                  <div style={{ marginBottom: '1.35rem' }}>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '0.5rem' }}>
+                      Select Payment Method
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                      {[
+                        { key: 'UPI', label: 'UPI / Dynamic QR', icon: QrCode, desc: 'GPay, PhonePe, Paytm' },
+                        { key: 'CARD', label: 'Credit / Debit Card', icon: CreditCard, desc: 'Visa, MasterCard, Amex' },
+                        { key: 'CASH', label: 'Pay at Counter', icon: Coins, desc: 'Cash payment to cashier' }
+                      ].map(pm => {
+                        const IconComp = pm.icon;
+                        const isSel = paymentMethod === pm.key;
+                        return (
+                          <button
+                            key={pm.key}
+                            type="button"
+                            onClick={() => setPaymentMethod(pm.key)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.65rem',
+                              padding: '0.75rem 0.85rem',
+                              borderRadius: '14px',
+                              border: isSel ? '2px solid #166534' : '1px solid #CBD5E1',
+                              backgroundColor: isSel ? '#F0FDF4' : '#FAFAFA',
+                              color: isSel ? '#166534' : '#334155',
+                              fontWeight: 700,
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              boxShadow: isSel ? '0 4px 12px rgba(22, 101, 52, 0.15)' : 'none',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <div style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '10px',
+                              backgroundColor: isSel ? '#166534' : '#E2E8F0',
+                              color: isSel ? '#FFFFFF' : '#475569',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}>
+                              <IconComp size={16} />
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 800 }}>{pm.label}</div>
+                              <div style={{ fontSize: '0.68rem', color: isSel ? '#15803D' : '#64748B', fontWeight: 500 }}>{pm.desc}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {/* 8. Shimmering Complete Payment Button */}
-              <button
-                type="button"
-                onClick={handlePayOrder}
-                disabled={isProcessingPayment}
-                style={{
-                  width: '100%',
-                  padding: '1rem',
-                  borderRadius: '18px',
-                  background: 'linear-gradient(135deg, #166534 0%, #15803D 100%)',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  fontWeight: 900,
-                  fontSize: '1.05rem',
-                  cursor: 'pointer',
-                  boxShadow: '0 12px 24px -4px rgba(22, 101, 52, 0.35)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <Lock size={18} />
-                <span>
-                  {isProcessingPayment
-                    ? 'Processing Encrypted Payment...'
-                    : `Complete Payment • ₹${grandTotal}`}
-                </span>
-              </button>
+                  {/* Complete Payment Button */}
+                  <button
+                    type="button"
+                    onClick={handlePayOrder}
+                    disabled={isProcessingPayment}
+                    style={{
+                      width: '100%',
+                      padding: '1rem',
+                      borderRadius: '18px',
+                      background: 'linear-gradient(135deg, #166534 0%, #15803D 100%)',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontWeight: 900,
+                      fontSize: '1.05rem',
+                      cursor: 'pointer',
+                      boxShadow: '0 12px 24px -4px rgba(22, 101, 52, 0.35)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <Lock size={18} />
+                    <span>
+                      {isProcessingPayment
+                        ? 'Processing Encrypted Payment...'
+                        : `Complete Payment • ₹${grandTotal}`}
+                    </span>
+                  </button>
 
-              <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#94A3B8', marginTop: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                <ShieldCheck size={14} color="#166534" /> 256-bit SSL Encrypted & GST Compliant Payment
-              </div>
+                  <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#94A3B8', marginTop: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <ShieldCheck size={14} color="#166534" /> 256-bit SSL Encrypted & GST Compliant Payment
+                  </div>
+                </>
+              )}
 
             </div>
           )}
