@@ -56,28 +56,34 @@ export default function CustomerOrderTrackingModal({ activeOrder, tableNum, onCl
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.65)',
-      backdropFilter: 'blur(6px)',
-      zIndex: 9999,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '1rem'
-    }}>
-      <div style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: '24px',
-        maxWidth: '520px',
-        width: '100%',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-        position: 'relative',
-        padding: '1.5rem'
-      }}>
+    <div
+      className="customer-modal-overlay"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backdropFilter: 'blur(6px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem'
+      }}
+    >
+      <div
+        className="customer-modal-card"
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '24px',
+          maxWidth: '520px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          position: 'relative',
+          padding: '1.5rem'
+        }}
+      >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <div>
@@ -142,37 +148,52 @@ export default function CustomerOrderTrackingModal({ activeOrder, tableNum, onCl
             Items in this Order ({activeOrder.items?.length || 0})
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {(activeOrder.items || []).map((item, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', borderRadius: '12px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1E293B' }}>
-                    {item.quantity || 1}x {item.name}
-                  </div>
-                  {item.notes && (
-                    <div style={{ fontSize: '0.75rem', color: '#64748B', fontStyle: 'italic' }}>
-                      Note: {item.notes}
-                    </div>
-                  )}
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#166534' }}>
-                    ₹{(Number(item.price) || 0) * (Number(item.quantity) || 1)}
-                  </span>
+            {(activeOrder.items || []).map((item, idx) => {
+              const isCancelled = item.status === 'CANCELLED' || item.status === 'Cancelled';
+              const itemName = item.name || 'Dish';
+
+              return (
+                <div key={idx} style={{
+                  display: 'flex',
+                  justify: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem',
+                  borderRadius: '12px',
+                  backgroundColor: isCancelled ? '#FEF2F2' : '#F8FAFC',
+                  border: isCancelled ? '1px solid #FCA5A5' : '1px solid #E2E8F0',
+                  opacity: isCancelled ? 0.85 : 1
+                }}>
                   <div>
-                    <span style={{
-                      fontSize: '0.68rem',
-                      fontWeight: 700,
-                      padding: '0.15rem 0.5rem',
-                      borderRadius: '9999px',
-                      backgroundColor: item.isDelivered ? '#DCFCE7' : (item.isReady ? '#FEF9C3' : '#F1F5F9'),
-                      color: item.isDelivered ? '#15803D' : (item.isReady ? '#854D0E' : '#475569')
-                    }}>
-                      {item.isDelivered ? 'Served' : (item.isReady ? 'Ready' : 'Preparing')}
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: isCancelled ? '#991B1B' : '#1E293B', textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                      {item.quantity || 1}x {itemName}
+                    </div>
+                    {item.notes && !isCancelled && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748B', fontStyle: 'italic' }}>
+                        Note: {item.notes}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '0.88rem', fontWeight: 800, color: isCancelled ? '#991B1B' : '#166534', textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                      ₹{(Number(item.price) || 0) * (Number(item.quantity) || 1)}
                     </span>
+                    <div>
+                      <span style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '9999px',
+                        backgroundColor: isCancelled ? '#FEE2E2' : (item.isDelivered ? '#DCFCE7' : (item.isReady ? '#FEF9C3' : '#F1F5F9')),
+                        color: isCancelled ? '#991B1B' : (item.isDelivered ? '#15803D' : (item.isReady ? '#854D0E' : '#475569')),
+                        border: isCancelled ? '1px solid #FCA5A5' : 'none'
+                      }}>
+                        {isCancelled ? '❌ Cancelled' : (item.isDelivered ? 'Served' : (item.isReady ? 'Ready' : 'Preparing'))}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

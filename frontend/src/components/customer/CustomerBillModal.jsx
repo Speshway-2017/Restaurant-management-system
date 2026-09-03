@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X, Receipt, Check, CreditCard, QrCode, Wallet, Coins, Percent, Download,
   Share2, Sparkles, AlertCircle, Printer, Tag, ShieldCheck, ChevronRight, Lock, Gift, Users, Utensils
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 export default function CustomerBillModal({
   activeOrder,
@@ -12,22 +13,51 @@ export default function CustomerBillModal({
   onPaymentSuccess,
   appliedCoupon,
   setAppliedCoupon,
-  loyaltyPoints = 250,
   brandSettings = {}
 }) {
+  const brandingContext = useRestaurantBranding ? useRestaurantBranding() : null;
+  const branding = brandingContext?.branding || brandSettings;
+  const [dynamicGstRate, setDynamicGstRate] = useState(0.05);
+
+  useEffect(() => {
+    const loadGstRate = async () => {
+      try {
+        let rawGst = branding?.gstRate;
+        const rawSaved = localStorage.getItem('flavora_restaurant_settings');
+        if (rawSaved) {
+          const parsed = JSON.parse(rawSaved);
+          if (parsed.gstRate !== undefined && parsed.gstRate !== null) rawGst = parsed.gstRate;
+        }
+        if (rawGst === undefined || rawGst === null) {
+          const settings = await api.getSettings();
+          if (settings && settings.gstRate !== undefined && settings.gstRate !== null) {
+            rawGst = settings.gstRate;
+          }
+        }
+        if (rawGst !== undefined && rawGst !== null) {
+          const str = String(rawGst).replace('%', '').trim();
+          const num = parseFloat(str);
+          if (!isNaN(num) && num >= 0) {
+            const rateVal = num > 1 ? num / 100 : num;
+            setDynamicGstRate(rateVal);
+          }
+        }
+      } catch (e) {}
+    };
+
+    loadGstRate();
+    const interval = setInterval(loadGstRate, 3000);
+    return () => clearInterval(interval);
+  }, [branding]);
+
   const [tipAmount, setTipAmount] = useState(0);
   const [customTipInput, setCustomTipInput] = useState('');
   const [isCustomTipOpen, setIsCustomTipOpen] = useState(false);
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [couponMsg, setCouponMsg] = useState(null);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
-  const [splitMode, setSplitMode] = useState('full'); // 'full', 'equal', 'custom'
-  const [splitCount, setSplitCount] = useState(2);
-  const [customSplitAmount, setCustomSplitAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [showInvoice, setShowInvoice] = useState(false);
-  const [redeemedPoints, setRedeemedPoints] = useState(0);
-  const [loyaltyDiscount, setLoyaltyDiscount] = useState(0);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [showItemDetails, setShowItemDetails] = useState(true);
 
@@ -36,22 +66,18 @@ export default function CustomerBillModal({
 
   const foodTotal = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
 
-  // Taxes (5% GST)
-  const gstRate = 0.05;
+  // Dynamic GST Tax calculation (configurable via Admin Settings)
+  const gstRate = dynamicGstRate;
   const gstAmount = Math.round(foodTotal * gstRate);
+  const gstPctLabel = Math.round(gstRate * 100);
 
   // Discount
   const couponDiscount = appliedCoupon ? Number(appliedCoupon.discountAmount || 0) : 0;
-  const totalDiscount = couponDiscount + loyaltyDiscount;
+  const totalDiscount = couponDiscount;
 
   // Final Payable
-  const netAmount = Math.max(0, foodTotal - totalDiscount);
+  const netAmount = Math.max(0, foodTotal - couponDiscount);
   const grandTotal = Math.max(0, netAmount + gstAmount + tipAmount);
-
-  // Split bill per person
-  const perPersonAmount = splitMode === 'equal' && splitCount > 0
-    ? Math.ceil(grandTotal / splitCount)
-    : (splitMode === 'custom' && customSplitAmount ? Number(customSplitAmount) : grandTotal);
 
   const handleApplyCoupon = async () => {
     if (!couponCodeInput.trim()) return;
@@ -79,14 +105,6 @@ export default function CustomerBillModal({
     } finally {
       setIsValidatingCoupon(false);
     }
-  };
-
-  const handleRedeemLoyalty = () => {
-    if (loyaltyPoints <= 0 || loyaltyDiscount > 0) return;
-    const maxRedeemablePoints = Math.min(loyaltyPoints, 200); // 200 pts max
-    const disc = Math.round(maxRedeemablePoints * 0.5); // 1 pt = ₹0.50
-    setRedeemedPoints(maxRedeemablePoints);
-    setLoyaltyDiscount(disc);
   };
 
   const handleTipSelect = (val) => {
@@ -155,29 +173,35 @@ export default function CustomerBillModal({
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.75)',
-      backdropFilter: 'blur(8px)',
-      zIndex: 9999,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '1rem 0.75rem'
-    }}>
-      <div style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: '28px',
-        maxWidth: '520px',
-        width: '100%',
-        maxHeight: '92vh',
-        overflowY: 'auto',
-        boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.3)',
-        position: 'relative',
+    <div
+      className="customer-modal-overlay"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 9999,
         display: 'flex',
-        flexDirection: 'column'
-      }}>
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem 0.75rem'
+      }}
+    >
+      <div
+        className="customer-modal-card"
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '28px',
+          maxWidth: '520px',
+          width: '100%',
+          maxHeight: '92vh',
+          overflowY: 'auto',
+          boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.3)',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
         {/* Top Header Banner */}
         <div style={{
           padding: '1.25rem 1.5rem',
@@ -293,15 +317,15 @@ export default function CustomerBillModal({
                     <span>Food Subtotal</span>
                     <span>₹{foodTotal}</span>
                   </div>
-                  {totalDiscount > 0 && (
+                  {couponDiscount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#15803D', fontWeight: 700, marginBottom: '0.35rem' }}>
-                      <span>Total Savings / Discount</span>
-                      <span>-₹{totalDiscount}</span>
+                      <span>Coupon Discount ({appliedCoupon?.code})</span>
+                      <span>-₹{couponDiscount}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                    <span>CGST (2.5%) + SGST (2.5%)</span>
-                    <span>₹{gstAmount}</span>
+                    <span>GST ({gstPctLabel}%)</span>
+                    <span>+₹{gstAmount}</span>
                   </div>
                   {tipAmount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#B45309', fontWeight: 700, marginBottom: '0.35rem' }}>
@@ -413,77 +437,7 @@ export default function CustomerBillModal({
                 )}
               </div>
 
-              {/* 2. Split Bill Controls */}
-              <div style={{
-                backgroundColor: '#F8FAFC',
-                borderRadius: '18px',
-                padding: '1rem',
-                marginBottom: '1.15rem',
-                border: '1px solid #E2E8F0'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.65rem' }}>
-                  <Users size={14} color="#166534" /> Split Bill Option
-                </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {[
-                    { key: 'full', label: 'Full Bill' },
-                    { key: 'equal', label: 'Split Equally' },
-                    { key: 'custom', label: 'Custom Amount' }
-                  ].map(m => {
-                    const isSel = splitMode === m.key;
-                    return (
-                      <button
-                        key={m.key}
-                        onClick={() => setSplitMode(m.key)}
-                        style={{
-                          flex: 1,
-                          padding: '0.55rem 0.25rem',
-                          borderRadius: '12px',
-                          border: isSel ? '2px solid #166534' : '1px solid #CBD5E1',
-                          backgroundColor: isSel ? '#166534' : '#FFFFFF',
-                          color: isSel ? '#FFFFFF' : '#475569',
-                          fontWeight: isSel ? 800 : 700,
-                          fontSize: '0.78rem',
-                          cursor: 'pointer',
-                          boxShadow: isSel ? '0 4px 10px rgba(22, 101, 52, 0.25)' : 'none',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        {m.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Equal Split Guest Counter */}
-                {splitMode === 'equal' && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1px solid #CBD5E1', marginTop: '0.75rem' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1E293B' }}>Number of Guests:</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <button onClick={() => setSplitCount(Math.max(2, splitCount - 1))} style={{ width: '30px', height: '30px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 800, cursor: 'pointer' }}>-</button>
-                      <span style={{ fontWeight: 900, fontSize: '0.95rem', width: '24px', textAlign: 'center', color: '#0F2A1D' }}>{splitCount}</span>
-                      <button onClick={() => setSplitCount(splitCount + 1)} style={{ width: '30px', height: '30px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 800, cursor: 'pointer' }}>+</button>
-                    </div>
-                    <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#166534' }}>
-                      ₹{perPersonAmount} / person
-                    </span>
-                  </div>
-                )}
-
-                {/* Custom Split Amount Input */}
-                {splitMode === 'custom' && (
-                  <div style={{ marginTop: '0.75rem' }}>
-                    <input
-                      type="number"
-                      placeholder="Enter custom amount you want to pay (₹)"
-                      value={customSplitAmount}
-                      onChange={(e) => setCustomSplitAmount(e.target.value)}
-                      style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1.5px solid #CBD5E1', fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                )}
-              </div>
 
               {/* 3. Promo Code / Coupon Section */}
               <div style={{ marginBottom: '1.15rem' }}>
@@ -533,63 +487,16 @@ export default function CustomerBillModal({
                 )}
               </div>
 
-              {/* 4. Loyalty Points Redemption Banner */}
-              {loyaltyPoints > 0 && (
-                <div style={{
-                  marginBottom: '1.15rem',
-                  padding: '0.85rem 1rem',
-                  background: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)',
-                  borderRadius: '16px',
-                  border: '1.5px solid #FCD34D',
-                  display: 'flex',
-                  justify: 'space-between',
-                  alignItems: 'center',
-                  boxShadow: '0 4px 12px rgba(217, 119, 6, 0.08)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#F59E0B', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Gift size={20} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#92400E' }}>
-                        🎁 {loyaltyPoints} Loyalty Points Available
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: 600 }}>
-                        {loyaltyDiscount > 0 ? `Redeemed! Saved ₹${loyaltyDiscount}` : 'Redeem points for instant discount'}
-                      </div>
-                    </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    onClick={handleRedeemLoyalty}
-                    disabled={loyaltyDiscount > 0}
-                    style={{
-                      padding: '0.45rem 0.85rem',
-                      borderRadius: '10px',
-                      background: loyaltyDiscount > 0 ? '#15803D' : 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      fontWeight: 800,
-                      fontSize: '0.78rem',
-                      cursor: loyaltyDiscount > 0 ? 'default' : 'pointer',
-                      boxShadow: '0 4px 8px rgba(180, 83, 9, 0.25)'
-                    }}
-                  >
-                    {loyaltyDiscount > 0 ? 'Redeemed ✓' : 'Redeem'}
-                  </button>
-                </div>
-              )}
 
               {/* 5. Tip Selection Bar */}
               <div style={{ marginBottom: '1.15rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                   <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Coins size={14} color="#B45309" /> Add Tip for Staff
-                  </label>
+                    <Coins size={14} color="#B45309" /> Add Tip                  </label>
                   {tipAmount > 0 && (
                     <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#B45309' }}>
-                      +₹{tipAmount} Tip Added
+                      + ₹{tipAmount} Tip Added
                     </span>
                   )}
                 </div>
@@ -646,33 +553,42 @@ export default function CustomerBillModal({
                 border: '1px solid #E2E8F0',
                 fontSize: '0.85rem'
               }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                  BILL SUMMARY
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#475569' }}>
-                  <span>Food Total ({items.length} items)</span>
+                  <span>Food / Subtotal ({items.length} items):</span>
                   <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{foodTotal}</span>
                 </div>
 
-                {couponDiscount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#15803D', fontWeight: 800 }}>
-                    <span>Coupon Discount ({appliedCoupon?.code})</span>
-                    <span>-₹{couponDiscount}</span>
-                  </div>
-                )}
-
-                {loyaltyDiscount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#15803D', fontWeight: 800 }}>
-                    <span>Loyalty Points Discount</span>
-                    <span>-₹{loyaltyDiscount}</span>
-                  </div>
-                )}
-
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#475569' }}>
-                  <span>GST Taxes (5%)</span>
-                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{gstAmount}</span>
+                  <span>GST ({gstPctLabel}%):</span>
+                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>+₹{gstAmount}</span>
                 </div>
 
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem', color: '#0F2A1D', fontWeight: 800, borderTop: '1px dashed #CBD5E1', paddingTop: '0.4rem' }}>
+                  <span>Total Before Discount:</span>
+                  <span>₹{foodTotal + gstAmount}</span>
+                </div>
+
+                {couponDiscount > 0 && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#DC2626', fontWeight: 800 }}>
+                      <span>Coupon Discount ({appliedCoupon?.code}):</span>
+                      <span>-₹{couponDiscount}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#0F2A1D', fontWeight: 900, borderTop: '1px solid #E2E8F0', paddingTop: '0.4rem' }}>
+                      <span>Amount After Discount:</span>
+                      <span>₹{netAmount + gstAmount}</span>
+                    </div>
+                  </>
+                )}
+
                 {tipAmount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#B45309', fontWeight: 800 }}>
-                    <span>Staff Tip</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#EA580C', fontWeight: 800 }}>
+                    <span>Customer Tip:</span>
                     <span>+₹{tipAmount}</span>
                   </div>
                 )}
@@ -689,13 +605,10 @@ export default function CustomerBillModal({
                   marginTop: '0.5rem'
                 }}>
                   <div>
-                    <div>{splitMode === 'equal' ? 'Your Split Share' : 'Total Payable'}</div>
-                    {splitMode === 'equal' && (
-                      <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Divided equally across {splitCount} guests</div>
-                    )}
+                    <div>Customer Paid </div>
                   </div>
                   <span style={{ fontSize: '1.35rem', color: '#166534' }}>
-                    ₹{splitMode === 'equal' ? perPersonAmount : grandTotal}
+                    ₹{grandTotal}
                   </span>
                 </div>
               </div>
@@ -709,7 +622,6 @@ export default function CustomerBillModal({
                   {[
                     { key: 'UPI', label: 'UPI / Dynamic QR', icon: QrCode, desc: 'GPay, PhonePe, Paytm' },
                     { key: 'CARD', label: 'Credit / Debit Card', icon: CreditCard, desc: 'Visa, MasterCard, Amex' },
-                    { key: 'WALLET', label: 'Mobile Wallet', icon: Wallet, desc: 'Paytm, AmazonPay' },
                     { key: 'CASH', label: 'Pay at Counter', icon: Coins, desc: 'Cash payment to cashier' }
                   ].map(pm => {
                     const IconComp = pm.icon;
@@ -786,7 +698,7 @@ export default function CustomerBillModal({
                 <span>
                   {isProcessingPayment
                     ? 'Processing Encrypted Payment...'
-                    : `Complete Payment • ₹${splitMode === 'equal' ? perPersonAmount : grandTotal}`}
+                    : `Complete Payment • ₹${grandTotal}`}
                 </span>
               </button>
 
