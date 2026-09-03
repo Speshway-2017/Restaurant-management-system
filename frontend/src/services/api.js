@@ -262,6 +262,7 @@ export const api = {
   // Receptionist & Host Dashboard API
   getReceptionistKPIs: () => request('/receptionist/kpis'),
   getFloorPlan: () => request('/receptionist/floor-plan'),
+  getActiveTableSession: (tableNum) => request(`/receptionist/active-session/${encodeURIComponent(tableNum)}`),
   seatWalkIn: (data) => request('/receptionist/walk-ins/seat', { method: 'POST', body: JSON.stringify(data) }),
   mergeTables: (primaryTableNum, secondaryTableNums) => request('/receptionist/tables/merge', { method: 'POST', body: JSON.stringify({ primaryTableNum, secondaryTableNums }) }),
   splitTables: (tableNum) => request('/receptionist/tables/split', { method: 'POST', body: JSON.stringify({ tableNum }) }),

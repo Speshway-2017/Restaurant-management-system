@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getReceptionistKPIs,
   getFloorPlan,
+  getActiveTableSession,
   seatWalkIn,
   mergeTables,
   splitTables,
@@ -24,6 +25,7 @@ const {
 // KPI & Floor Plan
 router.get('/kpis', getReceptionistKPIs);
 router.get('/floor-plan', getFloorPlan);
+router.get('/active-session/:tableNum', getActiveTableSession);
 
 // Walk-in Seating & Table Operations
 router.post('/walk-ins/seat', seatWalkIn);

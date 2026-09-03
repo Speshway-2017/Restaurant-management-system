@@ -62,9 +62,12 @@ const updateTableStatus = async (req, res) => {
     if (status === 'Cleaning') {
       // Set cleaning expiration to 10 minutes from now
       updateData.cleaningUntil = new Date(Date.now() + 10 * 60 * 1000);
+      updateData.activeSessionId = null;
+      updateData.currentOrder = '';
     } else if (status === 'Available') {
       updateData.cleaningUntil = null;
       updateData.currentOrder = '';
+      updateData.activeSessionId = null;
     }
 
     let updated;
@@ -90,6 +93,22 @@ const updateTableStatus = async (req, res) => {
         status: status,
         currentOrder: status === 'Available' ? '' : currentOrder
       });
+    }
+
+    if (updated) {
+      const TableSession = require('../models/TableSession');
+      const allNums = [updated.number, ...(updated.mergedWith || [])];
+
+      if (updated.mergedWith && updated.mergedWith.length > 0) {
+        await Table.updateMany({ number: { $in: updated.mergedWith } }, updateData);
+      }
+
+      if (status === 'Available' || status === 'Cleaning') {
+        await TableSession.updateMany(
+          { $or: [{ tableNum: { $in: allNums } }, { mergedTableNums: { $in: allNums } }], status: 'ACTIVE' },
+          { status: 'CLOSED', closedAt: new Date() }
+        );
+      }
     }
 
     res.json(updated || { message: 'Table status updated' });

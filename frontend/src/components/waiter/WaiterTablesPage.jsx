@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table2, Plus, Sparkles, RefreshCw, CheckCircle2, User, Clock, UtensilsCrossed, Eye, X, Bell, DollarSign, AlertCircle, Search, Filter, Receipt, CreditCard, QrCode, Check, Ticket, Coins } from 'lucide-react';
 import { api } from '../../services/api';
 import { clearTableSessionStorage } from '../../utils/orderUtils';
+import { groupTablesForFloorPlan } from '../../utils/floorPlanUtils';
 
 const BASE_DEFAULT_TABLES = [
   { id: 1, num: 'T-01', zone: 'Main Dining', cap: 4, status: 'Available' },
@@ -144,33 +145,14 @@ export default function WaiterTablesPage() {
   const fetchTablesAndOrders = async () => {
     try {
       const [fetchedTables, fetchedOrders] = await Promise.all([
-        api.getTables().catch(() => []),
+        api.getFloorPlan().catch(() => api.getTables().catch(() => [])),
         api.getOrders().catch(() => [])
       ]);
 
-      const tableMap = new Map();
+      const rawList = Array.isArray(fetchedTables) ? fetchedTables : (fetchedTables && fetchedTables.data ? fetchedTables.data : []);
+      const groupedDisplayTables = groupTablesForFloorPlan(rawList);
 
-      (fetchedTables || []).forEach(dbT => {
-        const rawNum = dbT.number || dbT.name || dbT.tableNum || `T-${String(dbT.tableNumber || 1).padStart(2, '0')}`;
-        const digits = rawNum.replace(/[^0-9]/g, '');
-        const normalizedKey = digits ? `T-${digits.padStart(2, '0')}` : rawNum;
-
-        tableMap.set(normalizedKey, {
-          id: dbT._id || dbT.id,
-          num: normalizedKey,
-          zone: dbT.section || dbT.zone || 'Main Dining',
-          cap: dbT.seats || dbT.capacity || 4,
-          status: dbT.status || 'Available'
-        });
-      });
-
-      const finalTablesList = Array.from(tableMap.values()).sort((a, b) => {
-        const numA = parseInt((a.num || '').replace(/[^0-9]/g, ''), 10) || 0;
-        const numB = parseInt((b.num || '').replace(/[^0-9]/g, ''), 10) || 0;
-        return numA - numB;
-      });
-
-      setTables(finalTablesList);
+      setTables(groupedDisplayTables);
       setOrders(fetchedOrders || []);
     } catch (e) {
       console.error(e);
@@ -181,13 +163,14 @@ export default function WaiterTablesPage() {
 
   const findTableOrder = (tb) => {
     if (!orders || orders.length === 0) return null;
-    const tbDigits = String(tb.num || '').replace(/[^0-9]/g, '');
+    const memberNums = tb.tableNumbers || [tb.num || tb.number];
+    const memberDigits = memberNums.map(n => String(n || '').replace(/[^0-9]/g, ''));
 
     return orders.find(o => {
       if (!o || o.status === 'Completed' || o.status === 'Cancelled' || o.status === 'Paid' || o.payment === 'Completed' || o.payment === 'Paid') return false;
       const orderTbStr = String(o.table || o.tableNumber || '');
       const orderDigits = orderTbStr.replace(/[^0-9]/g, '');
-      return (orderDigits && tbDigits && orderDigits === tbDigits) || orderTbStr.toLowerCase() === (tb.num || '').toLowerCase();
+      return (orderDigits && memberDigits.includes(orderDigits)) || memberNums.some(m => orderTbStr.toLowerCase() === String(m || '').toLowerCase());
     });
   };
 

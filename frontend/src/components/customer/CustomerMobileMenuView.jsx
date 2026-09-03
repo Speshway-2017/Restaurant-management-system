@@ -29,6 +29,7 @@ export default function CustomerMobileMenuView({
   setIsCheckoutModalOpen,
   setIsCustomerOrdersModalOpen,
   setIsCategoryDrawerOpen,
+  activeTableSession = null,
   outOfStockItems = [],
   placedTableOrders = [],
   isClosedNow = false,
@@ -55,14 +56,14 @@ export default function CustomerMobileMenuView({
             boxShadow: '0 4px 14px rgba(15, 42, 29, 0.22)'
           }}
         >
-          {/* Left: Table badge & seated label */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
-            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
-              Table {tableNum}
+          {/* Left: Table badge & active guest session label */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, overflow: 'hidden' }}>
+            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {activeTableSession && Array.isArray(activeTableSession.mergedTableNums) && activeTableSession.mergedTableNums.length > 0
+                ? `Table ${tableNum} + ${activeTableSession.mergedTableNums.join(', ')}`
+                : `Table ${tableNum}`}
             </span>
-            <span style={{ fontSize: '0.75rem', color: '#C8E6C9', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              📍 Seated
-            </span>
+            
           </div>
 
           {/* Right: Orders & Cart button */}

@@ -5,6 +5,7 @@ import {
   UtensilsCrossed, Zap, Bell, Check, Bookmark, Layers, Filter
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { groupTablesForFloorPlan } from '../../utils/floorPlanUtils';
 
 export default function ReceptionistDashboardHome({ onNavigate }) {
   const [kpis, setKpis] = useState({
@@ -279,172 +280,7 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
         </div>
       )}
 
-      {/* ==================== 1. WELCOME HERO & LIVE OCCUPANCY BANNER ==================== */}
-      <div style={{
-        backgroundColor: '#0F2A1D',
-        borderRadius: '24px',
-        padding: '1.75rem 2rem',
-        color: '#FFFFFF',
-        display: 'flex',
-        alignItems: 'center',
-        justify: 'space-between',
-        flexWrap: 'wrap',
-        gap: '1.5rem',
-        boxShadow: '0 10px 30px rgba(15, 42, 29, 0.25)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
-            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', fontSize: '0.72rem', fontWeight: 900, padding: '0.2rem 0.65rem', borderRadius: '20px', letterSpacing: '0.04em' }}>
-              HOST CONTROL CENTRE
-            </span>
-            <span style={{ color: '#A3C2B3', fontSize: '0.82rem', fontWeight: 600 }}>• Live Floor Operations</span>
-          </div>
-          <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 900, fontFamily: 'var(--font-heading)', color: '#FFFFFF', letterSpacing: '-0.02em' }}>
-            Flavora Kitchen Front Desk Dashboard
-          </h1>
-          <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.88rem', color: '#C8E6D7', fontWeight: 500 }}>
-            Seat walk-in guests, manage waiting queues, check-in reservations, and monitor live table occupancy in real time.
-          </p>
-        </div>
-
-        {/* Live Occupancy Meter */}
-        <div style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.08)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '18px',
-          padding: '1.1rem 1.4rem',
-          minWidth: '240px',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          position: 'relative',
-          zIndex: 2
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: '#A3C2B3', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>LIVE OCCUPANCY</span>
-            <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#86EFAC' }}>{occupancyPercentage}% Occupied</span>
-          </div>
-          
-          <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255, 255, 255, 0.15)', borderRadius: '999px', overflow: 'hidden' }}>
-            <div style={{ width: `${Math.min(occupancyPercentage, 100)}%`, height: '100%', backgroundColor: occupancyPercentage > 85 ? '#EF4444' : '#E07A3C', borderRadius: '999px', transition: 'width 0.5s ease' }} />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem', fontSize: '0.74rem', color: '#C8E6D7', fontWeight: 600 }}>
-            <span>{kpis.occupied || 0} Occupied Tables</span>
-            <span>{kpis.available || 0} Available</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ==================== 2. TOUCH QUICK ACTIONS BAR ==================== */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '1.1rem'
-      }}>
-        <button
-          onClick={() => setIsWalkInModalOpen(true)}
-          style={{
-            backgroundColor: '#0F2A1D',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '20px',
-            padding: '1.2rem 1.4rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            cursor: 'pointer',
-            boxShadow: '0 8px 24px rgba(15, 42, 29, 0.18)',
-            transition: 'transform 0.15s ease, boxShadow 0.15s ease'
-          }}
-        >
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '0.7rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Plus size={24} color="#86EFAC" />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '1.02rem', fontWeight: 900, fontFamily: 'var(--font-heading)' }}>+ Walk-in Seating</div>
-            <div style={{ fontSize: '0.74rem', color: '#A3C2B3', marginTop: '0.1rem' }}>Seat walk-in customer</div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => {
-            setWaitlistForm({ guestName: '', phone: '', partySize: 2, preferredSection: 'Main Dining', specialOccasion: 'None', notes: '' });
-            setIsWaitlistModalOpen(true);
-          }}
-          style={{
-            backgroundColor: '#E07A3C',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '20px',
-            padding: '1.2rem 1.4rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            cursor: 'pointer',
-            boxShadow: '0 8px 24px rgba(224, 122, 60, 0.22)',
-            transition: 'transform 0.15s ease'
-          }}
-        >
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', padding: '0.7rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Clock size={24} color="#FFFFFF" />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '1.02rem', fontWeight: 900, fontFamily: 'var(--font-heading)' }}>+ Issue Wait Token</div>
-            <div style={{ fontSize: '0.74rem', color: '#FFEDD5', marginTop: '0.1rem' }}>Add guest to queue</div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setIsReservationModalOpen(true)}
-          style={{
-            backgroundColor: '#1E4636',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '20px',
-            padding: '1.2rem 1.4rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            cursor: 'pointer',
-            boxShadow: '0 8px 24px rgba(30, 70, 54, 0.18)'
-          }}
-        >
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '0.7rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CalendarDays size={24} color="#FEF08A" />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '1.02rem', fontWeight: 900, fontFamily: 'var(--font-heading)' }}>+ New Booking</div>
-            <div style={{ fontSize: '0.74rem', color: '#A3C2B3', marginTop: '0.1rem' }}>Book future reservation</div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => onNavigate('receptionist-guests')}
-          style={{
-            backgroundColor: '#FFFFFF',
-            color: '#0F2A1D',
-            border: '1.5px solid #CBD5E1',
-            borderRadius: '20px',
-            padding: '1.2rem 1.4rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            cursor: 'pointer',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.03)'
-          }}
-        >
-          <div style={{ backgroundColor: '#F1F5F9', padding: '0.7rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Users size={24} color="#0F2A1D" />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '1.02rem', fontWeight: 900, fontFamily: 'var(--font-heading)' }}>Guest Profile Lookup</div>
-            <div style={{ fontSize: '0.74rem', color: '#64748B', marginTop: '0.1rem' }}>Repeat visits & tags</div>
-          </div>
-        </button>
-      </div>
-
-      {/* ==================== 3. KPI STATS CARDS GRID ==================== */}
+      {/* ==================== 2. KPI STATS CARDS GRID ==================== */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
@@ -542,6 +378,113 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
 
       </div>
 
+ {/* ==================== 3. TOUCH QUICK ACTIONS BAR ==================== */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1.1rem'
+      }}>
+        <button
+          onClick={() => setIsWalkInModalOpen(true)}
+          style={{
+            backgroundColor: '#0F2A1D',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '20px',
+            padding: '1.2rem 1.4rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(15, 42, 29, 0.18)',
+            transition: 'transform 0.15s ease, boxShadow 0.15s ease'
+          }}
+        >
+          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '0.7rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Plus size={24} color="#86EFAC" />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: '1.02rem', fontWeight: 900, fontFamily: 'var(--font-heading)' }}> Walk-in Seating</div>
+            <div style={{ fontSize: '0.74rem', color: '#A3C2B3', marginTop: '0.1rem' }}>Seat walk-in customer</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => {
+            setWaitlistForm({ guestName: '', phone: '', partySize: 2, preferredSection: 'Main Dining', specialOccasion: 'None', notes: '' });
+            setIsWaitlistModalOpen(true);
+          }}
+          style={{
+            backgroundColor: '#E07A3C',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '20px',
+            padding: '1.2rem 1.4rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(224, 122, 60, 0.22)',
+            transition: 'transform 0.15s ease'
+          }}
+        >
+          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', padding: '0.7rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={24} color="#FFFFFF" />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: '1.02rem', fontWeight: 900, fontFamily: 'var(--font-heading)' }}> Issue Wait Token</div>
+            <div style={{ fontSize: '0.74rem', color: '#FFEDD5', marginTop: '0.1rem' }}>Add guest to queue</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setIsReservationModalOpen(true)}
+          style={{
+            backgroundColor: '#1E4636',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '20px',
+            padding: '1.2rem 1.4rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(30, 70, 54, 0.18)'
+          }}
+        >
+          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '0.7rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CalendarDays size={24} color="#FEF08A" />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: '1.02rem', fontWeight: 900, fontFamily: 'var(--font-heading)' }}> New Booking</div>
+            <div style={{ fontSize: '0.74rem', color: '#A3C2B3', marginTop: '0.1rem' }}>Book future reservation</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => onNavigate('receptionist-guests')}
+          style={{
+            backgroundColor: '#FFFFFF',
+            color: '#0F2A1D',
+            border: '1.5px solid #CBD5E1',
+            borderRadius: '20px',
+            padding: '1.2rem 1.4rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            cursor: 'pointer',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ backgroundColor: '#F1F5F9', padding: '0.7rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Users size={24} color="#0F2A1D" />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: '1.02rem', fontWeight: 900, fontFamily: 'var(--font-heading)' }}>Guest Profile Lookup</div>
+            <div style={{ fontSize: '0.74rem', color: '#64748B', marginTop: '0.1rem' }}>Repeat visits & tags</div>
+          </div>
+        </button>
+      </div>
       {/* ==================== 4. LIVE FLOOR MINI OVERVIEW ==================== */}
       <div style={{ backgroundColor: '#FFFFFF', borderRadius: '24px', padding: '1.6rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -586,11 +529,12 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
             gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))',
             gap: '1rem'
           }}>
-            {floorPlanTables.slice(0, 10).map((tbl) => {
-              const isAvailable = tbl.status === 'Available';
-              const isOccupied = tbl.status === 'Occupied';
-              const isReserved = tbl.status === 'Reserved';
-              const isCleaning = tbl.status === 'Cleaning';
+            {groupTablesForFloorPlan(floorPlanTables).slice(0, 10).map((item) => {
+              const isAvailable = item.status === 'Available';
+              const isOccupied = item.status === 'Occupied';
+              const isReserved = item.status === 'Reserved';
+              const isCleaning = item.status === 'Cleaning';
+              const isMerged = item.isMergedGroup;
 
               let borderCol = '#E2E8F0';
               let badgeBg = '#DCFCE7';
@@ -601,7 +545,7 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
 
               return (
                 <div
-                  key={tbl._id || tbl.number}
+                  key={item.displayId}
                   style={{
                     backgroundColor: '#FAFAFA',
                     borderRadius: '16px',
@@ -614,20 +558,31 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#0F2A1D' }}>{tbl.number}</span>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#0F2A1D' }}>{item.displayNumber}</span>
                     <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '6px', backgroundColor: badgeBg, color: badgeText }}>
-                      {tbl.status}
+                      {item.status}
                     </span>
                   </div>
 
                   <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
-                    👥 {tbl.seats} Seats • {tbl.section || 'Main'}
+                    👥 {item.seats} Seats • {item.section || 'Main'}
                   </div>
 
-                  {isAvailable && (
+                  {isMerged && (
+                    <div style={{ fontSize: '0.68rem', color: '#C2410C', fontWeight: 800, backgroundColor: '#FFEDD5', padding: '0.2rem 0.4rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <Layers size={12} />
+                      <span>🔗 Merged</span>
+                    </div>
+                  )}
+
+                  {item.activeSession ? (
+                    <div style={{ fontSize: '0.72rem', color: '#0F2A1D', fontWeight: 800, backgroundColor: '#FFFFFF', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
+                      👤 {item.activeSession.guestName}
+                    </div>
+                  ) : isAvailable ? (
                     <button
                       onClick={() => {
-                        setWalkInForm(prev => ({ ...prev, selectedTableNum: tbl.number }));
+                        setWalkInForm(prev => ({ ...prev, selectedTableNum: item.primaryTableNumber || item.number }));
                         setIsWalkInModalOpen(true);
                       }}
                       style={{
@@ -645,7 +600,7 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
                     >
                       Seat Here
                     </button>
-                  )}
+                  ) : null}
                 </div>
               );
             })}

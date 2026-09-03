@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Table2, Users, Clock, Plus, ArrowRightLeft, GitMerge, Split, CheckCircle2,
   X, AlertTriangle, Sparkles, Search, ChevronDown, Check, ShieldCheck
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { groupTablesForFloorPlan } from '../../utils/floorPlanUtils';
 
 export default function ReceptionistFloorPlanPage() {
   const [tables, setTables] = useState([]);
@@ -39,19 +40,24 @@ export default function ReceptionistFloorPlanPage() {
   const sections = ['All', 'Main Dining', 'Window Section', 'Family Lounge', 'Patio Outdoor'];
   const statuses = ['All', 'Available', 'Occupied', 'Reserved', 'Billing', 'Cleaning'];
 
-  const filteredTables = tables.filter(t => {
-    const matchesSection = selectedSection === 'All' || (t.section || 'Main Dining') === selectedSection;
-    const matchesStatus = selectedStatus === 'All' || t.status === selectedStatus;
-    return matchesSection && matchesStatus;
-  });
+  // Detect merged groups and group physical tables into logical card items
+  const displayCardItems = useMemo(() => {
+    const grouped = groupTablesForFloorPlan(tables);
+    return grouped.filter(item => {
+      const matchesSection = selectedSection === 'All' || item.section === selectedSection;
+      const matchesStatus = selectedStatus === 'All' || item.status === selectedStatus;
+      return matchesSection && matchesStatus;
+    });
+  }, [tables, selectedSection, selectedStatus]);
 
   const handleTransferSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTable || !targetTransferTableNum) return;
+    const primaryNum = selectedTable.primaryTableNumber || selectedTable.number;
     try {
-      const res = await api.transferTable(selectedTable.number, targetTransferTableNum);
+      const res = await api.transferTable(primaryNum, targetTransferTableNum);
       if (res.success) {
-        showToast(`🔀 Session transferred from ${selectedTable.number} to ${targetTransferTableNum}!`);
+        showToast(`🔀 Session transferred from ${primaryNum} to ${targetTransferTableNum}!`);
         setIsTransferModalOpen(false);
         setSelectedTable(null);
         fetchFloorPlan();
@@ -64,10 +70,11 @@ export default function ReceptionistFloorPlanPage() {
   const handleMergeSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTable || selectedMergeTableNums.length === 0) return;
+    const primaryNum = selectedTable.primaryTableNumber || selectedTable.number;
     try {
-      const res = await api.mergeTables(selectedTable.number, selectedMergeTableNums);
+      const res = await api.mergeTables(primaryNum, selectedMergeTableNums);
       if (res.success) {
-        showToast(`🔗 Merged ${selectedTable.number} with ${selectedMergeTableNums.join(', ')}!`);
+        showToast(`🔗 Merged ${primaryNum} with ${selectedMergeTableNums.join(', ')}!`);
         setIsMergeModalOpen(false);
         setSelectedTable(null);
         fetchFloorPlan();
@@ -138,12 +145,12 @@ export default function ReceptionistFloorPlanPage() {
               key={sec}
               onClick={() => setSelectedSection(sec)}
               style={{
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                padding: '0.4rem 0.85rem',
-                borderRadius: '10px',
-                border: selectedSection === sec ? 'none' : '1px solid #CBD5E1',
-                backgroundColor: selectedSection === sec ? '#0F2A1D' : '#F8FAFC',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                padding: '0.35rem 0.75rem',
+                borderRadius: '8px',
+                border: '1px solid #E2E8F0',
+                backgroundColor: selectedSection === sec ? '#0F2A1D' : '#FFFFFF',
                 color: selectedSection === sec ? '#FFFFFF' : '#475569',
                 cursor: 'pointer'
               }}
@@ -180,11 +187,11 @@ export default function ReceptionistFloorPlanPage() {
       {/* ==================== LIVE FLOOR PLAN GRID ==================== */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
         gap: '1.1rem'
       }}>
-        {filteredTables.map(tbl => {
-          const isMerged = tbl.mergedWith && tbl.mergedWith.length > 0;
+        {displayCardItems.map(item => {
+          const isMerged = item.isMergedGroup;
           const getStatusStyle = (st) => {
             if (st === 'Occupied') return { bg: '#FEF2F2', border: '#FCA5A5', color: '#991B1B', tagBg: '#FEE2E2' };
             if (st === 'Reserved') return { bg: '#FFFBEB', border: '#FCD34D', color: '#92400E', tagBg: '#FEF3C7' };
@@ -192,12 +199,12 @@ export default function ReceptionistFloorPlanPage() {
             if (st === 'Cleaning') return { bg: '#F3E8FF', border: '#D8B4FE', color: '#6B21A8', tagBg: '#E9D5FF' };
             return { bg: '#F0FDF4', border: '#86EFAC', color: '#166534', tagBg: '#DCFCE7' };
           };
-          const style = getStatusStyle(tbl.status);
+          const style = getStatusStyle(item.status);
 
           return (
             <div
-              key={tbl._id || tbl.number}
-              onClick={() => setSelectedTable(tbl)}
+              key={item.displayId}
+              onClick={() => setSelectedTable(item)}
               style={{
                 backgroundColor: style.bg,
                 border: `2px solid ${style.border}`,
@@ -214,36 +221,43 @@ export default function ReceptionistFloorPlanPage() {
             >
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
-                  {tbl.number}
+                <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
+                  {item.displayNumber}
                 </span>
                 <span style={{ fontSize: '0.7rem', fontWeight: 900, padding: '0.2rem 0.55rem', borderRadius: '6px', backgroundColor: style.tagBg, color: style.color }}>
-                  {tbl.status}
+                  {item.status}
                 </span>
               </div>
 
               {/* Seating Capacity & Section */}
               <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700 }}>
-                👥 {tbl.seats} Seats • {tbl.section || 'Main Dining'}
+                👥 {item.seats} Seats • {item.section || 'Main Dining'}
               </div>
 
-              {/* Merged Badge */}
+              {/* Merged Table Label */}
               {isMerged && (
-                <div style={{ fontSize: '0.7rem', color: '#C2410C', fontWeight: 800, backgroundColor: '#FFEDD5', padding: '0.2rem 0.4rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <div style={{ fontSize: '0.7rem', color: '#C2410C', fontWeight: 800, backgroundColor: '#FFEDD5', padding: '0.2rem 0.55rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                   <GitMerge size={12} />
-                  <span>Merged (+{tbl.mergedWith.join(', ')})</span>
+                  <span>🔗 Merged Table</span>
                 </div>
               )}
 
-              {/* Active Session Info */}
-              {tbl.status !== 'Available' && tbl.activeSession ? (
+              {/* Active Session Info (Shown ONCE!) */}
+              {item.status !== 'Available' && item.activeSession ? (
                 <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', padding: '0.5rem', border: '1px solid #CBD5E1', fontSize: '0.74rem' }}>
-                  <div style={{ fontWeight: 800, color: '#0F2A1D' }}>👤 {tbl.activeSession.guestName}</div>
-                  <div style={{ color: '#64748B', marginTop: '0.1rem' }}>🎉 {tbl.activeSession.specialOccasion || 'Standard'}</div>
+                  <div style={{ fontWeight: 800, color: '#0F2A1D' }}>👤 {item.activeSession.guestName}</div>
+                  <div style={{ color: '#64748B', marginTop: '0.1rem' }}>🎉 {item.activeSession.specialOccasion || 'Standard'}</div>
                 </div>
               ) : (
-                <div style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 700 }}>
-                  Tap to seat walk-in guest
+                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700 }}>
+                  No guest assigned
+                </div>
+              )}
+
+              {/* Member Tables Breakdown */}
+              {isMerged && (
+                <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 700, marginTop: '0.1rem' }}>
+                  Tables: {item.tableNumbers.join(', ')}
                 </div>
               )}
             </div>
@@ -259,8 +273,12 @@ export default function ReceptionistFloorPlanPage() {
             {/* Modal Header */}
             <div style={{ backgroundColor: '#0F2A1D', padding: '1.25rem 1.5rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 900 }}>Table {selectedTable.number} Details</h3>
-                <span style={{ fontSize: '0.78rem', color: '#A3C2B3' }}>{selectedTable.seats} Seats • {selectedTable.section}</span>
+                <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 900 }}>
+                  {selectedTable.isMergedGroup ? `Merged Group (${selectedTable.displayNumber})` : `Table ${selectedTable.displayNumber} Details`}
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#A3C2B3' }}>
+                  {selectedTable.seats} Seats • {selectedTable.section}
+                </span>
               </div>
               <button onClick={() => setSelectedTable(null)} style={{ backgroundColor: 'rgba(255,255,255,0.1)', border: 'none', color: '#FFF', padding: '0.4rem', borderRadius: '8px', cursor: 'pointer' }}>
                 <X size={20} />
@@ -277,10 +295,19 @@ export default function ReceptionistFloorPlanPage() {
                 </div>
 
                 <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                  <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>CAPACITY</span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>COMBINED CAPACITY</span>
                   <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F2A1D', marginTop: '0.2rem' }}>{selectedTable.seats} Guests</div>
                 </div>
               </div>
+
+              {selectedTable.isMergedGroup && (
+                <div style={{ backgroundColor: '#FFF7ED', border: '1px solid #FDBA74', padding: '0.85rem', borderRadius: '12px' }}>
+                  <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#C2410C' }}>🔗 MERGED TABLE MEMBERS</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#9A3412', marginTop: '0.2rem' }}>
+                    Tables: {selectedTable.tableNumbers.join(', ')}
+                  </div>
+                </div>
+              )}
 
               {selectedTable.activeSession ? (
                 <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1rem', borderRadius: '14px' }}>
@@ -295,7 +322,7 @@ export default function ReceptionistFloorPlanPage() {
                 </div>
               ) : (
                 <div style={{ backgroundColor: '#F8FAFC', border: '1px dashed #CBD5E1', padding: '1rem', borderRadius: '14px', textAlign: 'center', color: '#64748B', fontSize: '0.84rem' }}>
-                  No active customer session currently associated with {selectedTable.number}.
+                  No active customer session currently associated with {selectedTable.displayNumber}.
                 </div>
               )}
 
@@ -305,7 +332,7 @@ export default function ReceptionistFloorPlanPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                   {/* Transfer Button */}
-                  {selectedTable.status === 'Occupied' && (
+                  {selectedTable.status === 'Occupied' && !selectedTable.isMergedGroup && (
                     <button
                       onClick={() => setIsTransferModalOpen(true)}
                       style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#0F2A1D', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
@@ -316,22 +343,24 @@ export default function ReceptionistFloorPlanPage() {
                   )}
 
                   {/* Merge Button */}
-                  <button
-                    onClick={() => setIsMergeModalOpen(true)}
-                    style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#0F2A1D', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                  >
-                    <GitMerge size={16} />
-                    <span>Merge Table</span>
-                  </button>
-
-                  {/* Split Button */}
-                  {selectedTable.mergedWith && selectedTable.mergedWith.length > 0 && (
+                  {!selectedTable.isMergedGroup && (
                     <button
-                      onClick={() => handleSplitSubmit(selectedTable.number)}
+                      onClick={() => setIsMergeModalOpen(true)}
+                      style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#0F2A1D', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                    >
+                      <GitMerge size={16} />
+                      <span>Merge Table</span>
+                    </button>
+                  )}
+
+                  {/* Split / Unmerge Button */}
+                  {selectedTable.isMergedGroup && (
+                    <button
+                      onClick={() => handleSplitSubmit(selectedTable.primaryTableNumber)}
                       style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid #FCA5A5', backgroundColor: '#FEF2F2', color: '#991B1B', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
                     >
                       <Split size={16} />
-                      <span>Split Table</span>
+                      <span>Unmerge / Split Tables</span>
                     </button>
                   )}
                 </div>

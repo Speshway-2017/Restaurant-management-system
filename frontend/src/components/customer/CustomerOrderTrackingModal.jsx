@@ -8,7 +8,7 @@ export default function CustomerOrderTrackingModal({ activeOrder, tableNum, onCl
 
   if (!activeOrder) {
     return (
-      <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
         <div style={{ backgroundColor: '#FFFFFF', borderRadius: '24px', maxWidth: '440px', width: '100%', padding: '2rem', textAlign: 'center' }}>
           <AlertCircle size={48} color="#94A3B8" style={{ margin: '0 auto 1rem' }} />
           <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.5rem' }}>No Active Order Found</h3>
@@ -63,7 +63,7 @@ export default function CustomerOrderTrackingModal({ activeOrder, tableNum, onCl
         inset: 0,
         backgroundColor: 'rgba(15, 23, 42, 0.65)',
         backdropFilter: 'blur(6px)',
-        zIndex: 9999,
+        zIndex: 999999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

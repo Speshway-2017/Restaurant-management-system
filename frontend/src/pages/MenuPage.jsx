@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send, Clock, Lock, Filter, Flame, Globe } from 'lucide-react';
+import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send, Clock, Lock, Filter, Flame, Globe, UserCheck } from 'lucide-react';
 import { api } from '../services/api';
 import MenuDishStrip from '../components/MenuDishStrip';
 import ExposureSlider from '../components/ExposureSlider';
@@ -76,7 +76,7 @@ export default function MenuPage({ onOpenDemoModal }) {
         const saved = localStorage.getItem(`flavora_cart_${clean}`);
         return saved ? JSON.parse(saved) : {};
       }
-    } catch (e) {}
+    } catch (e) { }
     return {};
   });
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
@@ -96,6 +96,7 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderSuccessMsg, setOrderSuccessMsg] = useState(null);
   const [tableOccupiedInfo, setTableOccupiedInfo] = useState(null);
+  const [activeTableSession, setActiveTableSession] = useState(null);
 
   // New Customer Enhancement States
   const [selectedDishForDetail, setSelectedDishForDetail] = useState(null);
@@ -152,12 +153,12 @@ export default function MenuPage({ onOpenDemoModal }) {
               const updated = { ...prev, ...data };
               try {
                 localStorage.setItem('flavora_restaurant_settings', JSON.stringify(updated));
-              } catch (e) {}
+              } catch (e) { }
               return updated;
             });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     };
 
     fetchLatestSettings();
@@ -210,7 +211,22 @@ export default function MenuPage({ onOpenDemoModal }) {
       try {
         const cleanTableNum = String(tableNum).replace(/[^0-9]/g, '');
 
-        // 1. Check active order status first across backend orders
+        // 1. ALWAYS query active receptionist session first (Backend Source of Truth)
+        try {
+          const sess = await api.getActiveTableSession(tableNum);
+          if (sess && (sess._id || sess.guestName)) {
+            setActiveTableSession(sess);
+            if (sess.guestName && sess.guestName !== 'Guest Diner' && sess.guestName !== 'Guest') {
+              setGuestName(sess.guestName);
+            }
+          } else {
+            setActiveTableSession(null);
+          }
+        } catch (e) {
+          setActiveTableSession(null);
+        }
+
+        // 2. Check active order status across backend orders
         const orders = await api.getOrders();
         let activeBackendOrders = [];
         if (Array.isArray(orders) && orders.length > 0) {
@@ -242,11 +258,10 @@ export default function MenuPage({ onOpenDemoModal }) {
           }));
           setPlacedTableOrders(mappedActive);
         } else {
-          // NO ACTIVE ORDERS EXIST FOR THIS TABLE
           setTableOccupiedInfo(null);
           setPlacedTableOrders([]);
 
-          // 2. If NO active order exists, check if table is currently in Cleaning timer state
+          // 3. If NO active order exists, check if table is currently in Cleaning timer state
           const dbTables = await api.getTables();
           if (Array.isArray(dbTables)) {
             const matchedTbl = dbTables.find(t => {
@@ -518,7 +533,7 @@ export default function MenuPage({ onOpenDemoModal }) {
     const matchesVeg = vegOnly ? item.isVeg : true;
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.desc && item.desc.toLowerCase().includes(searchQuery.toLowerCase()));
-    
+
     // Price filter matching
     let matchesPrice = true;
     const price = Number(item.price || 0);
@@ -643,7 +658,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       try {
         const cleanT = activeTable.toUpperCase().replace('TABLE', '').replace('T-', '').trim();
         const savedOrders = Array.isArray(placedTableOrders) ? [...placedTableOrders] : [];
-        
+
         const formattedOrderObj = {
           orderId: backendOrderId,
           table: persistedOrder?.table || activeTable,
@@ -733,6 +748,7 @@ export default function MenuPage({ onOpenDemoModal }) {
           setIsCategoryDrawerOpen={setIsCategoryDrawerOpen}
           outOfStockItems={outOfStockItems}
           placedTableOrders={placedTableOrders}
+          activeTableSession={activeTableSession}
           isClosedNow={isClosedNow}
           statusDetails={statusDetails}
         />
@@ -870,7 +886,330 @@ export default function MenuPage({ onOpenDemoModal }) {
           />
         )}
 
-        {/* Customer Mobile Bottom Nav */}
+        {/* Mobile Checkout Modal */}
+        {isCheckoutModalOpen && (
+          <div className="admin-modal-backdrop customer-qr-checkout-backdrop" onClick={() => setIsCheckoutModalOpen(false)} style={{ zIndex: 99999 }}>
+            <div
+              className="admin-modal-card customer-qr-checkout-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="admin-modal-header customer-qr-modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: '1 1 auto' }}>
+                  <ChefHat size={22} color="#FF8A00" style={{ flexShrink: 0 }} />
+                  <h3 className="admin-modal-title customer-qr-modal-title">
+                    {tableNum ? `Send Order — Table ${tableNum}` : 'Review Cart & Send Order'}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  className="admin-modal-close customer-qr-modal-close"
+                  onClick={() => setIsCheckoutModalOpen(false)}
+                  aria-label="Close modal"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleSendOrderToChefAndManager} className="customer-qr-modal-form">
+
+                {/* Order Items Summary */}
+                <div className="customer-qr-dishes-box">
+                  <div className="customer-qr-dishes-header">
+                    <span className="customer-qr-dishes-title">{tableNum ? `SELECTED DISHES (TABLE ${tableNum}):` : 'SELECTED DISHES IN YOUR CART:'}</span>
+                    <div className="customer-qr-dishes-actions">
+                      <span className="customer-qr-dish-count-badge">
+                        {totalCartCount} {totalCartCount === 1 ? 'Dish' : 'Dishes'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="customer-qr-dishes-list">
+                    {Object.entries(cart).map(([id, qty]) => {
+                      const dish = findItemInCatalog(id, menuItems);
+                      return dish ? (
+                        <div key={id} className="customer-qr-cart-row">
+                          {/* Left: Dish Name & Unit Price */}
+                          <div className="customer-qr-cart-info">
+                            <div className="customer-qr-cart-name">
+                              {dish.name}
+                            </div>
+                            <div className="customer-qr-cart-unit-price">₹{dish.price} each</div>
+                          </div>
+
+                          {/* Right: Quantity Adjuster & Row Total */}
+                          <div className="customer-qr-cart-controls">
+                            <div className="customer-qr-qty-picker">
+                              <button
+                                type="button"
+                                onClick={() => handleDecreaseQty(dish.id || id)}
+                                className="customer-qr-qty-btn"
+                                aria-label="Decrease quantity"
+                              >
+                                <Minus size={13} />
+                              </button>
+                              <span className="customer-qr-qty-val">{qty}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleAddToCart(dish.id || id)}
+                                className="customer-qr-qty-btn"
+                                aria-label="Increase quantity"
+                              >
+                                <Plus size={13} />
+                              </button>
+                            </div>
+                            <span className="customer-qr-row-price">₹{dish.price * qty}</span>
+                          </div>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+
+                  <div className="customer-qr-total-row">
+                    <span className="customer-qr-total-label">Total Amount Payable:</span>
+                    <span>₹{totalCartPrice}</span>
+                  </div>
+                </div>
+
+                {/* Table Number Display */}
+                <div className="admin-form-group mb-3">
+                  <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Lock size={14} color="#1E4636" />
+                    <span>Assigned Dining Table</span>
+                  </label>
+
+                  {tableNum ? (
+                    <div style={{
+                      backgroundColor: '#FAF6EE',
+                      border: '1.5px solid #E5DBC8',
+                      borderRadius: '10px',
+                      padding: '0.65rem 0.95rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justify: 'space-between',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          backgroundColor: '#E07A3C',
+                          color: '#FFFFFF',
+                          padding: '0.2rem 0.65rem',
+                          borderRadius: '6px',
+                          fontSize: '0.86rem',
+                          fontWeight: 900,
+                          letterSpacing: '0.02em'
+                        }}>
+                          Table {tableNum}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      backgroundColor: '#FEF2F2',
+                      border: '1.5px solid #FCA5A5',
+                      borderRadius: '10px',
+                      padding: '0.65rem 0.95rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      color: '#991B1B',
+                      fontSize: '0.82rem',
+                      fontWeight: 700
+                    }}>
+                      <QrCode size={16} color="#DC2626" />
+                      <span>No Table QR Code scanned. Please scan your dining table's QR code.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* ASSIGNED DINER — READ ONLY (Strictly No Text Input, No Edit Button when Active Session Exists) */}
+                {activeTableSession && activeTableSession.guestName && activeTableSession.guestName !== 'Guest Diner' ? (
+                  <div className="admin-form-group mb-3">
+                    <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.4rem' }}>
+                      <UserCheck size={16} color="#15803D" />
+                      <span>Assigned Diner</span>
+                    </label>
+                    <div style={{
+                      backgroundColor: '#F0FDF4',
+                      border: '1.5px solid #86EFAC',
+                      borderRadius: '12px',
+                      padding: '0.85rem 1rem',
+                      color: '#166534',
+                      boxShadow: '0 2px 6px rgba(22, 101, 52, 0.06)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <span style={{ fontSize: '1.4rem' }}>👤</span>
+                          <div>
+                            <div style={{ color: '#0F2A1D', fontWeight: 900, fontSize: '1.05rem', lineHeight: 1.2 }}>
+                              {activeTableSession.guestName}
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.15rem' }}>
+                              Name assigned by Reception
+                            </div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.76rem', backgroundColor: '#DCFCE7', padding: '0.25rem 0.65rem', borderRadius: '8px', color: '#15803D', fontWeight: 800 }}>
+                          👥 {activeTableSession.partySize || 2} Guests
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="admin-form-group mb-3">
+                    <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D' }}>
+                      Your Name / Diner Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter your name (e.g. Sai Kiran / Deepak)"
+                      value={guestName}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setGuestName(val);
+                        try {
+                          const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}`, val);
+                        } catch (err) { }
+                      }}
+                      className="form-control"
+                      style={{
+                        borderRadius: '10px',
+                        padding: '0.65rem 0.85rem',
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        border: '1.5px solid #CBD5E1'
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Instructions for Chef */}
+                <div className="admin-form-group mb-4">
+                  <label className="form-label" style={{ fontWeight: 700 }}>Special Cooking Instructions for Chef</label>
+                  <textarea
+                    rows="2"
+                    placeholder="e.g. Less spicy, extra butter, no green chilis..."
+                    value={chefNotes}
+                    onChange={(e) => setChefNotes(e.target.value)}
+                    className="form-control"
+                    style={{ fontSize: '0.88rem', minHeight: '85px' }}
+                  />
+                </div>
+
+                {isClosedNow && (
+                  <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.7rem 0.9rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Clock size={16} color="#DC2626" />
+                    <span>Restaurant is currently closed. You can add dishes to cart, but order placement is disabled while closed.</span>
+                  </div>
+                )}
+
+                <div className="customer-qr-footer-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline customer-qr-btn-secondary"
+                    onClick={() => setIsCheckoutModalOpen(false)}
+                  >
+                    <span>Add More Items</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingOrder || isClosedNow}
+                    className="btn btn-primary customer-qr-btn-primary"
+                    style={{
+                      backgroundColor: isClosedNow ? '#94A3B8' : '#FF8A00',
+                      borderColor: isClosedNow ? '#94A3B8' : '#FF8A00',
+                      cursor: isClosedNow ? 'not-allowed' : 'pointer',
+                      opacity: isClosedNow ? 0.7 : 1
+                    }}
+                  >
+                    <Send size={15} />
+                    <span>{isClosedNow ? 'Closed for Orders' : (isSubmittingOrder ? 'Placing Order...' : 'Confirm & Place Order')}</span>
+                  </button>
+                </div>
+
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Customer Orders Modal */}
+        {isCustomerOrdersModalOpen && (
+          <div className="admin-modal-backdrop" onClick={() => setIsCustomerOrdersModalOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 99999 }}>
+            <div
+              className="admin-modal-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: '480px',
+                width: '100%',
+                borderRadius: '18px',
+                overflow: 'hidden',
+                boxShadow: '0 20px 50px rgba(0,0,0,0.35)'
+              }}
+            >
+              <div className="admin-modal-header" style={{ backgroundColor: '#0F2A1D', color: '#FFFFFF', padding: '1.25rem 1.4rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
+                    Table {tableNum}
+                  </span>
+                  <h3 className="admin-modal-title" style={{ color: '#FFFFFF', fontSize: '1.1rem', margin: 0 }}>
+                    My Table Ordered Items
+                  </h3>
+                </div>
+                <button className="admin-modal-close" onClick={() => setIsCustomerOrdersModalOpen(false)} style={{ color: '#FFFFFF' }}>×</button>
+              </div>
+
+              <div style={{ padding: '1.4rem', maxHeight: '75vh', overflowY: 'auto' }}>
+                {placedTableOrders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748B' }}>
+                    <ShoppingBag size={36} color="#94A3B8" style={{ margin: '0 auto 0.5rem auto' }} />
+                    <div style={{ fontWeight: 700, color: '#1E4636' }}>No active orders placed for Table {tableNum}</div>
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Browse the menu and add dishes to place an order.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {placedTableOrders.map((ord, idx) => {
+                      const itemsList = Array.isArray(ord.items) ? ord.items : [];
+                      const activeItems = itemsList.filter(it => it.status !== 'CANCELLED' && it.status !== 'Cancelled');
+                      const calculatedSum = activeItems.reduce((acc, it) => {
+                        const q = Number(it.quantity || it.qty || it.count || 1);
+                        const rawP = Number(it.price || it.unitPrice || 0);
+                        const catalogMatch = (menuItems || []).find(m => (m.name || '').toLowerCase() === (it.name || '').toLowerCase());
+                        const fp = rawP > 0 ? rawP : (catalogMatch ? Number(catalogMatch.price || 0) : 0);
+                        return acc + (fp * q);
+                      }, 0);
+
+                      return (
+                        <div key={ord._id || idx} style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #CBD5E1', paddingBottom: '0.5rem' }}>
+                            <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#0F2A1D' }}>Order #{ord.orderId || (ord._id ? ord._id.substring(18) : idx + 1)}</span>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 800, padding: '0.2rem 0.55rem', borderRadius: '6px', backgroundColor: ord.status === 'Ready' ? '#DCFCE7' : '#FEF3C7', color: ord.status === 'Ready' ? '#166534' : '#92400E' }}>
+                              {ord.status || 'Placed'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            {activeItems.map((item, iIdx) => (
+                              <div key={iIdx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                                <span>{item.name} x {item.quantity || item.qty || 1}</span>
+                                <span style={{ fontWeight: 700 }}>₹{(Number(item.price || 0)) * Number(item.quantity || item.qty || 1)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #CBD5E1', marginTop: '0.75rem', paddingTop: '0.5rem', fontWeight: 900, color: '#0F2A1D', fontSize: '0.9rem' }}>
+                            <span>Total</span>
+                            <span>₹{calculatedSum}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Customer Bottom Nav */}
         <CustomerBottomNav
           activeTab={customerNavTab}
           onSelectTab={(tab) => {
@@ -1699,59 +2038,67 @@ export default function MenuPage({ onOpenDemoModal }) {
                 )}
               </div>
 
-              {/* Guest Name Input / Established Diner Badge */}
-              {(() => {
-                const cleanTblKey = String(tableNum || activeTable || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                const isEstablishedSession = Boolean(
-                  (Array.isArray(placedTableOrders) && placedTableOrders.length > 0) ||
-                  sessionStorage.setItem && sessionStorage.getItem(`flavora_order_submitted_${cleanTblKey}`) === 'true'
-                );
-
-                if (isEstablishedSession && guestName.trim()) {
-                  return (
-                    <div className="admin-form-group mb-3">
-                      <label className="form-label" style={{ fontWeight: 700, fontSize: '0.84rem', color: '#64748B' }}>Diner Name</label>
-                      <div style={{
-                        backgroundColor: '#F0FDF4',
-                        border: '1.5px solid #86EFAC',
-                        borderRadius: '10px',
-                        padding: '0.55rem 0.85rem',
-                        color: '#166534',
-                        fontWeight: 800,
-                        fontSize: '0.9rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}>
-                        <span>👤 {guestName}</span>
-                        <span style={{ fontSize: '0.72rem', backgroundColor: '#DCFCE7', padding: '0.15rem 0.45rem', borderRadius: '4px', color: '#15803D', fontWeight: 800 }}>
-                          Table {tableNum} Guest
-                        </span>
+              {/* ASSIGNED DINER — READ ONLY (Strictly No Text Input, No Edit Button when Active Session Exists) */}
+              {activeTableSession && activeTableSession.guestName && activeTableSession.guestName !== 'Guest Diner' ? (
+                <div className="admin-form-group mb-3">
+                  <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.4rem' }}>
+                    <UserCheck size={16} color="#15803D" />
+                    <span>Assigned Diner</span>
+                  </label>
+                  <div style={{
+                    backgroundColor: '#F0FDF4',
+                    border: '1.5px solid #86EFAC',
+                    borderRadius: '12px',
+                    padding: '0.85rem 1rem',
+                    color: '#166534',
+                    boxShadow: '0 2px 6px rgba(22, 101, 52, 0.06)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <span style={{ fontSize: '1.4rem' }}>👤</span>
+                        <div>
+                          <div style={{ color: '#0F2A1D', fontWeight: 900, fontSize: '1.05rem', lineHeight: 1.2 }}>
+                            {activeTableSession.guestName}
+                          </div>
+                          <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.15rem' }}>
+                            Name assigned by Reception
+                          </div>
+                        </div>
                       </div>
+                      <span style={{ fontSize: '0.76rem', backgroundColor: '#DCFCE7', padding: '0.25rem 0.65rem', borderRadius: '8px', color: '#15803D', fontWeight: 800 }}>
+                        👥 {activeTableSession.partySize || 2} Guests
+                      </span>
                     </div>
-                  );
-                }
-
-                return (
-                  <div className="admin-form-group mb-3">
-                    <label className="form-label" style={{ fontWeight: 700 }}>Your Name (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Deepak J."
-                      value={guestName}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setGuestName(val);
-                        try {
-                          const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}`, val.trim());
-                        } catch (err) { }
-                      }}
-                      className="form-control"
-                    />
                   </div>
-                );
-              })()}
+                </div>
+              ) : (
+                <div className="admin-form-group mb-3">
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D' }}>
+                    Your Name / Diner Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter your name (e.g. Sai Kiran / Deepak)"
+                    value={guestName}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setGuestName(val);
+                      try {
+                        const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                        sessionStorage.setItem(`flavora_guest_name_${cleanTbl}`, val);
+                      } catch (err) { }
+                    }}
+                    className="form-control"
+                    style={{
+                      borderRadius: '10px',
+                      padding: '0.65rem 0.85rem',
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      border: '1.5px solid #CBD5E1'
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Instructions for Chef */}
               <div className="admin-form-group mb-4">
@@ -1840,7 +2187,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {placedTableOrders.map((ord, idx) => {
                     const itemsList = Array.isArray(ord.items) ? ord.items : [];
-                    
+
                     // Filter active non-cancelled items for total calculation
                     const activeItems = itemsList.filter(it => it.status !== 'CANCELLED' && it.status !== 'Cancelled');
                     const calculatedSum = activeItems.reduce((acc, it) => {
@@ -1892,10 +2239,10 @@ export default function MenuPage({ onOpenDemoModal }) {
                     const cleanChefNote = (() => {
                       const n = (ord.chefNotes || ord.notes || '').trim();
                       if (!n) return '';
-                      const parts = n.split('|').map(p => p.trim()).filter(p => 
-                        p && 
-                        !p.toLowerCase().includes('cancelled dishes') && 
-                        !p.toLowerCase().includes('customer changed mind') && 
+                      const parts = n.split('|').map(p => p.trim()).filter(p =>
+                        p &&
+                        !p.toLowerCase().includes('cancelled dishes') &&
+                        !p.toLowerCase().includes('customer changed mind') &&
                         !p.toLowerCase().includes('dish item')
                       );
                       return parts.join(' | ');
