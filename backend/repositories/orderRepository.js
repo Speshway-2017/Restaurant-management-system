@@ -70,11 +70,18 @@ class OrderRepository {
       // Persist coupon and financial settlement fields to MongoDB document
       if (fullOrderData.originalTotal !== undefined) doc.originalTotal = Number(fullOrderData.originalTotal);
       if (fullOrderData.originalAmount !== undefined) doc.originalAmount = Number(fullOrderData.originalAmount);
+      if (fullOrderData.subtotal !== undefined) doc.subtotal = Number(fullOrderData.subtotal);
+      if (fullOrderData.gstAmount !== undefined) doc.gstAmount = Number(fullOrderData.gstAmount);
+      if (fullOrderData.totalBeforeDiscount !== undefined) doc.totalBeforeDiscount = Number(fullOrderData.totalBeforeDiscount);
       if (fullOrderData.couponCode !== undefined) doc.couponCode = String(fullOrderData.couponCode);
       if (fullOrderData.discountAmount !== undefined) doc.discountAmount = Number(fullOrderData.discountAmount);
+      if (fullOrderData.amountAfterDiscount !== undefined) doc.amountAfterDiscount = Number(fullOrderData.amountAfterDiscount);
       if (fullOrderData.tip !== undefined) doc.tip = Number(fullOrderData.tip);
       if (fullOrderData.tipAmount !== undefined) doc.tipAmount = Number(fullOrderData.tipAmount);
+      if (fullOrderData.customerPaidAmount !== undefined) doc.customerPaidAmount = Number(fullOrderData.customerPaidAmount);
       if (fullOrderData.paymentMethod !== undefined) doc.paymentMethod = String(fullOrderData.paymentMethod);
+      if (fullOrderData.transactionId !== undefined) doc.transactionId = String(fullOrderData.transactionId);
+      if (fullOrderData.paidAt !== undefined) doc.paidAt = fullOrderData.paidAt;
       if (fullOrderData.finalAmount !== undefined) {
         doc.finalAmount = Number(fullOrderData.finalAmount);
         doc.total = Number(fullOrderData.finalAmount);

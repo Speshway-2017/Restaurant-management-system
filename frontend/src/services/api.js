@@ -15,7 +15,7 @@ const request = async (endpoint, options = {}) => {
     ...(options.headers || {})
   };
 
-  const token = localStorage.getItem('flavora_auth_token');
+  const token = sessionStorage.getItem('flavora_auth_token') || localStorage.getItem('flavora_auth_token');
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -54,6 +54,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ email, password })
   }),
+  getMe: () => request('/auth/me'),
   getProfile: (id) => request(`/auth/profile/${id}`),
 
   // Menu API
@@ -278,10 +279,23 @@ export const api = {
   updateGuestPreferences: (id, data) => request(`/receptionist/guests/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   sendReceptionistNotification: (data) => request('/receptionist/notifications/send', { method: 'POST', body: JSON.stringify(data) }),
 
-  // Customer Module Enhancements API
+  // Customer Module & Waiter Assistance API
   callWaiter: (table, requestType = 'Assistance', note = '') => request('/orders/call-waiter', {
     method: 'POST',
     body: JSON.stringify({ table, requestType, note })
+  }),
+  getAssistanceRequests: () => request('/orders/assistance'),
+  updateAssistanceStatus: (id, status) => request(`/orders/assistance/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  }),
+  requestOrderCancellation: (id, reason, itemIds = null) => request(`/orders/${id}/cancel-request`, {
+    method: 'POST',
+    body: JSON.stringify({
+      reason,
+      itemIds: Array.isArray(itemIds) ? itemIds : (itemIds ? [itemIds] : []),
+      itemId: typeof itemIds === 'string' ? itemIds : null
+    })
   }),
   submitFeedback: (feedbackData) => request('/feedback', {
     method: 'POST',

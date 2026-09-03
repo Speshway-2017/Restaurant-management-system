@@ -30,6 +30,43 @@ export default function WaiterTablesPage() {
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [currentTimeStr, setCurrentTimeStr] = useState('');
 
+  // Table Transfer & Merge states
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [targetTransferTable, setTargetTransferTable] = useState('');
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [selectedSecondaryMergeTables, setSelectedSecondaryMergeTables] = useState([]);
+
+  const handleExecuteTransfer = async () => {
+    if (!selectedTable || !targetTransferTable) return;
+    try {
+      await api.transferTable(selectedTable.num, targetTransferTable);
+      showNotification(`✓ Session transferred from ${selectedTable.num} to ${targetTransferTable}!`);
+      setSelectedTable(null);
+      setTransferModalOpen(false);
+      setTargetTransferTable('');
+      fetchTablesAndOrders();
+      window.dispatchEvent(new Event('flavora_tables_updated'));
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+    } catch (err) {
+      alert(err.message || 'Failed to transfer table');
+    }
+  };
+
+  const handleExecuteMerge = async () => {
+    if (!selectedTable || selectedSecondaryMergeTables.length === 0) return;
+    try {
+      await api.mergeTables(selectedTable.num, selectedSecondaryMergeTables);
+      showNotification(`✓ Tables ${[selectedTable.num, ...selectedSecondaryMergeTables].join(' + ')} merged successfully!`);
+      setSelectedTable(null);
+      setMergeModalOpen(false);
+      setSelectedSecondaryMergeTables([]);
+      fetchTablesAndOrders();
+      window.dispatchEvent(new Event('flavora_tables_updated'));
+    } catch (err) {
+      alert(err.message || 'Failed to merge tables');
+    }
+  };
+
   // Coupon state for payment modal
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -1245,8 +1282,13 @@ export default function WaiterTablesPage() {
                     <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 800, color: '#0F2A1D' }}>Ordered Items:</h4>
                     <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem', marginBottom: '1.25rem', maxHeight: '180px', overflowY: 'auto' }}>
                       {Array.isArray(selectedTable.activeOrder.items) ? (
-                        selectedTable.activeOrder.items.map((item, i) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.3rem 0', borderBottom: i === selectedTable.activeOrder.items.length - 1 ? 'none' : '1px solid #F1F5F9' }}>
+                        selectedTable.activeOrder.items.filter(item => {
+                          if (!item) return false;
+                          if (typeof item === 'string') return true;
+                          const s = String(item.status || '').toUpperCase().trim();
+                          return s !== 'CANCELLED';
+                        }).map((item, i, arr) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.3rem 0', borderBottom: i === arr.length - 1 ? 'none' : '1px solid #F1F5F9' }}>
                             <span>{typeof item === 'string' ? item : `${item.name} (x${item.quantity || 1})`}</span>
                             <span style={{ fontWeight: 800, color: '#0F2A1D' }}>₹{item.price || 150}</span>
                           </div>
@@ -1268,7 +1310,7 @@ export default function WaiterTablesPage() {
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
                   {getTableRealStatus(selectedTable) === 'Cleaning' && (
                     <button
                       onClick={() => handleMarkCleanedAvailable(selectedTable.num)}
@@ -1278,11 +1320,138 @@ export default function WaiterTablesPage() {
                     </button>
                   )}
 
+                  {getTableRealStatus(selectedTable) === 'Occupied' && (
+                    <>
+                      <button
+                        onClick={() => setTransferModalOpen(true)}
+                        style={{ flex: 1, backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 900, cursor: 'pointer' }}
+                      >
+                        ↔️ Transfer Table
+                      </button>
+                      <button
+                        onClick={() => setMergeModalOpen(true)}
+                        style={{ flex: 1, backgroundColor: '#EFF6FF', color: '#1E40AF', border: '1px solid #93C5FD', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 900, cursor: 'pointer' }}
+                      >
+                        🔗 Merge Tables
+                      </button>
+                    </>
+                  )}
+
                   <button
                     onClick={() => setSelectedTable(null)}
                     style={{ flex: 1, backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
                   >
                     Close Window
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TRANSFER TABLE OVERLAY MODAL ================= */}
+          {transferModalOpen && selectedTable && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1rem' }}>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '420px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F2A1D' }}>
+                    ↔️ Transfer Table {selectedTable.num}
+                  </h3>
+                  <button onClick={() => setTransferModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <p style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '1rem' }}>
+                  Select an available target table to transfer customer <strong>{selectedTable.customer || 'Diner'}</strong> and active session without losing items or payment state:
+                </p>
+
+                <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', display: 'block', marginBottom: '0.4rem' }}>
+                  Target Available Table:
+                </label>
+                <select
+                  value={targetTransferTable}
+                  onChange={(e) => setTargetTransferTable(e.target.value)}
+                  style={{ width: '100%', padding: '0.65rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '1.25rem', outline: 'none' }}
+                >
+                  <option value="">-- Select Available Table --</option>
+                  {tables.filter(t => (t.status === 'Available' || getTableRealStatus(t) === 'Available') && t.num !== selectedTable.num).map(t => (
+                    <option key={t.num} value={t.num}>
+                      Table {t.num} ({t.cap || 4} Seats • {t.zone || 'Main'})
+                    </option>
+                  ))}
+                </select>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    disabled={!targetTransferTable}
+                    onClick={handleExecuteTransfer}
+                    style={{ flex: 1, backgroundColor: !targetTransferTable ? '#94A3B8' : '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.75rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 900, cursor: !targetTransferTable ? 'not-allowed' : 'pointer' }}
+                  >
+                    Confirm Transfer
+                  </button>
+                  <button
+                    onClick={() => setTransferModalOpen(false)}
+                    style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.75rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================= MERGE TABLES OVERLAY MODAL ================= */}
+          {mergeModalOpen && selectedTable && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1rem' }}>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '420px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F2A1D' }}>
+                    🔗 Merge Tables with {selectedTable.num}
+                  </h3>
+                  <button onClick={() => setMergeModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <p style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '1rem' }}>
+                  Select tables to combine with primary Table <strong>{selectedTable.num}</strong>:
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', marginBottom: '1.25rem', border: '1px solid #E2E8F0', padding: '0.65rem', borderRadius: '10px' }}>
+                  {tables.filter(t => t.num !== selectedTable.num).map(t => {
+                    const isChecked = selectedSecondaryMergeTables.includes(t.num);
+                    return (
+                      <label key={t.num} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', fontWeight: 700, color: '#0F2A1D', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSecondaryMergeTables(prev => [...prev, t.num]);
+                            } else {
+                              setSelectedSecondaryMergeTables(prev => prev.filter(n => n !== t.num));
+                            }
+                          }}
+                        />
+                        <span>Table {t.num} ({t.cap || 4} Seats • {t.status})</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    disabled={selectedSecondaryMergeTables.length === 0}
+                    onClick={handleExecuteMerge}
+                    style={{ flex: 1, backgroundColor: selectedSecondaryMergeTables.length === 0 ? '#94A3B8' : '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.75rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 900, cursor: selectedSecondaryMergeTables.length === 0 ? 'not-allowed' : 'pointer' }}
+                  >
+                    Confirm Merge ({selectedSecondaryMergeTables.length})
+                  </button>
+                  <button
+                    onClick={() => setMergeModalOpen(false)}
+                    style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.75rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Cancel
                   </button>
                 </div>
               </div>

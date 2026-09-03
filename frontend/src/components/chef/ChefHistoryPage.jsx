@@ -17,6 +17,14 @@ export default function ChefHistoryPage({ ordersList = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
 
+  // Pagination state (10 orders per page, starting on page 1 showing latest 10 orders)
+  const [currentPage, setCurrentPage] = useState(1);
+  const ordersPerPage = 10;
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, typeFilter]);
+
   // Filter completed kitchen tickets
   const historyOrders = ordersList.filter(o => {
     if (o.status === 'Ready' || o.status === 'Served' || o.status === 'Completed' || o.status === 'Paid') {
@@ -27,8 +35,15 @@ export default function ChefHistoryPage({ ordersList = [] }) {
     return items.every(i => i && (i.isReady || i.status === 'READY' || i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED'));
   });
 
+  // Sort history orders newest first (most recent timestamp at the top)
+  const sortedHistoryOrders = [...historyOrders].sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.updatedAt || a.time || 0).getTime();
+    const timeB = new Date(b.createdAt || b.updatedAt || b.time || 0).getTime();
+    return timeB - timeA;
+  });
+
   // Apply search & type filter
-  const filteredOrders = historyOrders.filter(ord => {
+  const filteredOrders = sortedHistoryOrders.filter(ord => {
     // Type filter
     if (typeFilter !== 'ALL' && (ord.type || 'Dine-In').toUpperCase() !== typeFilter) {
       return false;
@@ -44,6 +59,14 @@ export default function ChefHistoryPage({ ordersList = [] }) {
 
     return ordId.includes(q) || tableStr.includes(q) || customerStr.includes(q) || itemsStr.includes(q);
   });
+
+  const totalOrders = filteredOrders.length;
+  const totalPages = Math.max(1, Math.ceil(totalOrders / ordersPerPage));
+  const validCurrentPage = Math.min(currentPage, totalPages);
+
+  const indexOfLastOrder = validCurrentPage * ordersPerPage;
+  const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+  const paginatedOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
 
   // Calculate total dishes prepared count
   const totalDishesCooked = historyOrders.reduce((sum, ord) => {
@@ -76,8 +99,7 @@ export default function ChefHistoryPage({ ordersList = [] }) {
           <div style={{ display: 'flex', backgroundColor: '#FFFFFF', padding: '0.2rem', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
             {[
               { id: 'ALL', label: 'All Orders' },
-              { id: 'DINE-IN', label: 'Dine-In' },
-              { id: 'TAKEAWAY', label: 'Takeaway' }
+              { id: 'DINE-IN', label: 'Dine-In' }
             ].map(tf => (
               <button
                 key={tf.id}
@@ -193,7 +215,7 @@ export default function ChefHistoryPage({ ordersList = [] }) {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.length === 0 ? (
+              {paginatedOrders.length === 0 ? (
                 <tr>
                   <td colSpan="6" style={{ padding: '3rem 1.5rem', textAlign: 'center', color: '#94A3B8' }}>
                     <ChefHat size={40} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
@@ -204,7 +226,7 @@ export default function ChefHistoryPage({ ordersList = [] }) {
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map(ord => {
+                paginatedOrders.map(ord => {
                   const rawId = ord.orderId || ord.id || ord._id || 'ORD-101';
                   const ordId = `#${String(rawId).replace(/^#/, '')}`;
                   const tableDisplay = formatTableNumber(ord.table || ord.tableNumber);
@@ -297,6 +319,83 @@ export default function ChefHistoryPage({ ordersList = [] }) {
             </tbody>
           </table>
         </div>
+
+        {/* ================= PAGINATION CONTROL BAR (10 Tickets / Page) ================= */}
+        {totalOrders > 0 && (
+          <div style={{
+            display: 'flex',
+            justify: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1rem',
+            padding: '1.0rem 1.5rem',
+            backgroundColor: '#FAFAFA',
+            borderTop: '1px solid #E2E8F0'
+          }}>
+            <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 700 }}>
+              Showing <strong>{indexOfFirstOrder + 1}</strong> to <strong>{Math.min(indexOfLastOrder, totalOrders)}</strong> of <strong>{totalOrders}</strong> History Tickets
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <button
+                type="button"
+                disabled={validCurrentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                style={{
+                  backgroundColor: validCurrentPage === 1 ? '#F1F5F9' : '#0F2A1D',
+                  color: validCurrentPage === 1 ? '#94A3B8' : '#FFFFFF',
+                  border: 'none',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  cursor: validCurrentPage === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ← Prev
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setCurrentPage(p)}
+                  style={{
+                    backgroundColor: validCurrentPage === p ? '#E07A3C' : '#FFFFFF',
+                    color: validCurrentPage === p ? '#FFFFFF' : '#475569',
+                    border: '1px solid',
+                    borderColor: validCurrentPage === p ? '#E07A3C' : '#CBD5E1',
+                    padding: '0.4rem 0.7rem',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                disabled={validCurrentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                style={{
+                  backgroundColor: validCurrentPage === totalPages ? '#F1F5F9' : '#0F2A1D',
+                  color: validCurrentPage === totalPages ? '#94A3B8' : '#FFFFFF',
+                  border: 'none',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  cursor: validCurrentPage === totalPages ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
     </div>

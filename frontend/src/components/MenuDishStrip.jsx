@@ -187,11 +187,11 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '1.4rem',
+          gap: '1.1rem',
           flexWrap: 'nowrap',
-          padding: '0 1.5rem',
+          padding: '0 1rem',
           width: 'max-content',
-          margin: '0 auto',
+          margin: 0,
           pointerEvents: isDragging ? 'none' : 'auto'
         }}
       >
@@ -213,8 +213,8 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
               onMouseLeave={() => setHoveredIdx(null)}
               style={{
                 flexShrink: 0,
-                width: isMiddle ? '260px' : '170px',
-                height: isMiddle ? '190px' : '140px',
+                width: isMiddle ? 'clamp(210px, 60vw, 260px)' : 'clamp(140px, 40vw, 170px)',
+                height: isMiddle ? 'clamp(150px, 45vw, 190px)' : 'clamp(115px, 32vw, 140px)',
                 borderRadius: isMiddle ? '20px' : '16px',
                 overflow: 'hidden',
                 position: 'relative',
@@ -226,8 +226,8 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
                 border: isMiddle ? '3px solid #FF8A00' : isHovered ? '2px solid #1E4636' : '2px solid #FFFFFF',
                 alignSelf: 'center',
                 transform: isMiddle
-                  ? (isHovered ? 'scale(1.09) translateY(-8px)' : 'scale(1.06) translateY(-4px)')
-                  : (isHovered ? 'scale(1.05) translateY(-6px)' : 'scale(1)'),
+                  ? (isHovered ? 'scale(1.06) translateY(-6px)' : 'scale(1.03) translateY(-3px)')
+                  : (isHovered ? 'scale(1.04) translateY(-4px)' : 'scale(1)'),
                 transition: 'all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
                 cursor: 'pointer',
                 userSelect: 'none'

@@ -121,7 +121,7 @@ export default function WaiterSettingsPage() {
     <div className="admin-dashboard-container" style={{ width: '100%', boxSizing: 'border-box', paddingBottom: '3rem' }}>
       
       {/* ================= 1. PAGE HEADER ================= */}
-      <div className="admin-dashboard-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="admin-dashboard-header" style={{ marginBottom: '1.25rem' }}>
         <div>
           <div className="page-breadcrumb-bar">
             <span>Waiter</span>
@@ -135,56 +135,27 @@ export default function WaiterSettingsPage() {
             Configure Audio Chimes, Table Lifecycle Alerts, POS Sync & Station Preferences
           </p>
         </div>
-
-        <div style={{ display: 'flex', gap: '0.65rem' }}>
-          <button
-            type="button"
-            onClick={handleResetDefaults}
-            style={{
-              backgroundColor: '#F1F5F9',
-              color: '#475569',
-              border: '1px solid #CBD5E1',
-              padding: '0.6rem 1.1rem',
-              borderRadius: '10px',
-              fontSize: '0.82rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem'
-            }}
-          >
-            <RotateCcw size={15} />
-            <span>Reset Defaults</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            style={{
-              backgroundColor: '#0F2A1D',
-              color: '#FFFFFF',
-              border: 'none',
-              padding: '0.6rem 1.3rem',
-              borderRadius: '10px',
-              fontSize: '0.82rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              boxShadow: '0 4px 14px rgba(15, 42, 29, 0.2)'
-            }}
-          >
-            <Check size={16} />
-            <span>Save Preferences</span>
-          </button>
-        </div>
       </div>
 
+      {/* Floating Toast Notification Popup */}
       {successMsg && (
-        <div style={{ backgroundColor: '#F0FDF4', border: '1.5px solid #86EFAC', color: '#166534', padding: '0.85rem 1.25rem', borderRadius: '12px', marginBottom: '1.25rem', fontSize: '0.88rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 12px rgba(22, 101, 52, 0.08)' }}>
-          <CheckCircle2 size={18} />
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          backgroundColor: '#0F2A1D',
+          color: '#FFFFFF',
+          padding: '0.85rem 1.35rem',
+          borderRadius: '12px',
+          fontSize: '0.88rem',
+          fontWeight: 800,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.65rem',
+          boxShadow: '0 8px 24px rgba(15, 42, 29, 0.35)',
+          zIndex: 99999
+        }}>
+          <CheckCircle2 size={20} color="#86EFAC" />
           <span>{successMsg}</span>
         </div>
       )}
@@ -436,72 +407,6 @@ export default function WaiterSettingsPage() {
               </p>
             </div>
 
-            {/* Auto Print KOT */}
-            <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontWeight: 800, color: '#0F2A1D', fontSize: '0.9rem' }}>
-                <span>🖨️ Auto-Request KOT Receipt Print</span>
-                <input
-                  type="checkbox"
-                  checked={settings.autoPrintKot}
-                  onChange={e => setSettings({ ...settings, autoPrintKot: e.target.checked })}
-                  style={{ width: '18px', height: '18px', accentColor: '#166534', cursor: 'pointer' }}
-                />
-              </label>
-              <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
-                Trigger thermal receipt print prompt when order bill is generated.
-              </p>
-            </div>
-
-          </div>
-        </div>
-
-        {/* SECTION D: STATION SECURITY & SYSTEM */}
-        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '18px', padding: '1.5rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.75rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Shield size={18} color="#0F2A1D" />
-              <span>Station Security & Power Management</span>
-            </h3>
-            <span style={{ fontSize: '0.74rem', backgroundColor: '#F1F5F9', color: '#475569', fontWeight: 800, padding: '0.2rem 0.65rem', borderRadius: '6px' }}>
-              Shift Security
-            </span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
-            
-            {/* Auto Logout Minutes */}
-            <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.4rem' }}>
-                Inactivity Station Auto-Lock
-              </label>
-              <select
-                value={settings.autoLogoutMinutes}
-                onChange={e => setSettings({ ...settings, autoLogoutMinutes: e.target.value })}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 700, outline: 'none' }}
-              >
-                <option value="15">🔒 15 Minutes Inactivity</option>
-                <option value="30">🔒 30 Minutes Inactivity</option>
-                <option value="60">🔒 60 Minutes Inactivity</option>
-                <option value="never">🔓 Never Auto-Lock</option>
-              </select>
-            </div>
-
-            {/* Payment PIN Confirmation */}
-            <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontWeight: 800, color: '#0F2A1D', fontSize: '0.9rem' }}>
-                <span>🔑 Require Staff PIN for Refunds</span>
-                <input
-                  type="checkbox"
-                  checked={settings.requirePaymentPin}
-                  onChange={e => setSettings({ ...settings, requirePaymentPin: e.target.checked })}
-                  style={{ width: '18px', height: '18px', accentColor: '#0F2A1D', cursor: 'pointer' }}
-                />
-              </label>
-              <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
-                Require waiter employee ID verification before order cancellation.
-              </p>
-            </div>
-
           </div>
         </div>
 
@@ -542,7 +447,7 @@ export default function WaiterSettingsPage() {
             }}
           >
             <Check size={18} />
-            <span>Save & Apply Settings</span>
+            <span>Save Settings</span>
           </button>
         </div>
 

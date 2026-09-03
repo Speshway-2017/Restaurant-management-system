@@ -244,6 +244,9 @@ class OrderService {
     const isPaid = status === 'Paid' || status === 'Completed' || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid' || fullOrderData.paymentStatus === 'Paid';
     const isBillGenerated = status === 'Bill Generated' || status === 'Awaiting Payment' || fullOrderData.payment === 'Bill Generated' || fullOrderData.payment === 'Awaiting Payment';
 
+    const txnId = fullOrderData.transactionId || (isPaid ? `TXN-${Date.now().toString().slice(-8)}` : '');
+    const paidTimestamp = fullOrderData.paidAt || (isPaid ? new Date() : null);
+
     const updatePayload = {
       ...fullOrderData,
       status: isPaid ? 'Completed' : (status || 'Placed'),
@@ -252,12 +255,19 @@ class OrderService {
       paymentStatus: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.paymentStatus || 'Pending')),
       ...(fullOrderData.originalTotal !== undefined && { originalTotal: Number(fullOrderData.originalTotal) }),
       ...(fullOrderData.originalAmount !== undefined && { originalAmount: Number(fullOrderData.originalAmount) }),
+      ...(fullOrderData.subtotal !== undefined && { subtotal: Number(fullOrderData.subtotal) }),
+      ...(fullOrderData.gstAmount !== undefined && { gstAmount: Number(fullOrderData.gstAmount) }),
+      ...(fullOrderData.totalBeforeDiscount !== undefined && { totalBeforeDiscount: Number(fullOrderData.totalBeforeDiscount) }),
       ...(fullOrderData.couponCode !== undefined && { couponCode: String(fullOrderData.couponCode) }),
       ...(fullOrderData.discountAmount !== undefined && { discountAmount: Number(fullOrderData.discountAmount) }),
+      ...(fullOrderData.amountAfterDiscount !== undefined && { amountAfterDiscount: Number(fullOrderData.amountAfterDiscount) }),
       ...(fullOrderData.tip !== undefined && { tip: Number(fullOrderData.tip) }),
       ...(fullOrderData.tipAmount !== undefined && { tipAmount: Number(fullOrderData.tipAmount) }),
+      ...(fullOrderData.customerPaidAmount !== undefined && { customerPaidAmount: Number(fullOrderData.customerPaidAmount) }),
       ...(fullOrderData.paymentMethod !== undefined && { paymentMethod: String(fullOrderData.paymentMethod) }),
-      ...(fullOrderData.finalAmount !== undefined && { finalAmount: Number(fullOrderData.finalAmount), total: Number(fullOrderData.finalAmount) })
+      ...(fullOrderData.finalAmount !== undefined && { finalAmount: Number(fullOrderData.finalAmount), total: Number(fullOrderData.finalAmount) }),
+      transactionId: txnId,
+      ...(paidTimestamp && { paidAt: paidTimestamp })
     };
 
     if (isPaid && fullOrderData.couponCode) {

@@ -152,7 +152,7 @@ const updateTableByNumber = async (req, res) => {
 const generateTableQr = async (req, res) => {
   try {
     const tableNum = req.body?.tableNum || req.params?.tableNum || 'T-01';
-    const defaultHost = (req.hostname === 'localhost' || req.hostname === '127.0.0.1') ? '192.168.108.1' : req.hostname;
+    const defaultHost = (req.hostname === 'localhost' || req.hostname === '127.0.0.1') ? '192.168.1.4' : req.hostname;
     const targetUrl = req.body?.targetUrl || `http://${defaultHost}:5173/menu?table=${tableNum}`;
     
     // Generate base64 Data URL for table QR code
