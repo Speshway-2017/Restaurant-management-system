@@ -271,9 +271,17 @@ export default function ChefLayout({ setActivePage }) {
         const idStr = o.orderId || (typeof o.id === 'string' && o.id.startsWith('ORD-') ? o.id : null) || o.id || o._id || cleanId;
         const createdDate = o.createdAt ? new Date(o.createdAt) : new Date();
         const rawItems = Array.isArray(o.items) ? o.items : [];
+        const activeItemsList = rawItems.filter(it => {
+          if (!it) return false;
+          if (typeof it === 'string') return true;
+          return it.status !== 'CANCELLED' && it.status !== 'Cancelled';
+        });
 
         // Check if there are any pending dishes in this order that need cooking
-        const hasPendingItems = rawItems.some(it => !it.isDelivered && !it.isReady && it.status !== 'READY' && it.status !== 'DELIVERED' && it.status !== 'SERVED');
+        const hasPendingItems = activeItemsList.some(it => {
+          if (typeof it === 'string') return true;
+          return !it.isDelivered && !it.isReady && it.status !== 'READY' && it.status !== 'DELIVERED' && it.status !== 'SERVED';
+        });
 
         if (hasPendingItems) {
           // Clear any stale optimistic 'Ready' status for this order because customer added new dishes!
@@ -284,14 +292,17 @@ export default function ChefLayout({ setActivePage }) {
         const overrideStatus = optimisticStatusesRef.current[cleanId] || optimisticStatusesRef.current[idStr];
         const rawStatus = overrideStatus || o.status || 'Placed';
 
-        const finalItems = rawItems.map((it, itemIdx) => {
+        const finalItems = activeItemsList.map((it, itemIdx) => {
+          if (typeof it === 'string') {
+            return { id: `item-${itemIdx}`, name: it, price: 150, quantity: 1, status: 'PLACED', isReady: false, isDelivered: false };
+          }
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
           const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || (rawStatus === 'Ready' && !hasPendingItems)));
           const isCooking = Boolean(!isDelivered && !isReady && (it.status === 'COOKING' || it.status === 'PREPARING' || rawStatus === 'Preparing' || rawStatus === 'Cooking'));
           return {
             ...it,
             id: it.id || it._id || `item-${itemIdx}`,
-            name: it.name,
+            name: it.name || it.dishId || 'Dish',
             price: Number(it.price) || 0,
             quantity: Number(it.quantity || it.qty || 1),
             status: isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : 'PLACED')),
@@ -300,6 +311,17 @@ export default function ChefLayout({ setActivePage }) {
           };
         });
 
+        const getCleanChefNote = (notesStr) => {
+          if (!notesStr || typeof notesStr !== 'string') return '';
+          const parts = notesStr
+            .split('|')
+            .map(p => p.trim())
+            .filter(p => p && !p.toLowerCase().includes('cancelled dishes') && !p.toLowerCase().includes('cancel item:') && !p.toLowerCase().includes('cancellation'));
+          return parts.join(' | ');
+        };
+
+        const cleanNote = getCleanChefNote(o.notes || o.chefNotes || o.instructions || '');
+
         return {
           id: idStr,
           _id: o._id,
@@ -307,9 +329,9 @@ export default function ChefLayout({ setActivePage }) {
           table: o.table || (o.tableNum ? `Table ${o.tableNum}` : 'Takeaway'),
           type: o.type || 'Dine-In',
           customer: o.customer || o.customerName || 'Guest',
-          status: hasPendingItems ? (rawStatus === 'Preparing' || rawStatus === 'Cooking' ? 'Preparing' : 'Placed') : rawStatus,
+          status: activeItemsList.length === 0 || o.status === 'Cancelled' ? 'Cancelled' : (hasPendingItems ? (rawStatus === 'Preparing' || rawStatus === 'Cooking' ? 'Preparing' : 'Placed') : rawStatus),
           items: finalItems,
-          notes: o.notes || o.chefNotes || o.instructions || '',
+          notes: cleanNote,
           time: createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           createdAt: createdDate,
           total: o.totalAmount || o.total || 0
@@ -618,8 +640,8 @@ export default function ChefLayout({ setActivePage }) {
     if (ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled') {
       return true;
     }
-    const items = Array.isArray(ord.items) ? ord.items : [];
-    if (items.length === 0) return false;
+    const items = Array.isArray(ord.items) ? ord.items.filter(i => i && i.status !== 'CANCELLED' && i.status !== 'Cancelled') : [];
+    if (items.length === 0) return true;
 
     // If there are ANY dishes still to be prepared/cooked, the ticket MUST stay visible on Live KDS!
     const hasPendingDishes = items.some(i => i && !i.isDelivered && !i.isReady && i.status !== 'READY' && i.status !== 'DELIVERED' && i.status !== 'SERVED');
@@ -1091,11 +1113,11 @@ export default function ChefLayout({ setActivePage }) {
                   paddingRight: '0.25rem',
                   scrollbarWidth: 'thin'
                 }}>
-                  {selectedTicketModal.items.map((item, idx) => (
+                  {selectedTicketModal.items.filter(it => (typeof it === 'object' ? it.status !== 'CANCELLED' : true)).map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0.85rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                       <span style={{ fontWeight: 800, color: '#0F2A1D' }}>
                         <strong style={{ color: '#E07A3C', marginRight: '0.4rem' }}>{item.quantity || 1}x</strong>
-                        {item.name}
+                        {typeof item === 'string' ? item : item.name}
                       </span>
                       <span style={{ color: '#64748B', fontSize: '0.8rem' }}>₹{(item.price || 0) * (item.quantity || 1)}</span>
                     </div>

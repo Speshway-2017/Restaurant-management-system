@@ -5,7 +5,16 @@
 export const normalizeOrderItem = (item) => {
   if (!item) return item;
 
-  const statusStr = String(item.status || '').toUpperCase();
+  const statusStr = String(item.status || '').toUpperCase().trim();
+  if (statusStr === 'CANCELLED' || statusStr === 'CANCEL') {
+    return {
+      ...item,
+      status: 'CANCELLED',
+      isReady: false,
+      isDelivered: false
+    };
+  }
+
   const isDelivered = Boolean(
     item.isDelivered === true || 
     statusStr === 'DELIVERED' || 
@@ -55,6 +64,15 @@ export const mergeOrderItems = (dbItems = [], localItems = []) => {
     const normLocal = localItem ? normalizeOrderItem(localItem) : null;
 
     if (normDb && normLocal) {
+      if (normDb.status === 'CANCELLED' || normLocal.status === 'CANCELLED') {
+        result.push({
+          ...(normDb || normLocal),
+          status: 'CANCELLED',
+          isReady: false,
+          isDelivered: false
+        });
+        continue;
+      }
       const isDelivered = normDb.isDelivered || normLocal.isDelivered;
       const isReady = isDelivered || normDb.isReady || normLocal.isReady;
       const isCooking = !isDelivered && !isReady && (normDb.status === 'COOKING' || normDb.status === 'PREPARING' || normLocal.status === 'COOKING' || normLocal.status === 'PREPARING');

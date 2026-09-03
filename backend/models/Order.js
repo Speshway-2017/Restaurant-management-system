@@ -18,11 +18,15 @@ const orderSchema = new mongoose.Schema({
   total: { type: Number, required: true },
   originalTotal: { type: Number },
   originalAmount: { type: Number },
+  subtotal: { type: Number },
+  gstAmount: { type: Number, default: 0 },
+  totalBeforeDiscount: { type: Number },
   couponCode: { type: String, default: '' },
   discountAmount: { type: Number, default: 0 },
-  finalAmount: { type: Number },
+  amountAfterDiscount: { type: Number },
   tip: { type: Number, default: 0 },
   tipAmount: { type: Number, default: 0 },
+  customerPaidAmount: { type: Number },
   paymentMethod: { type: String, default: 'UPI' },
   status: { 
     type: String, 
@@ -30,6 +34,8 @@ const orderSchema = new mongoose.Schema({
   },
   payment: { type: String, default: 'Pending' },
   paymentStatus: { type: String, default: 'Pending' },
+  transactionId: { type: String, default: '' },
+  paidAt: { type: Date },
   time: { type: String, default: '' },
   notes: { type: String, default: '' }
 }, { timestamps: true, strict: false });

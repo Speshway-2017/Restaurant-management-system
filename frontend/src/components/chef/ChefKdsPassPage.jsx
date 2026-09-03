@@ -130,29 +130,47 @@ export default function ChefKdsPassPage({
             {/* Ticket Body: Itemized Dish List */}
             <div style={{ padding: '1rem 1.15rem', flex: 1 }}>
               {/* Guest / Waiter Notes Callout */}
-              {ord.notes && (
-                <div style={{
-                  backgroundColor: '#FFF3EB',
-                  border: '1px solid #FDBA74',
-                  borderRadius: '8px',
-                  padding: '0.5rem 0.75rem',
-                  marginBottom: '0.85rem',
-                  fontSize: '0.78rem',
-                  color: '#C2410C',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.4rem'
-                }}>
-                  <AlertCircle size={14} color="#EA580C" style={{ flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <strong style={{ color: '#EA580C' }}>Chef Note:</strong> {ord.notes}
-                  </div>
-                </div>
-              )}
+              {(() => {
+                const getCleanChefNote = (notesStr) => {
+                  if (!notesStr || typeof notesStr !== 'string') return '';
+                  const parts = notesStr
+                    .split('|')
+                    .map(p => p.trim())
+                    .filter(p => p && !p.toLowerCase().includes('cancelled dishes') && !p.toLowerCase().includes('cancel item:') && !p.toLowerCase().includes('cancellation'));
+                  return parts.join(' | ');
+                };
+                const cleanNote = getCleanChefNote(ord.notes);
+                if (!cleanNote) return null;
 
-              <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#64748B', marginBottom: '0.5rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                DISHES TO PREPARE ({ord.items.length})
-              </div>
+                return (
+                  <div style={{
+                    backgroundColor: '#FFF3EB',
+                    border: '1px solid #FDBA74',
+                    borderRadius: '10px',
+                    padding: '0.65rem 0.85rem',
+                    marginBottom: '0.85rem',
+                    fontSize: '0.78rem',
+                    color: '#C2410C',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.4rem'
+                  }}>
+                    <AlertCircle size={14} color="#EA580C" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div>
+                      <strong style={{ color: '#EA580C' }}>Chef Note:</strong> {cleanNote}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const activeItems = (ord.items || []).filter(it => (typeof it === 'object' ? it.status !== 'CANCELLED' : true));
+                return (
+                  <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#64748B', marginBottom: '0.5rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    DISHES TO PREPARE ({activeItems.length})
+                  </div>
+                );
+              })()}
 
               {/* Dish List with Checkbox Strikeout & Status Badges (Scrollable fixed-height list) */}
               <div style={{
@@ -166,50 +184,63 @@ export default function ChefKdsPassPage({
                 scrollbarColor: '#CBD5E1 transparent'
               }}>
                 {(() => {
+                  const activeItems = (ord.items || []).filter(it => (typeof it === 'object' ? it.status !== 'CANCELLED' : true));
+
+                  if (activeItems.length === 0) {
+                    return (
+                      <div style={{ fontSize: '0.8rem', color: '#991B1B', fontWeight: 800, padding: '0.65rem', backgroundColor: '#FEF2F2', borderRadius: '8px', border: '1px solid #FCA5A5', textAlign: 'center' }}>
+                        ❌ All dishes in this order have been cancelled.
+                      </div>
+                    );
+                  }
+
                   const isPlacedOrNew = !ord.status || ord.status === 'Placed' || ord.status === 'NEW';
                   const isOrderPreparingOrCooking = ord.status === 'Preparing' || ord.status === 'Cooking' || ord.status === 'In-Progress' || ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed';
-                  const hasAnyItemStarted = Array.isArray(ord.items) && ord.items.some(it =>
+                  const hasAnyItemStarted = Array.isArray(activeItems) && activeItems.some(it =>
                     it.status === 'COOKING' || it.status === 'PREPARING' || it.status === 'READY' || it.isReady
                   );
                   const isStarted = !isPlacedOrNew || hasAnyItemStarted;
 
-                  return ord.items.map((item, idx) => {
+                  return activeItems.map((item, idx) => {
                     const cleanId = String(ord.id || ord.orderId || '').replace(/^#/i, '').trim();
                     const itemKey = `${cleanId}-${idx}`;
                     const isUpdating = Boolean(updatingDishItems && (updatingDishItems[itemKey] || updatingDishItems[`${ord.id}-${idx}`]));
                     const isOrderReadyOverall = ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed' || ord.status === 'Paid';
-                    const isDelivered = item.isDelivered || item.status === 'SERVED' || item.status === 'DELIVERED';
+                    const isCancelled = item.status === 'CANCELLED';
+                    const isDelivered = !isCancelled && (item.isDelivered || item.status === 'SERVED' || item.status === 'DELIVERED');
                     const isCheckedInMap = Boolean(checkedDishItems[ord.id]?.[idx] || checkedDishItems[cleanId]?.[idx] || checkedDishItems[`#${cleanId}`]?.[idx]);
-                    const isReady = !isDelivered && (isOrderReadyOverall || item.isReady || item.status === 'READY' || isCheckedInMap);
-                    const isCooking = isStarted && !isReady && !isDelivered;
+                    const isReady = !isCancelled && !isDelivered && (isOrderReadyOverall || item.isReady || item.status === 'READY' || isCheckedInMap);
+                    const isCooking = isStarted && !isReady && !isDelivered && !isCancelled;
 
                     return (
                       <div
                         key={idx}
                         onClick={() => {
-                          if (isDelivered || isUpdating) return;
+                          if (isCancelled || isDelivered || isUpdating) return;
                           if (!isStarted) {
-                            showToast('⚠️ Click "🔥 Start Cooking" below to start preparing dishes!');
+                            alert('⚠️ Click "🔥 Start Cooking" below to start preparing dishes!');
                             return;
                           }
                           handleToggleItemCheck(ord.id, idx);
                         }}
-                        title={!isStarted ? '⚠️ Click "🔥 Start Cooking" below to start preparing & ticking dishes' : (isDelivered ? 'Dish already served' : 'Click to toggle dish ready status')}
+                        title={isCancelled ? 'Dish cancelled by waiter/customer' : (!isStarted ? '⚠️ Click "🔥 Start Cooking" below to start preparing & ticking dishes' : (isDelivered ? 'Dish already served' : 'Click to toggle dish ready status'))}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '0.55rem 0.75rem',
-                          backgroundColor: isDelivered ? '#F1F5F9' : (isReady ? '#F0FDF4' : (isStarted ? '#F8FAFC' : '#FAFAFA')),
+                          backgroundColor: isCancelled ? '#FEF2F2' : (isDelivered ? '#F1F5F9' : (isReady ? '#F0FDF4' : (isStarted ? '#F8FAFC' : '#FAFAFA'))),
                           borderRadius: '8px',
-                          border: isDelivered ? '1px solid #CBD5E1' : (isReady ? '1.5px solid #86EFAC' : (isStarted ? '1px solid #E2E8F0' : '1px dashed #CBD5E1')),
-                          cursor: isDelivered || isUpdating ? 'default' : (isStarted ? 'pointer' : 'not-allowed'),
-                          opacity: isDelivered ? 0.65 : (isStarted ? 1 : 0.65),
+                          border: isCancelled ? '1px solid #FCA5A5' : (isDelivered ? '1px solid #CBD5E1' : (isReady ? '1.5px solid #86EFAC' : (isStarted ? '1px solid #E2E8F0' : '1px dashed #CBD5E1'))),
+                          cursor: isCancelled || isDelivered || isUpdating ? 'default' : (isStarted ? 'pointer' : 'not-allowed'),
+                          opacity: isCancelled || isDelivered ? 0.65 : (isStarted ? 1 : 0.65),
                           transition: 'all 0.2s ease'
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          {isDelivered ? (
+                          {isCancelled ? (
+                            <X size={17} color="#991B1B" />
+                          ) : isDelivered ? (
                             <CheckCircle2 size={17} color="#64748B" />
                           ) : isReady ? (
                             <CheckSquare size={17} color="#166534" />
@@ -219,11 +250,11 @@ export default function ChefKdsPassPage({
                           <span style={{
                             fontSize: '0.9rem',
                             fontWeight: 800,
-                            color: isDelivered ? '#64748B' : (isReady ? '#166534' : (isStarted ? '#0F2A1D' : '#64748B')),
-                            textDecoration: isDelivered ? 'line-through' : 'none'
+                            color: isCancelled ? '#991B1B' : (isDelivered ? '#64748B' : (isReady ? '#166534' : (isStarted ? '#0F2A1D' : '#64748B'))),
+                            textDecoration: isCancelled || isDelivered ? 'line-through' : 'none'
                           }}>
-                            <strong style={{ color: isDelivered ? '#64748B' : (isStarted ? '#E07A3C' : '#94A3B8'), marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
-                            {item.name}
+                            <strong style={{ color: isCancelled ? '#991B1B' : (isDelivered ? '#64748B' : (isStarted ? '#E07A3C' : '#94A3B8')), marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
+                            {typeof item === 'string' ? item : item.name}
                           </span>
                         </div>
 
@@ -237,16 +268,16 @@ export default function ChefKdsPassPage({
                           <span style={{
                             fontSize: '0.68rem',
                             fontWeight: 900,
-                            backgroundColor: isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : (isStarted ? '#FFEDD5' : '#F1F5F9')),
-                            color: isDelivered ? '#475569' : (isReady ? '#166534' : (isStarted ? '#C2410C' : '#64748B')),
+                            backgroundColor: isCancelled ? '#FEE2E2' : (isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : (isStarted ? '#FFEDD5' : '#F1F5F9'))),
+                            color: isCancelled ? '#991B1B' : (isDelivered ? '#475569' : (isReady ? '#166534' : (isStarted ? '#C2410C' : '#64748B'))),
                             padding: '0.15rem 0.45rem',
                             borderRadius: '5px'
                           }}>
-                            {isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : (isStarted ? 'COOKING' : 'PLACED'))}
+                            {isCancelled ? '❌ CANCELLED' : (isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : (isStarted ? 'COOKING' : 'PLACED')))}
                           </span>
 
                           {item.price && (
-                            <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
+                            <span style={{ fontSize: '0.74rem', color: isCancelled ? '#991B1B' : '#64748B', fontWeight: 600, textDecoration: isCancelled ? 'line-through' : 'none' }}>
                               ₹{item.price * (item.quantity || 1)}
                             </span>
                           )}
@@ -261,8 +292,11 @@ export default function ChefKdsPassPage({
             {/* Ticket Footer Action Controls */}
             <div style={{ padding: '0.85rem 1.15rem', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', gap: '0.6rem' }}>
               {(() => {
+                const activeItems = (ord.items || []).filter(it => (typeof it === 'object' ? it.status !== 'CANCELLED' : true));
+                if (activeItems.length === 0) return null;
+
                 const isPlacedOrNew = !ord.status || ord.status === 'Placed' || ord.status === 'NEW';
-                const hasAnyItemStarted = Array.isArray(ord.items) && ord.items.some(it =>
+                const hasAnyItemStarted = Array.isArray(activeItems) && activeItems.some(it =>
                   it.status === 'COOKING' || it.status === 'PREPARING' || it.status === 'READY' || it.isReady
                 );
                 const isStarted = !isPlacedOrNew || hasAnyItemStarted;

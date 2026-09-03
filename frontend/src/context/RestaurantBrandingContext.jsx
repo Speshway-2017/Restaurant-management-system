@@ -219,3 +219,5 @@ export function useRestaurantBranding() {
   }
   return context;
 }
+
+export const useBranding = useRestaurantBranding;

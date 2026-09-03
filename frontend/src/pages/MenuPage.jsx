@@ -13,12 +13,22 @@ import CustomerOrderTrackingModal from '../components/customer/CustomerOrderTrac
 import CustomerBillModal from '../components/customer/CustomerBillModal';
 import CustomerEngagementModal from '../components/customer/CustomerEngagementModal';
 import CustomerBottomNav from '../components/customer/CustomerBottomNav';
+import CustomerMobileMenuView from '../components/customer/CustomerMobileMenuView';
 
 export default function MenuPage({ onOpenDemoModal }) {
   const { brandName } = useRestaurantBranding();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   // Locked Table session initialized strictly from original QR scan in sessionStorage to prevent manual URL tampering
   const [tableNum, setTableNum] = useState(() => {
     try {
@@ -336,6 +346,9 @@ export default function MenuPage({ onOpenDemoModal }) {
     const loadMenu = () => {
       const formatItem = (item) => ({
         id: item._id || item.id || item.name,
+        _id: item._id || item.id,
+        rawId: String(item._id || item.id || ''),
+        dishId: item._id || item.id || item.dishId,
         name: item.name,
         category: item.category || 'Main Course',
         price: Number(item.price || 0),
@@ -470,20 +483,32 @@ export default function MenuPage({ onOpenDemoModal }) {
   }, [menuItems]);
 
   const matchCategory = (itemCategory, selectedCat) => {
-    if (!selectedCat || selectedCat === 'all') return true;
-    const catLower = (itemCategory || '').toLowerCase().trim();
+    if (!selectedCat || selectedCat === 'all' || selectedCat === 'All') return true;
+    const catLower = (itemCategory || 'Main Course').toLowerCase().trim();
     const selLower = selectedCat.toLowerCase().trim();
 
-    if (selLower === 'mains' || selLower === 'main course' || selLower === 'main-course') {
-      return catLower.includes('main') || catLower.includes('curry');
+    if (selLower === 'mains' || selLower === 'main course' || selLower === 'main-course' || selLower === 'maincourse') {
+      return (
+        catLower.includes('main') ||
+        catLower.includes('curry') ||
+        catLower.includes('curries') ||
+        catLower.includes('biryani') ||
+        catLower.includes('gravy') ||
+        catLower.includes('thali') ||
+        catLower.includes('combo') ||
+        catLower.includes('rice') ||
+        catLower === 'main course' ||
+        catLower === 'mains' ||
+        !itemCategory
+      );
     }
-    if (selLower === 'starters') return catLower.includes('starter');
-    if (selLower === 'curries') return catLower.includes('curry') || catLower.includes('curries');
-    if (selLower === 'biryani') return catLower.includes('biryani');
-    if (selLower === 'breads') return catLower.includes('bread') || catLower.includes('roti') || catLower.includes('naan');
-    if (selLower === 'desserts') return catLower.includes('dessert') || catLower.includes('sweet');
-    if (selLower === 'beverages') return catLower.includes('beverage') || catLower.includes('drink');
-    if (selLower === 'southindian' || selLower === 'south indian') return catLower.includes('south');
+    if (selLower === 'starters' || selLower === 'starter') return catLower.includes('starter') || catLower.includes('appetizer') || catLower.includes('tandoori') || catLower.includes('kebab');
+    if (selLower === 'curries' || selLower === 'curry') return catLower.includes('curry') || catLower.includes('curries') || catLower.includes('gravy') || catLower.includes('main');
+    if (selLower === 'biryani') return catLower.includes('biryani') || catLower.includes('pulao') || catLower.includes('rice') || catLower.includes('main');
+    if (selLower === 'breads' || selLower === 'bread') return catLower.includes('bread') || catLower.includes('roti') || catLower.includes('naan') || catLower.includes('paratha');
+    if (selLower === 'desserts' || selLower === 'dessert') return catLower.includes('dessert') || catLower.includes('sweet') || catLower.includes('ice');
+    if (selLower === 'beverages' || selLower === 'beverage') return catLower.includes('beverage') || catLower.includes('drink') || catLower.includes('shake') || catLower.includes('juice');
+    if (selLower === 'southindian' || selLower === 'south indian') return catLower.includes('south') || catLower.includes('dosa') || catLower.includes('idli');
 
     return catLower === selLower || catLower.includes(selLower) || selLower.includes(catLower);
   };
@@ -521,6 +546,7 @@ export default function MenuPage({ onOpenDemoModal }) {
   // Group filtered dishes dynamically by category
   const getNormalizedCategoryKey = (cat) => {
     const c = (cat || '').toLowerCase().trim();
+    if (!c || c === 'main course' || c === 'mains' || c === 'main-course' || c.includes('main')) return 'Main Course';
     if (c.includes('starter')) return 'Starters';
     if (c.includes('biryani')) return 'Biryani';
     if (c.includes('bread') || c.includes('roti') || c.includes('naan')) return 'Breads';
@@ -528,7 +554,6 @@ export default function MenuPage({ onOpenDemoModal }) {
     if (c.includes('dessert') || c.includes('sweet')) return 'Desserts';
     if (c.includes('beverage') || c.includes('drink')) return 'Beverages';
     if (c.includes('curry') || c.includes('curries')) return 'Curries';
-    if (c.includes('main')) return 'Main Course';
     return (cat || '').trim() || 'Main Course';
   };
 
@@ -677,6 +702,195 @@ export default function MenuPage({ onOpenDemoModal }) {
 
   const isFixedTableBarActive = Boolean(tableNum && !tableCleaningInfo?.isCleaning);
 
+  if (isMobile) {
+    return (
+      <div className="menu-page mobile-customer-view" style={{ position: 'relative', backgroundColor: '#F8FAFC', color: '#0F172A' }}>
+        <CustomerMobileMenuView
+          brandName={brandName}
+          tableNum={tableNum}
+          menuItems={menuItems}
+          filteredItems={filteredItems}
+          groupedDishes={groupedDishes}
+          dynamicCategories={dynamicCategories}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          vegOnly={vegOnly}
+          setVegOnly={setVegOnly}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          priceFilter={priceFilter}
+          setPriceFilter={setPriceFilter}
+          spiceFilter={spiceFilter}
+          setSpiceFilter={setSpiceFilter}
+          cart={cart}
+          totalCartCount={totalCartCount}
+          totalCartPrice={totalCartPrice}
+          handleAddToCart={handleAddToCart}
+          handleDecreaseQty={handleDecreaseQty}
+          setSelectedDishForDetail={setSelectedDishForDetail}
+          setIsCheckoutModalOpen={setIsCheckoutModalOpen}
+          setIsCustomerOrdersModalOpen={setIsCustomerOrdersModalOpen}
+          setIsCategoryDrawerOpen={setIsCategoryDrawerOpen}
+          outOfStockItems={outOfStockItems}
+          placedTableOrders={placedTableOrders}
+          isClosedNow={isClosedNow}
+          statusDetails={statusDetails}
+        />
+
+        {/* Category Drawer Modal */}
+        {isCategoryDrawerOpen && (
+          <div className="admin-modal-backdrop" onClick={() => setIsCategoryDrawerOpen(false)} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0', zIndex: 10000 }}>
+            <div
+              className="admin-modal-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: '520px',
+                width: '100%',
+                borderRadius: '24px 24px 0 0',
+                overflow: 'hidden',
+                boxShadow: '0 -10px 40px rgba(0,0,0,0.35)',
+                backgroundColor: '#FFFFFF'
+              }}
+            >
+              <div style={{ backgroundColor: '#0F2A1D', color: '#FFFFFF', padding: '1.1rem 1.4rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <Utensils size={22} strokeWidth={2.2} color="#FF8A00" />
+                  <h3 style={{ color: '#FFFFFF', fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>
+                    Select Menu Category
+                  </h3>
+                </div>
+                <button className="admin-modal-close" onClick={() => setIsCategoryDrawerOpen(false)} style={{ color: '#FFFFFF' }}>×</button>
+              </div>
+
+              <div style={{ padding: '1.25rem', backgroundColor: '#FAF6EE', maxHeight: '65vh', overflowY: 'auto' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                  {dynamicCategories.map((cat) => {
+                    const isActive = selectedCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(cat.id);
+                          setIsCategoryDrawerOpen(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '1rem 0.6rem',
+                          borderRadius: '14px',
+                          border: '2px solid',
+                          borderColor: isActive ? '#FF8A00' : '#EAE3D2',
+                          backgroundColor: isActive ? '#1E4636' : '#FFFFFF',
+                          color: isActive ? '#FFFFFF' : '#0F2A1D',
+                          fontWeight: 800,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          boxShadow: isActive ? '0 6px 16px rgba(30,70,54,0.35)' : '0 2px 6px rgba(0,0,0,0.03)',
+                          transition: 'all 0.15s ease',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <span style={{ fontSize: '1.6rem' }}>{cat.icon}</span>
+                        <span style={{ textAlign: 'center', lineHeight: 1.2 }}>{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ padding: '0.85rem 1.4rem', backgroundColor: '#FFFFFF', borderTop: '1px solid #EAE3D2', textAlign: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setIsCategoryDrawerOpen(false)}
+                  style={{ width: '100%', borderRadius: '10px', fontWeight: 800, padding: '0.65rem', borderColor: '#1E4636', color: '#1E4636' }}
+                >
+                  Close Category Menu
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dish Detailed Info Modal */}
+        {selectedDishForDetail && (
+          <CustomerDishDetailModal
+            dish={selectedDishForDetail}
+            onClose={() => setSelectedDishForDetail(null)}
+            onAddToCart={(dishObj, qty) => {
+              const id = dishObj.id || dishObj._id;
+              const currentQty = cart[id] || 0;
+              const newCart = { ...cart, [id]: currentQty + qty };
+              updateCartState(newCart);
+            }}
+            language={currentLanguage}
+          />
+        )}
+
+        {/* Real-time Order Tracking Modal */}
+        {isOrderTrackingOpen && (
+          <CustomerOrderTrackingModal
+            activeOrder={placedTableOrders[0] || null}
+            tableNum={tableNum}
+            onClose={() => setIsOrderTrackingOpen(false)}
+            onAddMoreItems={() => setIsOrderTrackingOpen(false)}
+            onViewBill={() => {
+              setIsOrderTrackingOpen(false);
+              setIsBillModalOpen(true);
+            }}
+          />
+        )}
+
+        {/* Live Running Bill Modal */}
+        {isBillModalOpen && (
+          <CustomerBillModal
+            activeOrder={placedTableOrders[0] || null}
+            tableNum={tableNum}
+            onClose={() => setIsBillModalOpen(false)}
+            onPaymentSuccess={() => setAppliedCoupon(null)}
+            appliedCoupon={appliedCoupon}
+            setAppliedCoupon={setAppliedCoupon}
+            loyaltyPoints={250}
+            brandSettings={{ brandName }}
+          />
+        )}
+
+        {/* Engagement Modal */}
+        {isEngagementModalOpen && (
+          <CustomerEngagementModal
+            activeTab={engagementTab}
+            onClose={() => setIsEngagementModalOpen(false)}
+            activeOrder={placedTableOrders[0] || null}
+            tableNum={tableNum}
+            currentLanguage={currentLanguage}
+            onLanguageChange={(lang) => setCurrentLanguage(lang)}
+          />
+        )}
+
+        {/* Customer Mobile Bottom Nav */}
+        <CustomerBottomNav
+          activeTab={customerNavTab}
+          onSelectTab={(tab) => {
+            setCustomerNavTab(tab);
+            if (tab === 'menu') {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else if (tab === 'orders') {
+              setIsOrderTrackingOpen(true);
+            } else if (tab === 'bill') {
+              setIsBillModalOpen(true);
+            } else if (tab === 'more') {
+              setEngagementTab('rating');
+              setIsEngagementModalOpen(true);
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="menu-page" style={{ position: 'relative', backgroundColor: '#FFFDF8', color: '#1A202C', paddingTop: isFixedTableBarActive ? '48px' : '0', paddingBottom: totalCartCount > 0 ? '6rem' : '0' }}>
 
@@ -716,37 +930,19 @@ export default function MenuPage({ onOpenDemoModal }) {
 
       {/* ================= CUSTOMER SEATED QR BADGE STRIP (SINGLE LINE FIT AT TOP) ================= */}
       {isFixedTableBarActive && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '50px',
-            left: 0,
-            right: 0,
-            zIndex: 9999,
-            height: '46px',
-            backgroundColor: '#0F2A1D',
-            color: '#FFFFFF',
-            padding: '0 0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'nowrap',
-            gap: '0.5rem',
-            boxShadow: '0 4px 14px rgba(15, 42, 29, 0.22)'
-          }}
-        >
+        <div className="customer-seated-bar">
           {/* Left Side: Table Badge & Seated Text */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, flexShrink: 1 }}>
-            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
               Table {tableNum}
             </span>
-            <span style={{ fontSize: '0.76rem', color: '#C8E6C9', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontSize: '0.75rem', color: '#C8E6C9', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               📍 Seated
             </span>
           </div>
 
           {/* Right Side: My Orders (if any) + Cart Button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
             {placedTableOrders.length > 0 && (
               <button
                 type="button"
@@ -755,14 +951,14 @@ export default function MenuPage({ onOpenDemoModal }) {
                   backgroundColor: '#F2C14E',
                   color: '#0F2A1D',
                   border: 'none',
-                  padding: '0.25rem 0.6rem',
+                  padding: '0.25rem 0.55rem',
                   borderRadius: '8px',
-                  fontSize: '0.75rem',
+                  fontSize: '0.74rem',
                   fontWeight: 800,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.3rem',
+                  gap: '0.25rem',
                   whiteSpace: 'nowrap'
                 }}
               >
@@ -779,14 +975,14 @@ export default function MenuPage({ onOpenDemoModal }) {
                 backgroundColor: '#B91C1C',
                 color: '#FFFFFF',
                 border: '1px solid rgba(255,255,255,0.3)',
-                padding: '0.3rem 0.85rem',
+                padding: '0.25rem 0.75rem',
                 borderRadius: '9999px',
-                fontSize: '0.78rem',
+                fontSize: '0.76rem',
                 fontWeight: 800,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.3rem',
                 whiteSpace: 'nowrap',
                 boxShadow: '0 2px 8px rgba(185, 28, 28, 0.4)'
               }}
@@ -920,11 +1116,11 @@ export default function MenuPage({ onOpenDemoModal }) {
       </section>
 
       {/* ================= 2. SEARCH & VEG TOGGLE BAR ================= */}
-      <section style={{ backgroundColor: '#FAF6EE', padding: '1.25rem 1.5rem', borderBottom: '1px dashed #E2D7C5' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexWrap: 'nowrap', gap: '0.85rem', alignItems: 'center', justifyContent: 'space-between' }}>
+      <section style={{ backgroundColor: '#FAF6EE', padding: '1rem 1.25rem', borderBottom: '1px dashed #E2D7C5' }}>
+        <div className="customer-filter-bar-container" style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
           {/* Search Box */}
-          <div style={{ position: 'relative', flexGrow: 1, minWidth: 0 }}>
+          <div style={{ position: 'relative', flexGrow: 1, minWidth: 0, width: '100%' }}>
             <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
             <input
               type="text"
@@ -947,115 +1143,126 @@ export default function MenuPage({ onOpenDemoModal }) {
             />
           </div>
 
-          {/* Veg Only Toggle Switch (Matching Reference Image 2) */}
-          <div
-            onClick={() => setVegOnly(!vegOnly)}
-            title={vegOnly ? "Showing Veg Only dishes (Click to show all)" : "Click to filter Veg Only dishes"}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#FFFFFF',
-              padding: '0.45rem 0.85rem',
-              borderRadius: '16px',
-              border: '1.5px solid #CBD5E1',
-              cursor: 'pointer',
-              userSelect: 'none',
-              flexShrink: 0,
-              boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
-            }}
-          >
-            {/* Horizontal Pill Track */}
+          {/* Filters Group (Veg Toggle + Price Dropdown + Spice Level Dropdown) */}
+          <div className="customer-filter-scroll-group">
+
+            {/* Veg Only Toggle Switch */}
             <div
+              onClick={() => setVegOnly(!vegOnly)}
+              title={vegOnly ? "Showing Veg Only dishes (Click to show all)" : "Click to filter Veg Only dishes"}
               style={{
-                width: '46px',
-                height: '16px',
-                borderRadius: '10px',
-                backgroundColor: vegOnly ? '#DCFCE7' : '#E2E8F0',
-                position: 'relative',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                transition: 'background-color 0.25s ease'
+                justifyContent: 'center',
+                backgroundColor: '#FFFFFF',
+                padding: '0.45rem 0.85rem',
+                borderRadius: '16px',
+                border: '1.5px solid #CBD5E1',
+                cursor: 'pointer',
+                userSelect: 'none',
+                flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                height: '42px',
+                boxSizing: 'border-box'
               }}
             >
-              {/* Sliding Green Veg Square Knob */}
+              {/* Horizontal Pill Track */}
               <div
                 style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '7px',
-                  border: '2px solid #166534',
-                  backgroundColor: '#FFFFFF',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                  position: 'absolute',
-                  top: '-4px',
-                  left: vegOnly ? '24px' : '-2px',
-                  transition: 'left 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                  width: '46px',
+                  height: '16px',
+                  borderRadius: '10px',
+                  backgroundColor: vegOnly ? '#DCFCE7' : '#E2E8F0',
+                  position: 'relative',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  transition: 'background-color 0.25s ease'
                 }}
               >
-                {/* Center Green Dot */}
+                {/* Sliding Green Veg Square Knob */}
                 <div
                   style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    backgroundColor: '#166534'
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '7px',
+                    border: '2px solid #166534',
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                    position: 'absolute',
+                    top: '-4px',
+                    left: vegOnly ? '24px' : '-2px',
+                    transition: 'left 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
-                />
+                >
+                  {/* Center Green Dot */}
+                  <div
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: '#166534'
+                    }}
+                  />
+                </div>
               </div>
             </div>
+
+            {/* Price Range Filter Dropdown */}
+            <select
+              value={priceFilter}
+              onChange={(e) => setPriceFilter(e.target.value)}
+              style={{
+                padding: '0.45rem 0.85rem',
+                borderRadius: '16px',
+                border: '1.5px solid #CBD5E1',
+                backgroundColor: '#FFFFFF',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                color: '#334155',
+                cursor: 'pointer',
+                outline: 'none',
+                height: '42px',
+                flexShrink: 0,
+                boxSizing: 'border-box'
+              }}
+            >
+              <option value="all">💰 All Prices</option>
+              <option value="under200">Under ₹200</option>
+              <option value="under500">Under ₹500</option>
+              <option value="500plus">₹500+</option>
+              <option value="lowHigh">Price: Low to High</option>
+              <option value="highLow">Price: High to Low</option>
+            </select>
+
+            {/* Spice Level Filter Dropdown */}
+            <select
+              value={spiceFilter}
+              onChange={(e) => setSpiceFilter(e.target.value)}
+              style={{
+                padding: '0.45rem 0.85rem',
+                borderRadius: '16px',
+                border: '1.5px solid #CBD5E1',
+                backgroundColor: '#FFFFFF',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                color: '#334155',
+                cursor: 'pointer',
+                outline: 'none',
+                height: '42px',
+                flexShrink: 0,
+                boxSizing: 'border-box'
+              }}
+            >
+              <option value="all">🌶️ All Spice Levels</option>
+              <option value="Mild">Mild</option>
+              <option value="Medium">Medium</option>
+              <option value="Spicy">Spicy</option>
+            </select>
+
           </div>
-
-          {/* Price Range Filter Dropdown */}
-          <select
-            value={priceFilter}
-            onChange={(e) => setPriceFilter(e.target.value)}
-            style={{
-              padding: '0.45rem 0.85rem',
-              borderRadius: '16px',
-              border: '1.5px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              color: '#334155',
-              cursor: 'pointer',
-              outline: 'none',
-              height: '42px'
-            }}
-          >
-            <option value="all">💰 All Prices</option>
-            <option value="under200">Under ₹200</option>
-            <option value="under500">Under ₹500</option>
-            <option value="500plus">₹500+</option>
-            <option value="lowHigh">Price: Low to High</option>
-            <option value="highLow">Price: High to Low</option>
-          </select>
-
-          {/* Spice Level Filter Dropdown */}
-          <select
-            value={spiceFilter}
-            onChange={(e) => setSpiceFilter(e.target.value)}
-            style={{
-              padding: '0.45rem 0.85rem',
-              borderRadius: '16px',
-              border: '1.5px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              color: '#334155',
-              cursor: 'pointer',
-              outline: 'none',
-              height: '42px'
-            }}
-          >
-            <option value="all">🌶️ All Spice Levels</option>
-            <option value="Mild">Mild</option>
-            <option value="Medium">Medium</option>
-            <option value="Spicy">Spicy</option>
-          </select>
 
         </div>
       </section>
@@ -1261,27 +1468,7 @@ export default function MenuPage({ onOpenDemoModal }) {
         type="button"
         onClick={() => setIsCategoryDrawerOpen(true)}
         aria-label="Open Menu Categories"
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          zIndex: 9999,
-          width: '58px',
-          height: '58px',
-          borderRadius: '50%',
-          backgroundColor: '#FF7A00',
-          backgroundImage: 'linear-gradient(135deg, #FF8A00 0%, #FF6800 100%)',
-          color: '#FFFFFF',
-          boxShadow: '0 8px 25px rgba(255, 122, 0, 0.45)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: '2.5px solid #FFFFFF',
-          cursor: 'pointer',
-          transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), boxShadow 0.2s ease',
-          animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-          padding: 0
-        }}
+        className="customer-floating-menu-btn"
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'scale(1.08)';
           e.currentTarget.style.boxShadow = '0 12px 32px rgba(255, 122, 0, 0.6)';
@@ -1291,7 +1478,7 @@ export default function MenuPage({ onOpenDemoModal }) {
           e.currentTarget.style.boxShadow = '0 8px 25px rgba(255, 122, 0, 0.45)';
         }}
       >
-        <UtensilsCrossed size={28} strokeWidth={2.4} color="#FFFFFF" />
+        <UtensilsCrossed size={26} strokeWidth={2.4} color="#FFFFFF" />
       </button>
 
 
@@ -1653,14 +1840,66 @@ export default function MenuPage({ onOpenDemoModal }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {placedTableOrders.map((ord, idx) => {
                     const itemsList = Array.isArray(ord.items) ? ord.items : [];
-                    const calculatedSum = itemsList.reduce((acc, it) => {
+                    
+                    // Filter active non-cancelled items for total calculation
+                    const activeItems = itemsList.filter(it => it.status !== 'CANCELLED' && it.status !== 'Cancelled');
+                    const calculatedSum = activeItems.reduce((acc, it) => {
                       const q = Number(it.quantity || it.qty || it.count || 1);
                       const rawP = Number(it.price || it.unitPrice || 0);
                       const catalogMatch = (menuItems || []).find(m => (m.name || '').toLowerCase() === (it.name || '').toLowerCase());
                       const fp = rawP > 0 ? rawP : (catalogMatch ? Number(catalogMatch.price || 0) : 0);
                       return acc + (fp * q);
                     }, 0);
-                    const displayTotal = Number(ord.totalAmount || ord.total || calculatedSum);
+
+                    const displayTotal = calculatedSum;
+
+                    // Collect unique cancelled dish names for explicit display
+                    const cancelledNames = [];
+
+                    itemsList.forEach(it => {
+                      if (it.status === 'CANCELLED' || it.status === 'Cancelled') {
+                        const name = it.name;
+                        if (name && name !== 'Dish Item' && !cancelledNames.includes(name)) {
+                          cancelledNames.push(name);
+                        }
+                      }
+                    });
+
+                    const noteText = ord.chefNotes || ord.notes || '';
+                    if (noteText.includes('Cancelled dishes:')) {
+                      const match = noteText.match(/Cancelled dishes:\s*([^|(]+)/i);
+                      if (match && match[1]) {
+                        const parts = match[1].split(',').map(s => s.trim()).filter(Boolean);
+                        parts.forEach(p => {
+                          let resolved = p;
+                          if (/^[0-9a-fA-F]{24}$/.test(p)) {
+                            const matchInItems = (ord.items || []).find(i => String(i._id || i.id || i.itemId || i.dishId || '') === p);
+                            if (matchInItems && matchInItems.name) resolved = matchInItems.name;
+                            else {
+                              const matchInCat = (menuItems || []).find(m => String(m._id || m.id || m.rawId || m.dishId || '') === p);
+                              if (matchInCat && matchInCat.name) resolved = matchInCat.name;
+                              else resolved = '';
+                            }
+                          }
+                          if (resolved && resolved !== 'Dish Item' && !cancelledNames.includes(resolved)) {
+                            cancelledNames.push(resolved);
+                          }
+                        });
+                      }
+                    }
+
+                    // Filter out cancellation metadata from chef notes
+                    const cleanChefNote = (() => {
+                      const n = (ord.chefNotes || ord.notes || '').trim();
+                      if (!n) return '';
+                      const parts = n.split('|').map(p => p.trim()).filter(p => 
+                        p && 
+                        !p.toLowerCase().includes('cancelled dishes') && 
+                        !p.toLowerCase().includes('customer changed mind') && 
+                        !p.toLowerCase().includes('dish item')
+                      );
+                      return parts.join(' | ');
+                    })();
 
                     return (
                       <div key={ord.orderId || idx} style={{ backgroundColor: '#FAF6EE', border: '1.5px solid #EAE3D2', borderRadius: '14px', padding: '1rem 1.1rem' }}>
@@ -1677,24 +1916,49 @@ export default function MenuPage({ onOpenDemoModal }) {
                         {/* Items List */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.65rem' }}>
                           {itemsList.map((it, i) => {
+                            const isCancelledItem = it.status === 'CANCELLED' || it.status === 'Cancelled';
                             const qty = Number(it.quantity || it.qty || it.count || 1);
                             const rawP = Number(it.price || it.unitPrice || 0);
                             const catalogMatch = (menuItems || []).find(m => (m.name || '').toLowerCase() === (it.name || '').toLowerCase());
                             const price = rawP > 0 ? rawP : (catalogMatch ? Number(catalogMatch.price || 0) : 0);
                             const itemTotal = price * qty;
+                            const itemName = it.name || 'Dish';
 
                             return (
-                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', color: '#334155' }}>
-                                <span><strong style={{ color: '#E07A3C', marginRight: '0.35rem' }}>{qty}x</strong> {it.name}</span>
-                                <span style={{ fontWeight: 700, color: '#1E4636' }}>₹{itemTotal}</span>
+                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.86rem', color: isCancelledItem ? '#94A3B8' : '#334155' }}>
+                                <span style={{ textDecoration: isCancelledItem ? 'line-through' : 'none' }}>
+                                  <strong style={{ color: isCancelledItem ? '#94A3B8' : '#E07A3C', marginRight: '0.35rem' }}>{qty}x</strong>
+                                  {itemName}
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span style={{ fontWeight: 700, color: isCancelledItem ? '#94A3B8' : '#1E4636', textDecoration: isCancelledItem ? 'line-through' : 'none' }}>₹{itemTotal}</span>
+                                  {isCancelledItem && (
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 800, backgroundColor: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5', padding: '0.15rem 0.45rem', borderRadius: '6px' }}>
+                                      ❌ Cancelled
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
                         </div>
 
-                        {ord.chefNotes && (
+                        {/* Explicit Cancelled Items Block */}
+                        {cancelledNames.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.4rem', marginBottom: '0.65rem', padding: '0.5rem 0.65rem', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px' }}>
+                            {cancelledNames.map((name, cIdx) => (
+                              <div key={cIdx} style={{ fontSize: '0.82rem', fontWeight: 800, color: '#991B1B', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <span>🔴 Cancelled:</span>
+                                <span style={{ fontWeight: 900 }}>{name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Optional Custom Chef Note */}
+                        {cleanChefNote && (
                           <div style={{ fontSize: '0.78rem', color: '#9A3412', backgroundColor: '#FFF7ED', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.65rem' }}>
-                            📝 Note: {ord.chefNotes}
+                            📝 Note: {cleanChefNote}
                           </div>
                         )}
 
@@ -1815,9 +2079,6 @@ export default function MenuPage({ onOpenDemoModal }) {
             setIsEngagementModalOpen(true);
           }
         }}
-        cartCount={totalCartCount}
-        cartTotal={totalCartPrice}
-        onOpenCart={() => setIsCheckoutModalOpen(true)}
       />
 
     </div>

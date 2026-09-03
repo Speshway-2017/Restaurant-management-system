@@ -245,7 +245,7 @@ export default function ManagerTablesPage() {
 
     // Default dynamic scannable QR link (Uses local Wi-Fi IP address 192.168.1.34 for mobile accessibility)
     const host = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? '192.168.108.1'
+      ? '192.168.1.4'
       : window.location.hostname;
     const port = window.location.port ? `:${window.location.port}` : ':5173';
     const targetLink = `${window.location.protocol}//${host}${port}/menu?table=${encodeURIComponent(tbl.num)}`;

@@ -223,16 +223,23 @@ const mergeTables = async (req, res) => {
     const primaryTable = tables.find(t => t.number === primaryTableNum);
     if (!primaryTable) return res.status(404).json({ success: false, message: 'Primary table not found.' });
 
-    // Link secondary tables to primary table
-    for (let t of tables) {
-      if (t.number !== primaryTableNum) {
-        t.mergedWith = [primaryTableNum];
-        await t.save();
-      }
-    }
+    const activeSession = await TableSession.findOne({ tableNum: primaryTableNum, status: 'ACTIVE' });
+    const mergeGroupId = `MG-${Date.now()}`;
 
-    primaryTable.mergedWith = secondaryTableNums;
-    await primaryTable.save();
+    // Link secondary tables and set status to Occupied for all merged tables
+    for (let t of tables) {
+      t.status = 'Occupied';
+      if (activeSession) {
+        t.activeSessionId = activeSession._id.toString();
+        t.mergeGroupId = mergeGroupId;
+      }
+      if (t.number !== primaryTableNum) {
+        t.mergedWith = [primaryTableNum, ...secondaryTableNums.filter(n => n !== t.number)];
+      } else {
+        t.mergedWith = secondaryTableNums;
+      }
+      await t.save();
+    }
 
     res.json({ success: true, message: `Tables ${allTableNums.join(' + ')} merged successfully!`, primaryTable });
   } catch (error) {
@@ -281,6 +288,19 @@ const transferTable = async (req, res) => {
     if (activeSession) {
       activeSession.tableNum = toTableNum;
       await activeSession.save();
+    }
+
+    // Move active open/unpaid orders to target table in MongoDB
+    const cleanFromDigits = String(fromTableNum).replace(/[^0-9]/g, '');
+    if (cleanFromDigits) {
+      const fromRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanFromDigits}$`, 'i');
+      await Order.updateMany(
+        {
+          $or: [{ table: fromTableNum }, { table: fromRegex }],
+          status: { $nin: ['Completed', 'Paid', 'Cancelled'] }
+        },
+        { table: toTableNum }
+      );
     }
 
     // Update table statuses

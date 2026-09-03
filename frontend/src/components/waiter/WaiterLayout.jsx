@@ -66,6 +66,65 @@ export default function WaiterLayout({ setActivePage }) {
     return () => clearInterval(timer);
   }, []);
   const profileMenuRef = useRef(null);
+  const notifMenuRef = useRef(null);
+  const [notifMenuOpen, setNotifMenuOpen] = useState(false);
+  const [notificationsList, setNotificationsList] = useState([]);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const [orders, assistance] = await Promise.all([
+          api.getOrders().catch(() => []),
+          api.getAssistanceRequests().catch(() => [])
+        ]);
+
+        const notifs = [];
+
+        // 1. Order Ready Alerts
+        (orders || []).forEach(ord => {
+          const readyItems = (ord.items || []).filter(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'DELIVERED');
+          if (ord.status === 'Ready' || readyItems.length > 0) {
+            notifs.push({
+              id: `notif-ready-${ord.orderId || ord._id}`,
+              type: 'ORDER_READY',
+              title: `🔔 Order Ready - ${ord.table || 'T-01'}`,
+              message: `${readyItems.length || 'All'} dish(es) ready for pickup on ${ord.orderId || 'Order'}`,
+              time: ord.time || 'Just now',
+              table: ord.table,
+              isRead: false
+            });
+          }
+        });
+
+        // 2. Customer Assistance Requests
+        (assistance || []).filter(a => a.status === 'NEW' || a.status === 'ACKNOWLEDGED').forEach(ast => {
+          notifs.push({
+            id: `notif-ast-${ast._id}`,
+            type: 'ASSISTANCE',
+            title: `🙋 Customer Assistance - ${ast.table}`,
+            message: `Requested: ${ast.requestType}${ast.note ? ` (${ast.note})` : ''}`,
+            time: new Date(ast.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            table: ast.table,
+            isRead: ast.status === 'ACKNOWLEDGED'
+          });
+        });
+
+        setNotificationsList(notifs);
+      } catch (e) {
+        console.error('Failed to fetch notifications', e);
+      }
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 4000);
+    window.addEventListener('flavora_orders_updated', fetchNotifications);
+    window.addEventListener('flavora_tables_updated', fetchNotifications);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('flavora_orders_updated', fetchNotifications);
+      window.removeEventListener('flavora_tables_updated', fetchNotifications);
+    };
+  }, []);
 
   const [waiterProfile, setWaiterProfile] = useState({
     name: 'Waiter Ravi',
@@ -357,15 +416,73 @@ export default function WaiterLayout({ setActivePage }) {
               );
             })()}
 
-            {/* Notifications Bell */}
-            <div className="admin-header-icon-btn-wrapper">
+            {/* Notifications Bell & Dropdown */}
+            <div className="admin-header-icon-btn-wrapper" ref={notifMenuRef} style={{ position: 'relative' }}>
               <button 
                 className="admin-header-icon-btn" 
                 aria-label="Notifications"
+                onClick={() => setNotifMenuOpen(!notifMenuOpen)}
+                style={{ position: 'relative', cursor: 'pointer' }}
               >
                 <Bell size={19} color="#1E4636" />
-                <span className="admin-notif-dot">3</span>
+                {notificationsList.filter(n => !n.isRead).length > 0 && (
+                  <span className="admin-notif-dot" style={{ backgroundColor: '#DC2626', color: '#FFFFFF', fontSize: '0.68rem', fontWeight: 900, padding: '0.1rem 0.35rem', borderRadius: '10px', minWidth: '16px', textAlign: 'center' }}>
+                    {notificationsList.filter(n => !n.isRead).length}
+                  </span>
+                )}
               </button>
+
+              {notifMenuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '125%',
+                  right: 0,
+                  width: '320px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  boxShadow: '0 12px 35px rgba(0,0,0,0.18)',
+                  border: '1px solid #E2E8F0',
+                  padding: '1rem',
+                  zIndex: 99999
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0F2A1D' }}>Live Notifications</span>
+                    <span style={{ fontSize: '0.72rem', color: '#E07A3C', fontWeight: 800 }}>
+                      {notificationsList.filter(n => !n.isRead).length} Active
+                    </span>
+                  </div>
+
+                  {notificationsList.length === 0 ? (
+                    <div style={{ padding: '1rem 0', textAlign: 'center', color: '#64748B', fontSize: '0.8rem' }}>
+                      No active notifications right now.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '280px', overflowY: 'auto' }}>
+                      {notificationsList.map(n => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            setNotifMenuOpen(false);
+                            if (n.type === 'ORDER_READY') handleTabChange('waiter-orders');
+                            if (n.type === 'ASSISTANCE') handleTabChange('waiter-dashboard');
+                          }}
+                          style={{
+                            padding: '0.65rem 0.75rem',
+                            backgroundColor: n.type === 'ORDER_READY' ? '#F0FDF4' : '#FFF7ED',
+                            border: `1px solid ${n.type === 'ORDER_READY' ? '#86EFAC' : '#FDBA74'}`,
+                            borderRadius: '10px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <div style={{ fontSize: '0.8rem', fontWeight: 900, color: '#0F2A1D' }}>{n.title}</div>
+                          <div style={{ fontSize: '0.74rem', color: '#475569', marginTop: '0.15rem' }}>{n.message}</div>
+                          <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '0.2rem', textAlign: 'right' }}>{n.time}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Waiter User Profile Card */}

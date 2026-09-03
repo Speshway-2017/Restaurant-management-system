@@ -3,7 +3,8 @@ import {
   TrendingUp, ShoppingBag, DollarSign, Users, Table2, Clock,
   CheckCircle2, AlertCircle, Eye, Plus, Utensils, X,
   ChevronRight, Sparkles, ShieldCheck, Ticket, UserCheck, Bell, RefreshCw,
-  ArrowUpRight, ArrowDownRight, Layers, LayoutGrid, Check, Search, Calendar, Receipt
+  ArrowUpRight, ArrowDownRight, Layers, LayoutGrid, Check, Search, Calendar, Receipt,
+  MessageSquare, Flame, CheckSquare, CornerDownRight
 } from 'lucide-react';
 import { api } from '../../services/api';
 
@@ -13,48 +14,10 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
   const [activeOrders, setActiveOrders] = useState([]);
   const [tablesList, setTablesList] = useState([]);
-
-  const handleTableStatusChange = async (tableNum, newStatus) => {
-    try {
-      setTablesList(prev => prev.map(t => {
-        const tNum = t.num || t.number || `T-${String(t.id || 1).padStart(2, '0')}`;
-        if (tNum === tableNum) {
-          return { ...t, status: newStatus };
-        }
-        return t;
-      }));
-
-      let savedTables = [];
-      try {
-        const raw = localStorage.getItem('flavora_tables');
-        if (raw) savedTables = JSON.parse(raw);
-      } catch (e) { }
-
-      let updated = false;
-      const updatedList = savedTables.map(t => {
-        const tNum = t.num || t.number || `T-${String(t.id || 1).padStart(2, '0')}`;
-        if (tNum === tableNum) {
-          updated = true;
-          return { ...t, status: newStatus };
-        }
-        return t;
-      });
-
-      if (!updated) {
-        updatedList.push({ num: tableNum, status: newStatus, zone: 'Main Dining', cap: 4 });
-      }
-
-      localStorage.setItem('flavora_tables', JSON.stringify(updatedList));
-      window.dispatchEvent(new Event('flavora_tables_updated'));
-
-      const dbTable = tablesList.find(t => (t.num || t.number) === tableNum);
-      if (dbTable && dbTable.id) {
-        await api.updateTableStatus(dbTable.id, newStatus).catch(() => { });
-      }
-    } catch (e) {
-      console.error('Failed to change table status', e);
-    }
-  };
+  const [assistanceRequests, setAssistanceRequests] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
+  const [dismissedUpsells, setDismissedUpsells] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Live time ticker matching Manager Dashboard
   useEffect(() => {
@@ -67,22 +30,28 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch waiter orders and tables
+  // Fetch waiter dashboard data (tables, orders, assistance requests, menu)
+  const fetchWaiterData = async () => {
+    try {
+      const [dbTables, dbOrders, dbAssistance, dbMenu] = await Promise.all([
+        api.getTables().catch(() => []),
+        api.getOrders().catch(() => []),
+        api.getAssistanceRequests().catch(() => []),
+        api.getMenuItems().catch(() => [])
+      ]);
+
+      setTablesList(dbTables || []);
+      setActiveOrders(dbOrders || []);
+      setAssistanceRequests(dbAssistance || []);
+      setMenuItems(dbMenu || []);
+    } catch (e) {
+      console.error('Failed to fetch waiter dashboard data', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchWaiterData = async () => {
-      try {
-        const [dbTables, dbOrders] = await Promise.all([
-          api.getTables().catch(() => []),
-          api.getOrders().catch(() => [])
-        ]);
-
-        setTablesList(dbTables || []);
-        setActiveOrders(dbOrders || []);
-      } catch (e) {
-        console.error('Failed to fetch waiter dashboard data', e);
-      }
-    };
-
     fetchWaiterData();
     const interval = setInterval(fetchWaiterData, 4000);
     window.addEventListener('flavora_orders_updated', fetchWaiterData);
@@ -107,49 +76,61 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
 
     try {
       await api.updateOrderItemStatus(targetOrderId, targetItemIds, 'DELIVERED');
-    } catch (e) { }
-
-    const updatedOrders = activeOrders.map(o => {
-      if (o.id === order.id || o._id === order._id || o.orderId === order.orderId) {
-        const newItems = (o.items || []).map((it, idx) => {
-          const itId = it._id || it.id || it.itemId || idx;
-          const isTarget = targetItemIds.includes(itId) || targetItemIds.includes(idx);
-          if (isTarget) {
-            return { ...it, status: 'DELIVERED', isDelivered: true, isReady: true };
-          }
-          return it;
-        });
-
-        const totalCount = newItems.length;
-        const deliveredCount = newItems.filter(i => i.status === 'DELIVERED' || i.isDelivered).length;
-        const newStatus = (totalCount > 0 && deliveredCount === totalCount) ? 'Served' : (deliveredCount > 0 ? 'PARTIALLY DELIVERED' : o.status);
-
-        return {
-          ...o,
-          items: newItems,
-          status: newStatus
-        };
-      }
-      return o;
-    });
-
-    setActiveOrders(updatedOrders);
-    try {
-      localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedOrders));
+      fetchWaiterData();
       window.dispatchEvent(new Event('flavora_orders_updated'));
       window.dispatchEvent(new Event('flavora_tables_updated'));
-    } catch (e) { }
+    } catch (e) {
+      console.error('Failed to deliver ready dishes', e);
+    }
+  };
+
+  const handleUpdateAssistanceStatus = async (id, status) => {
+    try {
+      await api.updateAssistanceStatus(id, status);
+      fetchWaiterData();
+    } catch (e) {
+      console.error('Failed to update assistance status', e);
+    }
+  };
+
+  const handleAddUpsellToOrder = async (order, menuItem) => {
+    try {
+      const existingItems = Array.isArray(order.items) ? order.items : [];
+      const updatedItems = [
+        ...existingItems,
+        {
+          id: menuItem._id || menuItem.id || `item-${Date.now()}`,
+          name: menuItem.name || menuItem.title,
+          price: Number(menuItem.price) || 0,
+          quantity: 1,
+          status: 'PLACED',
+          isReady: false,
+          isDelivered: false
+        }
+      ];
+
+      const newTotal = updatedItems.reduce((sum, i) => sum + ((i.price || 0) * (i.quantity || 1)), 0);
+
+      await api.updateOrderStatus(order.orderId || order._id || order.id, order.status, {
+        items: updatedItems,
+        total: newTotal,
+        finalAmount: newTotal
+      });
+
+      fetchWaiterData();
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+    } catch (e) {
+      console.error('Failed to add upsell item to order', e);
+    }
   };
 
   // Calculations for Waiter KPIs
   const liveOrders = activeOrders.filter(o => o.status !== 'Completed' && o.status !== 'Cancelled');
   const pendingOrders = activeOrders.filter(o => o.status === 'Placed' || o.status === 'Preparing');
-  const totalSalesNum = activeOrders.reduce((sum, o) => sum + (o.totalAmount || o.total || 0), 0);
-  const formattedSales = `₹${totalSalesNum.toLocaleString('en-IN')}`;
-
   const occupiedTablesCount = tablesList.filter(t => t.status === 'Occupied' || t.isOccupied).length;
-  const assignedCount = occupiedTablesCount;
   const totalAssignedCount = tablesList.length;
+
+  const activeAssistance = assistanceRequests.filter(a => a.status === 'NEW' || a.status === 'ACKNOWLEDGED');
 
   const waiterKpis = [
     {
@@ -177,8 +158,8 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
     {
       id: 'assigned_tables',
       label: "ASSIGNED TABLES",
-      value: `${assignedCount} / ${totalAssignedCount} Tables`,
-      change: `↗ ${assignedCount} Active`,
+      value: `${occupiedTablesCount} / ${totalAssignedCount} Tables`,
+      change: `↗ ${occupiedTablesCount} Occupied`,
       isPositive: true,
       isHighlighted: false,
       badgeColor: "#283593",
@@ -186,15 +167,15 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
       icon: Layers
     },
     {
-      id: 'pending_orders',
-      label: "PENDING ORDERS",
-      value: `${pendingOrders.length} Orders`,
-      change: pendingOrders.length > 0 ? "↗ Needs Attention" : "0 Pending",
+      id: 'customer_requests',
+      label: "CUSTOMER REQUESTS",
+      value: `${activeAssistance.length} Requests`,
+      change: activeAssistance.length > 0 ? "⚡ Needs Response" : "0 Pending",
       isPositive: false,
       isHighlighted: false,
-      badgeColor: "#00796B",
-      accentBg: "#E0F2F1",
-      icon: Clock
+      badgeColor: "#C2410C",
+      accentBg: "#FFEDD5",
+      icon: Bell
     }
   ];
 
@@ -206,6 +187,13 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
       return o.status === 'Ready' || readyCount > 0;
     }
     return o.status === activeOrderFilter;
+  });
+
+  // Collect all orders with ready items
+  const readyPickupOrders = liveOrders.filter(o => {
+    const itemsList = Array.isArray(o.items) ? o.items : [];
+    const readyCount = itemsList.filter(i => (i.status === 'READY' || i.isReady) && i.status !== 'DELIVERED' && !i.isDelivered).length;
+    return o.status === 'Ready' || readyCount > 0;
   });
 
   return (
@@ -223,12 +211,12 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
             Dashboard Overview
           </h1>
           <p className="admin-page-subtitle" style={{ margin: '0.2rem 0 0 0' }}>
-            Manage your assigned tables, orders, and service activities.
+            Manage assigned tables, live orders, assistance requests, and service activities.
           </p>
         </div>
       </div>
 
-      {/* ================= 2. FOUR KPI CARDS IN EXACTLY ONE ROW (STRICT 4-COLUMN GRID) ================= */}
+      {/* ================= 2. FOUR KPI CARDS (STRICT 4-COLUMN GRID) ================= */}
       <div
         style={{
           display: 'grid',
@@ -257,7 +245,7 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
                   : '0 2px 10px rgba(0, 0, 0, 0.03)',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between'
+                justify: 'space-between'
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
@@ -342,22 +330,176 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
           </button>
 
           <button
-            onClick={() => onNavigateTab && onNavigateTab('waiter-history')}
+            onClick={() => onNavigateTab && onNavigateTab('waiter-orders')}
             style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', color: '#334155', padding: '0.5rem 1rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
           >
             <Receipt size={14} />
-            <span>Order History</span>
+            <span>Billing & Payments</span>
           </button>
         </div>
       </div>
 
-      {/* ================= 4. MY ACTIVE TABLES & ORDERS SECTION ================= */}
+      {/* ================= 4. REAL-TIME CUSTOMER ASSISTANCE REQUESTS ================= */}
+      {activeAssistance.length > 0 && (
+        <div style={{
+          backgroundColor: '#FFF7ED',
+          border: '1.5px solid #FDBA74',
+          borderRadius: '16px',
+          padding: '1.25rem 1.5rem',
+          marginBottom: '1.5rem',
+          boxShadow: '0 4px 15px rgba(224, 122, 60, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Bell size={18} color="#C2410C" />
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#9A3412' }}>
+                CUSTOMER ASSISTANCE REQUESTS ({activeAssistance.length})
+              </h3>
+            </div>
+            <span style={{ fontSize: '0.72rem', backgroundColor: '#FFEDD5', color: '#C2410C', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 800 }}>
+              Live Alerts
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.85rem' }}>
+            {activeAssistance.map((ast) => (
+              <div
+                key={ast._id}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '12px',
+                  padding: '0.85rem 1rem',
+                  border: '1px solid #FED7AA',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: '0.6rem'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '0.95rem', color: '#0F2A1D', fontWeight: 900 }}>Table {ast.table}</strong>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: ast.status === 'NEW' ? '#DC2626' : '#D97706', backgroundColor: ast.status === 'NEW' ? '#FEE2E2' : '#FEF3C7', padding: '0.15rem 0.45rem', borderRadius: '5px' }}>
+                      {ast.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#C2410C', fontWeight: 800, marginTop: '0.25rem' }}>
+                    "{ast.requestType}" {ast.note ? `- ${ast.note}` : ''}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '0.2rem' }}>
+                    {new Date(ast.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {ast.status === 'NEW' && (
+                    <button
+                      onClick={() => handleUpdateAssistanceStatus(ast._id, 'ACKNOWLEDGED')}
+                      style={{ flex: 1, backgroundColor: '#EA580C', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '0.4rem', fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      Acknowledge
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleUpdateAssistanceStatus(ast._id, 'RESOLVED')}
+                    style={{ flex: 1, backgroundColor: '#166534', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '0.4rem', fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    ✓ Resolve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ================= 5. READY FOR PICKUP DEDICATED SECTION ================= */}
+      {readyPickupOrders.length > 0 && (
+        <div style={{
+          backgroundColor: '#F0FDF4',
+          border: '1.5px solid #86EFAC',
+          borderRadius: '16px',
+          padding: '1.25rem 1.5rem',
+          marginBottom: '1.5rem',
+          boxShadow: '0 4px 15px rgba(22, 101, 52, 0.06)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CheckCircle2 size={18} color="#166534" />
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#166534' }}>
+                READY FOR PICKUP ({readyPickupOrders.length} ORDERS)
+              </h3>
+            </div>
+            <span style={{ fontSize: '0.72rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 800 }}>
+              Pass Counter Ready
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.85rem' }}>
+            {readyPickupOrders.map((ord) => {
+              const rawItems = Array.isArray(ord.items) ? ord.items : [];
+              const readyItems = rawItems.filter(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'DELIVERED');
+
+              return (
+                <div
+                  key={ord._id || ord.id || ord.orderId}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '12px',
+                    padding: '0.85rem 1rem',
+                    border: '1px solid #BBF7D0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '0.6rem'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: '0.98rem', color: '#0F2A1D', fontWeight: 900 }}>Table {ord.table}</strong>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#166534', backgroundColor: '#DCFCE7', padding: '0.15rem 0.45rem', borderRadius: '5px' }}>
+                        {ord.orderId || ord.id}
+                      </span>
+                    </div>
+
+                    <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      {readyItems.map((item, idx) => (
+                        <div key={idx} style={{ fontSize: '0.78rem', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <CheckCircle2 size={13} color="#166534" />
+                          <span>{item.quantity || item.qty || 1}x {item.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
+                    <button
+                      onClick={() => onNavigateTab && onNavigateTab('waiter-orders')}
+                      style={{ flex: 1, backgroundColor: '#F1F5F9', color: '#334155', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '0.45rem', fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      View Order
+                    </button>
+                    <button
+                      onClick={() => handleDeliverReadyDishes(ord)}
+                      style={{ flex: 1, backgroundColor: '#166534', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '0.45rem', fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      Mark Served
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ================= 6. RECENT ORDERS GRID ================= */}
       <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', padding: '1.25rem 1.5rem', border: '1px solid #E2E8F0', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Table2 size={18} color="#E07A3C" />
-              <span>Recent Orders </span>
+              <span>Assigned Table Orders</span>
             </h3>
             <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
               Real-time assigned seating and order status tracking
@@ -391,7 +533,13 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
             filteredOrdersList.map((ord, idx) => {
               const rawTable = ord.table || ord.tableNumber || '01';
               const cleanTableNum = String(rawTable).replace(/^Table\s+/i, '');
-              const itemsList = Array.isArray(ord.items) ? ord.items : [];
+              const rawItems = Array.isArray(ord.items) ? ord.items : [];
+              const itemsList = rawItems.filter(i => {
+                if (!i) return false;
+                if (typeof i === 'string') return true;
+                const s = String(i.status || '').toUpperCase().trim();
+                return s !== 'CANCELLED';
+              });
               const totalCount = itemsList.length;
               const readyItems = itemsList.filter(i => (i.status === 'READY' || i.isReady) && i.status !== 'DELIVERED' && !i.isDelivered);
               const deliveredItems = itemsList.filter(i => i.status === 'DELIVERED' || i.isDelivered);
@@ -498,7 +646,7 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
                       onClick={() => onNavigateTab && onNavigateTab('waiter-orders')}
                       style={{ width: '100%', backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.55rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer' }}
                     >
-                      Orders
+                      View Order
                     </button>
                   </div>
                 </div>
@@ -508,7 +656,7 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
             <div style={{ gridColumn: '1 / -1', padding: '2rem 1rem', textAlign: 'center', color: '#64748B', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1px border-dashed #CBD5E1' }}>
               <ShoppingBag size={32} color="#CBD5E1" style={{ marginBottom: '0.4rem' }} />
               <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0F2A1D' }}>No Active Floor Orders</h4>
-              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem' }}>Database has zero orders. New QR orders will appear here automatically.</p>
+              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem' }}>Database has zero active orders. New QR orders will appear here automatically.</p>
             </div>
           )}
         </div>

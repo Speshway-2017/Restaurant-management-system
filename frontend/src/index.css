@@ -6867,11 +6867,11 @@ html:has(.admin-modal-backdrop),
   inset: 0 !important;
   background-color: rgba(0, 0, 0, 0.65) !important;
   backdrop-filter: blur(5px) !important;
-  z-index: 99999 !important;
+  z-index: 1000000 !important;
   display: flex !important;
-  align-items: center !important;
+  align-items: flex-start !important;
   justify-content: center !important;
-  padding: 1rem !important;
+  padding: 5rem 1rem 1.5rem 1rem !important;
   overflow-y: auto !important;
   overscroll-behavior: contain !important;
 }
@@ -8228,3 +8228,152 @@ div[style*="position:fixed"] > div,
   overflow-y: auto !important;
   box-sizing: border-box !important;
 }
+
+/* ==========================================================================
+   CUSTOMER MODULE MOBILE ALIGNMENT & RESPONSIVE DESIGN SYSTEM
+   ========================================================================== */
+
+/* 1. Mobile Filter Bar Layout */
+.customer-filter-bar-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  width: 100%;
+}
+
+.customer-filter-scroll-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .customer-filter-bar-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .customer-filter-scroll-group {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    justify-content: flex-start;
+    scrollbar-width: none;
+  }
+  .customer-filter-scroll-group::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* 2. Floating Menu Button Alignment on Mobile */
+.customer-floating-menu-btn {
+  position: fixed;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  right: 18px;
+  z-index: 9950;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background-color: #FF7A00;
+  background-image: linear-gradient(135deg, #FF8A00 0%, #FF6800 100%);
+  color: #FFFFFF;
+  box-shadow: 0 8px 25px rgba(255, 122, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid #FFFFFF;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  padding: 0;
+}
+
+@media (min-width: 769px) {
+  .customer-floating-menu-btn {
+    bottom: 24px;
+    right: 24px;
+    width: 58px;
+    height: 58px;
+  }
+}
+
+/* 3. Seated Table Bar Mobile Fit */
+.customer-seated-bar {
+  position: fixed;
+  top: 50px;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  height: 46px;
+  background-color: #0F2A1D;
+  color: #FFFFFF;
+  padding: 0 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  box-shadow: 0 4px 14px rgba(15, 42, 29, 0.22);
+}
+
+@media (max-width: 480px) {
+  .customer-seated-bar {
+    padding: 0 0.5rem;
+    height: 42px;
+  }
+}
+
+/* 4. Customer Bottom Nav Alignment */
+.customer-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #FFFFFF;
+  border-top: 1px solid #E2E8F0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  z-index: 9900;
+  padding: 0.35rem 0.5rem calc(0.35rem + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.customer-bottom-nav-tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.customer-bottom-nav-label {
+  font-size: 0.68rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin-top: 0.15rem;
+}
+
+/* 5. Mobile Modals Responsive Container */
+@media (max-width: 640px) {
+  .customer-modal-overlay {
+    padding: 0.5rem !important;
+    align-items: flex-end !important;
+  }
+  .customer-modal-card {
+    border-radius: 24px 24px 0 0 !important;
+    max-height: 88vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
