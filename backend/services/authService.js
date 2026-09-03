@@ -1,61 +1,176 @@
 const userRepository = require('../repositories/userRepository');
 const generateToken = require('../utils/generateToken');
+const User = require('../models/User');
 
 class AuthService {
   async login(email, password) {
-    const User = require('../models/User');
-    let user = await userRepository.findByEmail(email);
-    
+    if (!email || !password) {
+      throw new Error('Invalid email or password');
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    // 1. Ensure default system accounts exist in database
+    await this.ensureDefaultUsersExist();
+
+    // 2. Find user in MongoDB (case insensitive)
+    let user = await User.findOne({
+      email: { $regex: new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') }
+    });
+
+    // 3. If user is not found, check if role keyword matches email and register role account dynamically
     if (!user) {
-      const lower = (email || '').toLowerCase();
-      if (lower.includes('chef')) {
+      if (cleanEmail.includes('admin')) {
         user = await User.create({
-          name: 'Master Chef Vikram',
-          email: lower,
-          password: password || 'chef123',
-          role: 'Chef',
-          phone: '+91 98765 43212',
+          name: 'System Admin',
+          email: cleanEmail,
+          password: password || 'admin123',
+          role: 'Admin',
+          phone: '+91 98765 43210',
           branch: 'Jubilee Hills (Main Branch)',
-          empId: 'CHEF-01'
+          empId: 'FLV-EMP-101'
         });
-      } else if (lower.includes('waiter')) {
-        user = await User.create({
-          name: 'Suresh Kumar',
-          email: lower,
-          password: password || 'waiter123',
-          role: 'Waiter',
-          phone: '+91 98765 88990',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'RMSW-01'
-        });
-      } else if (lower.includes('manager')) {
+      } else if (cleanEmail.includes('manager') || cleanEmail.includes('rmsm')) {
         user = await User.create({
           name: 'Ramesh Sharma',
-          email: lower,
+          email: cleanEmail,
           password: password || 'manager123',
           role: 'Manager',
           phone: '+91 98765 12345',
           branch: 'Jubilee Hills (Main Branch)',
           empId: 'RMSM-01'
         });
-      } else {
-        throw new Error('Invalid email or password');
+      } else if (cleanEmail.includes('chef')) {
+        user = await User.create({
+          name: 'Master Chef Vikram',
+          email: cleanEmail,
+          password: password || 'chef123',
+          role: 'Chef',
+          phone: '+91 98765 43212',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'CHEF-01'
+        });
+      } else if (cleanEmail.includes('waiter')) {
+        user = await User.create({
+          name: 'Suresh Kumar',
+          email: cleanEmail,
+          password: password || 'waiter123',
+          role: 'Waiter',
+          phone: '+91 98765 88990',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSW-01'
+        });
+      } else if (cleanEmail.includes('reception') || cleanEmail.includes('host')) {
+        user = await User.create({
+          name: 'Ananya Roy',
+          email: cleanEmail,
+          password: password || 'receptionist123',
+          role: 'Receptionist',
+          phone: '+91 98765 77665',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSR-01'
+        });
       }
     }
 
+    if (!user) {
+      throw new Error('Invalid email or password');
+    }
+
+    // 4. Verify password against stored hash/password
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       throw new Error('Invalid email or password');
     }
 
+    // 5. Generate JWT Token
     const token = generateToken(user._id, user.role);
-    return {
+
+    const userPayload = {
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
-      token
+      phone: user.phone || '',
+      branch: user.branch || ''
     };
+
+    return {
+      user: userPayload,
+      role: user.role,
+      token,
+      ...userPayload
+    };
+  }
+
+  async ensureDefaultUsersExist() {
+    try {
+      const defaults = [
+        {
+          name: 'Chef Srikanth',
+          email: 'admin@flavorakitchen.in',
+          password: 'admin123password',
+          role: 'Admin',
+          phone: '+91 98765 43210',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'FLV-EMP-101'
+        },
+        {
+          name: 'System Admin',
+          email: 'admin@rms.com',
+          password: 'admin123password',
+          role: 'Admin',
+          phone: '+91 98765 43210',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'FLV-EMP-100'
+        },
+        {
+          name: 'Ramesh Sharma',
+          email: 'manager@flavorakitchen.in',
+          password: 'manager123password',
+          role: 'Manager',
+          phone: '+91 98765 12345',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSM-01'
+        },
+        {
+          name: 'Master Chef Vikram',
+          email: 'chef@flavorakitchen.in',
+          password: 'chef123password',
+          role: 'Chef',
+          phone: '+91 98765 43212',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'CHEF-01'
+        },
+        {
+          name: 'Suresh Kumar',
+          email: 'waiter@flavorakitchen.in',
+          password: 'waiter123password',
+          role: 'Waiter',
+          phone: '+91 98765 88990',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSW-01'
+        },
+        {
+          name: 'Ananya Roy',
+          email: 'receptionist@flavorakitchen.in',
+          password: 'receptionist123password',
+          role: 'Receptionist',
+          phone: '+91 98765 77665',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSR-01'
+        }
+      ];
+
+      for (const d of defaults) {
+        const exists = await User.findOne({ email: d.email });
+        if (!exists) {
+          await User.create(d);
+        }
+      }
+    } catch (err) {
+      console.error('Error ensuring default users exist:', err.message);
+    }
   }
 
   async getProfile(id) {

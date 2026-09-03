@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import DemoModal from './components/DemoModal';
 import { useRestaurantBranding } from './context/RestaurantBrandingContext';
+import { api } from './services/api';
 
 import HomePage from './pages/HomePage';
 import AboutUsPage from './pages/AboutUsPage';
@@ -21,67 +22,126 @@ import ChefLayout from './components/chef/ChefLayout';
 import WaiterLayout from './components/waiter/WaiterLayout';
 import ReceptionistLayout from './components/receptionist/ReceptionistLayout';
 
-export default function App() {
-  const getIsLoggedIn = () => Boolean(
-    sessionStorage.getItem('flavora_logged_in') === 'true' ||
-    sessionStorage.getItem('flavora_auth_token')
-  );
+const getAuthState = () => {
+  const token = sessionStorage.getItem('flavora_auth_token') || localStorage.getItem('flavora_auth_token');
+  const loggedInFlag = sessionStorage.getItem('flavora_logged_in') === 'true' || localStorage.getItem('flavora_logged_in') === 'true';
+  const role = (sessionStorage.getItem('flavora_user_role') || localStorage.getItem('flavora_user_role') || '').toLowerCase().trim();
+  const isAuthenticated = Boolean(loggedInFlag && token && role);
+  return { isAuthenticated, token, role };
+};
 
+const getAuthorizedDashboardPage = (targetRoute) => {
+  const { isAuthenticated, role } = getAuthState();
+  if (!isAuthenticated) return 'login';
+
+  let roleDashboard = 'login';
+  if (role === 'admin') roleDashboard = 'admin';
+  else if (role === 'manager' || role === 'resto manager') roleDashboard = 'manager';
+  else if (role === 'chef' || role === 'head chef') roleDashboard = 'chef';
+  else if (role === 'waiter') roleDashboard = 'waiter';
+  else if (role === 'receptionist' || role === 'host') roleDashboard = 'receptionist';
+
+  if (targetRoute === 'admin') {
+    return role === 'admin' ? 'admin' : roleDashboard;
+  }
+  if (targetRoute === 'manager') {
+    return (role === 'manager' || role === 'resto manager' || role === 'admin') ? 'manager' : roleDashboard;
+  }
+  if (targetRoute === 'chef') {
+    return (role === 'chef' || role === 'head chef' || role === 'admin') ? 'chef' : roleDashboard;
+  }
+  if (targetRoute === 'waiter') {
+    return (role === 'waiter' || role === 'admin') ? 'waiter' : roleDashboard;
+  }
+  if (targetRoute === 'receptionist') {
+    return (role === 'receptionist' || role === 'host' || role === 'admin') ? 'receptionist' : roleDashboard;
+  }
+
+  return roleDashboard;
+};
+
+export default function App() {
   const [activePage, setActivePageState] = useState(() => {
     const path = window.location.pathname.toLowerCase();
     const search = window.location.search.toLowerCase();
-    const isLoggedIn = getIsLoggedIn();
 
-    // If QR code scanned or URL contains /menu or ?table=, open 'menu' directly without login!
+    // Public customer dining menu QR bypass
     if (path.includes('/menu') || search.includes('table=')) {
       return 'menu';
     }
     if (path.includes('/receptionist')) {
-      return isLoggedIn ? 'receptionist' : 'login';
+      return getAuthorizedDashboardPage('receptionist');
     }
     if (path.includes('/chef')) {
-      return isLoggedIn ? 'chef' : 'login';
+      return getAuthorizedDashboardPage('chef');
     }
     if (path.includes('/waiter')) {
-      return isLoggedIn ? 'waiter' : 'login';
+      return getAuthorizedDashboardPage('waiter');
     }
     if (path.includes('/manager')) {
-      return isLoggedIn ? 'manager' : 'login';
+      return getAuthorizedDashboardPage('manager');
     }
     if (path.includes('/admin')) {
-      return isLoggedIn ? 'admin' : 'login';
+      return getAuthorizedDashboardPage('admin');
     }
 
     const saved = localStorage.getItem('flavora_active_page');
-    if (saved) {
-      if ((saved === 'admin' || saved === 'manager' || saved === 'chef' || saved === 'receptionist') && !isLoggedIn) {
-        return 'home';
-      }
-      return saved;
+    if (saved && ['admin', 'manager', 'chef', 'waiter', 'receptionist'].includes(saved)) {
+      return getAuthorizedDashboardPage(saved);
     }
-    return 'home';
+    return saved || 'home';
   });
 
   const [demoModalOpen, setDemoModalOpen] = useState(false);
 
-  const setActivePage = (newPage) => {
-    setActivePageState(newPage);
-    localStorage.setItem('flavora_active_page', newPage);
+  // Validate existing auth session/token with backend on app startup/refresh
+  useEffect(() => {
+    const { isAuthenticated, token } = getAuthState();
+    if (isAuthenticated && token) {
+      api.getMe()
+        .then((res) => {
+          const userObj = res.user || res;
+          const role = userObj.role || res.role;
+          if (userObj && role) {
+            const normRole = String(role).toLowerCase().trim();
+            sessionStorage.setItem('flavora_user_role', normRole);
+            sessionStorage.setItem('flavora_user_data', JSON.stringify(userObj));
+          }
+        })
+        .catch(() => {
+          sessionStorage.clear();
+          localStorage.removeItem('flavora_auth_token');
+          localStorage.removeItem('flavora_logged_in');
+          localStorage.removeItem('flavora_user_role');
+          localStorage.removeItem('flavora_user_data');
+          setActivePageState('login');
+          window.history.pushState({}, '', '/login');
+        });
+    }
+  }, []);
 
-    const isLoggedIn = getIsLoggedIn();
-    if (newPage === 'home') {
+  const setActivePage = (newPage) => {
+    const authorizedPage = ['admin', 'manager', 'chef', 'waiter', 'receptionist'].includes(newPage)
+      ? getAuthorizedDashboardPage(newPage)
+      : newPage;
+
+    setActivePageState(authorizedPage);
+    localStorage.setItem('flavora_active_page', authorizedPage);
+
+    const { isAuthenticated } = getAuthState();
+    if (authorizedPage === 'home') {
       window.history.pushState({}, '', '/');
-    } else if (newPage === 'receptionist' && isLoggedIn) {
+    } else if (authorizedPage === 'receptionist' && isAuthenticated) {
       window.history.pushState({}, '', '/receptionist/dashboard');
-    } else if (newPage === 'admin' && isLoggedIn) {
+    } else if (authorizedPage === 'admin' && isAuthenticated) {
       window.history.pushState({}, '', '/admin/dashboard');
-    } else if (newPage === 'manager' && isLoggedIn) {
+    } else if (authorizedPage === 'manager' && isAuthenticated) {
       window.history.pushState({}, '', '/manager/dashboard');
-    } else if (newPage === 'chef' && isLoggedIn) {
+    } else if (authorizedPage === 'chef' && isAuthenticated) {
       window.history.pushState({}, '', '/chef/dashboard');
-    } else if (newPage === 'waiter' && isLoggedIn) {
+    } else if (authorizedPage === 'waiter' && isAuthenticated) {
       window.history.pushState({}, '', '/waiter/dashboard');
-    } else if (newPage === 'login') {
+    } else if (authorizedPage === 'login') {
       window.history.pushState({}, '', '/login');
     }
   };
@@ -90,20 +150,19 @@ export default function App() {
     const handleUrlRouting = () => {
       const path = window.location.pathname.toLowerCase();
       const search = window.location.search.toLowerCase();
-      const isLoggedIn = getIsLoggedIn();
 
       if (path.includes('/menu') || search.includes('table=')) {
         setActivePageState('menu');
       } else if (path.includes('/receptionist')) {
-        setActivePageState(isLoggedIn ? 'receptionist' : 'login');
+        setActivePageState(getAuthorizedDashboardPage('receptionist'));
       } else if (path.includes('/chef')) {
-        setActivePageState(isLoggedIn ? 'chef' : 'login');
+        setActivePageState(getAuthorizedDashboardPage('chef'));
       } else if (path.includes('/waiter')) {
-        setActivePageState(isLoggedIn ? 'waiter' : 'login');
+        setActivePageState(getAuthorizedDashboardPage('waiter'));
       } else if (path.includes('/manager')) {
-        setActivePageState(isLoggedIn ? 'manager' : 'login');
+        setActivePageState(getAuthorizedDashboardPage('manager'));
       } else if (path.includes('/admin')) {
-        setActivePageState(isLoggedIn ? 'admin' : 'login');
+        setActivePageState(getAuthorizedDashboardPage('admin'));
       }
     };
 
