@@ -42,4 +42,24 @@ const getProfile = async (req, res) => {
   }
 };
 
-module.exports = { loginUser, getMe, getProfile };
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const result = await authService.forgotPassword(email);
+    return successResponse(res, result, 'Password reset OTP sent successfully');
+  } catch (error) {
+    return errorResponse(res, error.message || 'Error processing forgot password request', 400);
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    const result = await authService.resetPassword(email, otp, newPassword);
+    return successResponse(res, result, 'Password reset successful');
+  } catch (error) {
+    return errorResponse(res, error.message || 'Error resetting password', 400);
+  }
+};
+
+module.exports = { loginUser, getMe, getProfile, forgotPassword, resetPassword };
