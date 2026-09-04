@@ -79,7 +79,7 @@ export default function PerformancePage({ setActivePage, onOpenDemoModal }) {
             </div>
             <div>[04:42:15] POS_GATEWAY: WebSocket connection initialized (TLS 1.3)</div>
             <div>[04:42:15] MONGO_DB: Read menu query completed in 2.1ms (Cache Hit)</div>
-            <div>[04:42:16] SOCKET_IO: Order #T04-1082 broadcasted to KDS channel</div>
+            <div>[04:42:16] _IO: Order #T04-1082 broadcasted to KDS channel</div>
             <div style={{ color: 'var(--color-success)' }}>[04:42:16] CHEF_KDS: Received payload in 38ms — UI Rendered</div>
             <div>[04:42:16] RAZORPAY_API: Dynamic UPI QR generated for Table #04</div>
             <div style={{ color: 'var(--color-warning)', marginTop: '0.5rem' }}>✓ STATUS: ALL METRICS WITHIN SLA PARAMETERS</div>

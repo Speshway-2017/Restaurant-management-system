@@ -252,11 +252,23 @@ export default function WaiterOrdersPage() {
           dbStatus === 'Completed' || dbStatus === 'Paid' || 
           localStatus === 'Completed' || localStatus === 'Paid' || 
           ordDoc.status === 'Completed' || ordDoc.status === 'Paid' || 
-          ordDoc.payment === 'Paid' || ordDoc.payment === 'Completed'
+          ordDoc.payment === 'Paid' || ordDoc.payment === 'Completed' ||
+          ordDoc.paymentStatus === 'Paid' ||
+          dbMatch?.payment === 'Paid' || dbMatch?.payment === 'Completed' || dbMatch?.paymentStatus === 'Paid' ||
+          localMatch?.payment === 'Paid' || localMatch?.payment === 'Completed' || localMatch?.paymentStatus === 'Paid'
         );
 
-        let derivedStatus = isAlreadyPaid ? 'Completed' : (dbStatus || localStatus || ordDoc.status || 'Placed');
-        if (!isAlreadyPaid) {
+        const isAlreadyBillGenerated = Boolean(
+          !isAlreadyPaid && (
+            dbStatus === 'Bill Generated' || localStatus === 'Bill Generated' ||
+            ordDoc.status === 'Bill Generated' || ordDoc.payment === 'Awaiting Payment' ||
+            ordDoc.paymentStatus === 'Awaiting Payment' || ordDoc.isBillGenerated || ordDoc.billGenerated ||
+            dbMatch?.payment === 'Awaiting Payment' || localMatch?.payment === 'Awaiting Payment'
+          )
+        );
+
+        let derivedStatus = isAlreadyPaid ? 'Completed' : (isAlreadyBillGenerated ? 'Bill Generated' : (dbStatus || localStatus || ordDoc.status || 'Placed'));
+        if (!isAlreadyPaid && !isAlreadyBillGenerated) {
           if (totalCount > 0 && deliveredCount === totalCount) {
             derivedStatus = 'Served';
           } else if (deliveredCount > 0) {
@@ -377,7 +389,7 @@ export default function WaiterOrdersPage() {
       const foodSubtotal = Number(order.subtotal ?? order.originalTotal ?? order.originalAmount ?? order.total ?? 0);
       const gstAmount = order.gstAmount !== undefined && order.gstAmount !== null && Number(order.gstAmount) > 0
         ? Number(order.gstAmount)
-        : Math.round(foodSubtotal * 0.05);
+        : Math.round(foodSubtotal * dynamicGstRate);
       const totalBeforeDiscount = foodSubtotal + gstAmount;
 
       const discountAmount = appliedCoupon ? Number(appliedCoupon.discountAmount || 0) : Number(order.discountAmount || 0);
@@ -800,13 +812,30 @@ export default function WaiterOrdersPage() {
 
                         {(() => {
                           const isPaid = order.status === 'Completed' || order.status === 'Paid' || order.payment === 'Paid' || order.payment === 'Completed';
-                          const displayPaidVal = Number(order.finalAmount ?? order.total ?? order.totalAmount ?? 0);
+
+                          // Compute food subtotal from items list
+                          const itemsFoodSubtotal = itemsList.reduce((sum, i) => sum + (Number(i.price || 0) * Number(i.quantity || 1)), 0);
+
+                          const rawFoodTotal = Number(
+                            order.originalTotal !== undefined && order.originalTotal !== null && Number(order.originalTotal) > 0
+                              ? order.originalTotal
+                              : (order.originalAmount !== undefined && order.originalAmount !== null && Number(order.originalAmount) > 0
+                                ? order.originalAmount
+                                : (order.subtotal !== undefined && order.subtotal !== null && Number(order.subtotal) > 0
+                                  ? order.subtotal
+                                  : itemsFoodSubtotal))
+                          );
+
+                          const discountAmt = Number(order.discountAmount || order.discount || 0);
+
+                          // Net Food Revenue (original total amount - discount, excluding GST & tip)
+                          const netFoodRevenue = Math.max(0, rawFoodTotal - discountAmt);
 
                           return (
                             <div style={{ marginTop: '0.5rem' }}>
-                              {/* Primary Paid Amount Line */}
+                              {/* Net Food Revenue Line */}
                               <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#166534', fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <span>₹{displayPaidVal}</span>
+                                <span>₹{netFoodRevenue}</span>
                                 {isPaid && (
                                   <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '6px', border: '1px solid #86EFAC' }}>
                                     ✓ PAID
@@ -1575,7 +1604,8 @@ export default function WaiterOrdersPage() {
                 const subtotal = Number(viewOrderDetailsModal.subtotal ?? viewOrderDetailsModal.originalTotal ?? viewOrderDetailsModal.originalAmount ?? viewOrderDetailsModal.total ?? 0);
                 const gst = viewOrderDetailsModal.gstAmount !== undefined && viewOrderDetailsModal.gstAmount !== null && Number(viewOrderDetailsModal.gstAmount) > 0
                   ? Number(viewOrderDetailsModal.gstAmount)
-                  : Math.round(subtotal * 0.05);
+                  : Math.round(subtotal * dynamicGstRate);
+                const gstPct = (subtotal > 0 && gst > 0) ? Math.round((gst / subtotal) * 100) : Math.round(dynamicGstRate * 100);
                 const totalBeforeDisc = subtotal + gst;
                 const disc = Number(viewOrderDetailsModal.discountAmount ?? 0);
                 const amountAfterDisc = Number(viewOrderDetailsModal.amountAfterDiscount ?? viewOrderDetailsModal.finalAmount ?? (totalBeforeDisc - disc));
@@ -1591,21 +1621,16 @@ export default function WaiterOrdersPage() {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', fontWeight: 700 }}>
-                      <span>GST (5%):</span>
+                      <span>GST ({gstPct}%):</span>
                       <span>+₹{gst}</span>
                     </div>
 
-                    {code && disc > 0 && (
+                    {disc > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#991B1B', fontWeight: 800 }}>
-                        <span>Coupon ({code}):</span>
+                        <span>Coupon Discount {code ? `(${code})` : ''}:</span>
                         <span style={{ color: '#DC2626' }}>-₹{disc}</span>
                       </div>
                     )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#991B1B', fontWeight: 800 }}>
-                      <span>Coupon Discount:</span>
-                      <span style={{ color: '#DC2626' }}>{disc > 0 ? `-₹${disc}` : '-₹0'}</span>
-                    </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#0F2A1D', fontWeight: 900, paddingTop: '0.35rem', borderTop: '1px solid #E2E8F0' }}>
                       <span>Amount After Discount:</span>

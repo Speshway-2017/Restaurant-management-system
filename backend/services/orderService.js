@@ -279,7 +279,7 @@ class OrderService {
     }
 
     const isPaid = status === 'Paid' || status === 'Completed' || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid' || fullOrderData.paymentStatus === 'Paid';
-    const isBillGenerated = status === 'Bill Generated' || status === 'Awaiting Payment' || fullOrderData.payment === 'Bill Generated' || fullOrderData.payment === 'Awaiting Payment';
+    const isBillGenerated = status === 'Bill Generated' || status === 'Awaiting Payment' || fullOrderData.isBillGenerated || fullOrderData.billGenerated || fullOrderData.payment === 'Bill Generated' || fullOrderData.payment === 'Awaiting Payment';
 
     // BLOCK PAYMENT if waiter has not generated the bill yet
     if (isPaid && !isBillGenerated && existingOrder) {
