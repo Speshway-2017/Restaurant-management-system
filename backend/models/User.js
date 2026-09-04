@@ -20,7 +20,9 @@ const userSchema = new mongoose.Schema({
   checkOutTime: { type: String, default: '06:00 PM' },
   scheduledShift: { type: String, default: '09:00 AM – 06:00 PM (Morning)' },
   hoursLogged: { type: String, default: '8h 30m' },
-  attendanceStatus: { type: String, default: 'Present' }
+  attendanceStatus: { type: String, default: 'Present' },
+  resetPasswordToken: { type: String, default: null },
+  resetPasswordExpires: { type: Date, default: null }
 }, { timestamps: true });
 
 // Pre-save hook: Automatically hash password using bcrypt before saving to database

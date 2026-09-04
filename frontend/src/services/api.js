@@ -54,6 +54,14 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ email, password })
   }),
+  forgotPassword: (email) => request('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  }),
+  resetPassword: (email, otp, newPassword) => request('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, otp, newPassword })
+  }),
   getMe: () => request('/auth/me'),
   getProfile: (id) => request(`/auth/profile/${id}`),
 
@@ -304,5 +312,21 @@ export const api = {
   }),
   getFeedback: () => request('/feedback'),
   getGuestLoyalty: (phone) => request(`/receptionist/guests?search=${encodeURIComponent(phone || '')}`),
-  redeemLoyaltyPoints: (phone, points) => Promise.resolve({ success: true, redeemed: points, discount: Math.round(points * 0.5) })
+  redeemLoyaltyPoints: (phone, points) => Promise.resolve({ success: true, redeemed: points, discount: Math.round(points * 0.5) }),
+
+  // Multi-Waiter & Multi-Chef Workload Management API
+  assignTableWaiter: (tableId, waiterId, waiterName) => request(`/tables/${encodeURIComponent(tableId)}/assign-waiter`, {
+    method: 'PUT',
+    body: JSON.stringify({ waiterId, waiterName })
+  }),
+  claimChefOrder: (orderId, chefId, chefName) => request(`/orders/${encodeURIComponent(orderId)}/claim-chef`, {
+    method: 'POST',
+    body: JSON.stringify({ chefId, chefName })
+  }),
+  reassignChefOrder: (orderId, chefId, chefName) => request(`/orders/${encodeURIComponent(orderId)}/reassign-chef`, {
+    method: 'POST',
+    body: JSON.stringify({ chefId, chefName })
+  }),
+  getStaffWorkload: () => request('/staff/workload')
 };
+
