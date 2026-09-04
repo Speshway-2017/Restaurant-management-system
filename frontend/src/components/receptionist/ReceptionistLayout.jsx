@@ -91,17 +91,31 @@ export default function ReceptionistLayout({ setActivePage }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [powerModalOpen, setPowerModalOpen] = useState(false);
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
   const [receptionistProfile, setReceptionistProfile] = useState(() => {
-    const saved = localStorage.getItem('flavora_profile_receptionist');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+    const current = getSessionUser();
+    if (current && current.name) {
+      return {
+        name: current.name,
+        email: current.email || 'receptionist@rms.com',
+        phone: current.phone || '',
+        role: current.role || 'Host Desk',
+        empId: current.empId || 'RMSR-01'
+      };
     }
     return {
       name: 'Reception Desk',
-      email: 'reception@flavorakitchen.in',
+      email: 'receptionist@rms.com',
       phone: '9876543210',
       role: 'Host Desk',
-      empId: 'HST-01'
+      empId: 'RMSR-01'
     };
   });
 
@@ -110,20 +124,26 @@ export default function ReceptionistLayout({ setActivePage }) {
 
   useEffect(() => {
     const fetchStaffFromDb = () => {
+      const current = getSessionUser();
+      if (!current) return;
+
       api.getStaff()
         .then((staffList) => {
           if (Array.isArray(staffList) && staffList.length > 0) {
-            const recInDb = staffList.find(s => s.role === 'Receptionist' || s.role === 'Host' || (s.empId && s.empId.startsWith('HST')));
-            if (recInDb && recInDb.name) {
+            const match = staffList.find(s => 
+              (current._id && String(s._id || s.id) === String(current._id)) ||
+              (current.id && String(s._id || s.id) === String(current.id)) ||
+              (current.email && s.email && s.email.toLowerCase() === current.email.toLowerCase())
+            );
+            if (match && match.name) {
               const fetchedProfile = {
-                name: recInDb.name,
-                email: recInDb.email || 'reception@flavorakitchen.in',
-                phone: recInDb.phone || '9876543210',
-                role: 'Host Desk',
-                empId: recInDb.empId || 'HST-01'
+                name: match.name,
+                email: match.email || current.email,
+                phone: match.phone || current.phone || '',
+                role: match.role || current.role || 'Host Desk',
+                empId: match.empId || current.empId || 'RMSR-01'
               };
               setReceptionistProfile(fetchedProfile);
-              localStorage.setItem('flavora_profile_receptionist', JSON.stringify(fetchedProfile));
             }
           }
         })
@@ -135,14 +155,15 @@ export default function ReceptionistLayout({ setActivePage }) {
     fetchStaffFromDb();
 
     const updateProfile = () => {
-      const saved = localStorage.getItem('flavora_profile_receptionist');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.name) setReceptionistProfile(parsed);
-        } catch (e) {}
-      } else {
-        fetchStaffFromDb();
+      const current = getSessionUser();
+      if (current && current.name) {
+        setReceptionistProfile({
+          name: current.name,
+          email: current.email || 'receptionist@rms.com',
+          phone: current.phone || '',
+          role: current.role || 'Host Desk',
+          empId: current.empId || 'RMSR-01'
+        });
       }
     };
 

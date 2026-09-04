@@ -10,89 +10,36 @@ class AuthService {
 
     const cleanEmail = String(email).trim().toLowerCase();
 
-    // 1. Ensure default system accounts exist in database
+    // 1. Ensure default system accounts exist in database if not created
     await this.ensureDefaultUsersExist();
 
-    // 2. Find user in MongoDB (case insensitive)
-    let user = await User.findOne({
+    // 2. Find user in MongoDB (case insensitive exact match by email)
+    const user = await User.findOne({
       email: { $regex: new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') }
     });
-
-    // 3. If user is not found, check if role keyword matches email and register role account dynamically
-    if (!user) {
-      if (cleanEmail.includes('admin')) {
-        user = await User.create({
-          name: 'System Admin',
-          email: cleanEmail,
-          password: password || 'admin123',
-          role: 'Admin',
-          phone: '+91 98765 43210',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'FLV-EMP-101'
-        });
-      } else if (cleanEmail.includes('manager') || cleanEmail.includes('rmsm')) {
-        user = await User.create({
-          name: 'Ramesh Sharma',
-          email: cleanEmail,
-          password: password || 'manager123',
-          role: 'Manager',
-          phone: '+91 98765 12345',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'RMSM-01'
-        });
-      } else if (cleanEmail.includes('chef')) {
-        user = await User.create({
-          name: 'Master Chef Vikram',
-          email: cleanEmail,
-          password: password || 'chef123',
-          role: 'Chef',
-          phone: '+91 98765 43212',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'CHEF-01'
-        });
-      } else if (cleanEmail.includes('waiter')) {
-        user = await User.create({
-          name: 'Suresh Kumar',
-          email: cleanEmail,
-          password: password || 'waiter123',
-          role: 'Waiter',
-          phone: '+91 98765 88990',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'RMSW-01'
-        });
-      } else if (cleanEmail.includes('reception') || cleanEmail.includes('host')) {
-        user = await User.create({
-          name: 'Ananya Roy',
-          email: cleanEmail,
-          password: password || 'receptionist123',
-          role: 'Receptionist',
-          phone: '+91 98765 77665',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'RMSR-01'
-        });
-      }
-    }
 
     if (!user) {
       throw new Error('Invalid email or password');
     }
 
-    // 4. Verify password against stored hash/password
+    // 3. Verify password against stored hash/password
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       throw new Error('Invalid email or password');
     }
 
-    // 5. Generate JWT Token
+    // 4. Generate JWT Token with exact user ID
     const token = generateToken(user._id, user.role);
 
     const userPayload = {
       _id: user._id,
+      id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
       phone: user.phone || '',
-      branch: user.branch || ''
+      branch: user.branch || '',
+      empId: user.empId || ''
     };
 
     return {
@@ -107,6 +54,24 @@ class AuthService {
     try {
       const defaults = [
         {
+          name: 'Manager Ram',
+          email: 'manager1@rms.com',
+          password: 'manager123',
+          role: 'Manager',
+          phone: '+91 98765 12345',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSM-01'
+        },
+        {
+          name: 'Manager Kiran',
+          email: 'manager2@rms.com',
+          password: 'manager123',
+          role: 'Manager',
+          phone: '+91 98765 54321',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSM-02'
+        },
+        {
           name: 'Chef Srikanth',
           email: 'admin@flavorakitchen.in',
           password: 'admin123password',
@@ -114,51 +79,6 @@ class AuthService {
           phone: '+91 98765 43210',
           branch: 'Jubilee Hills (Main Branch)',
           empId: 'FLV-EMP-101'
-        },
-        {
-          name: 'System Admin',
-          email: 'admin@rms.com',
-          password: 'admin123password',
-          role: 'Admin',
-          phone: '+91 98765 43210',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'FLV-EMP-100'
-        },
-        {
-          name: 'Ramesh Sharma',
-          email: 'manager@flavorakitchen.in',
-          password: 'manager123password',
-          role: 'Manager',
-          phone: '+91 98765 12345',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'RMSM-01'
-        },
-        {
-          name: 'Master Chef Vikram',
-          email: 'chef@flavorakitchen.in',
-          password: 'chef123password',
-          role: 'Chef',
-          phone: '+91 98765 43212',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'CHEF-01'
-        },
-        {
-          name: 'Suresh Kumar',
-          email: 'waiter@flavorakitchen.in',
-          password: 'waiter123password',
-          role: 'Waiter',
-          phone: '+91 98765 88990',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'RMSW-01'
-        },
-        {
-          name: 'Ananya Roy',
-          email: 'receptionist@flavorakitchen.in',
-          password: 'receptionist123password',
-          role: 'Receptionist',
-          phone: '+91 98765 77665',
-          branch: 'Jubilee Hills (Main Branch)',
-          empId: 'RMSR-01'
         }
       ];
 

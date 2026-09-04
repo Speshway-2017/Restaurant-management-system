@@ -121,17 +121,29 @@ export default function ManagerLayout({ setActivePage }) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
   const [managerProfile, setManagerProfile] = useState(() => {
-    const saved = localStorage.getItem('flavora_profile_manager');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.name) return parsed;
-      } catch (e) {}
+    const current = getSessionUser();
+    if (current && current.name) {
+      return {
+        name: current.name,
+        email: current.email || '',
+        phone: current.phone || '',
+        role: 'Restaurant Manager',
+        empId: current.empId || 'RMSM-01',
+        avatarUrl: current.avatarUrl || ''
+      };
     }
     return {
       name: 'Resto Manager',
-      email: 'manager@flavorakitchen.in',
+      email: 'manager@rms.com',
       phone: '9876512345',
       role: 'Restaurant Manager',
       empId: 'RMSM-01'
@@ -139,40 +151,47 @@ export default function ManagerLayout({ setActivePage }) {
   });
 
   useEffect(() => {
-    const fetchManagerFromDb = () => {
+    const syncManagerFromAuth = () => {
+      const current = getSessionUser();
+      if (!current) return;
+
       api.getStaff()
         .then((staffList) => {
           if (Array.isArray(staffList) && staffList.length > 0) {
-            const managerInDb = staffList.find(s => s.role === 'Manager' || s.role === 'Resto Manager' || (s.empId && s.empId.startsWith('RMSM')));
-            if (managerInDb && managerInDb.name) {
+            const match = staffList.find(s => 
+              (current._id && String(s._id || s.id) === String(current._id)) ||
+              (current.id && String(s._id || s.id) === String(current.id)) ||
+              (current.email && s.email && s.email.toLowerCase() === current.email.toLowerCase())
+            );
+            if (match && match.name) {
               const fetchedProfile = {
-                name: managerInDb.name,
-                email: managerInDb.email || 'manager@flavorakitchen.in',
-                phone: managerInDb.phone || '9876512345',
+                name: match.name,
+                email: match.email || current.email,
+                phone: match.phone || current.phone || '',
                 role: 'Restaurant Manager',
-                empId: managerInDb.empId || 'RMSM-01'
+                empId: match.empId || current.empId || 'RMSM-01',
+                avatarUrl: match.avatarUrl || current.avatarUrl || ''
               };
               setManagerProfile(fetchedProfile);
-              localStorage.setItem('flavora_profile_manager', JSON.stringify(fetchedProfile));
             }
           }
         })
-        .catch((err) => {
-          console.warn('Could not fetch manager profile from DB:', err.message);
-        });
+        .catch(() => {});
     };
 
-    fetchManagerFromDb();
+    syncManagerFromAuth();
 
     const updateManagerProfile = () => {
-      const saved = localStorage.getItem('flavora_profile_manager');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.name) setManagerProfile(parsed);
-        } catch (e) {}
-      } else {
-        fetchManagerFromDb();
+      const current = getSessionUser();
+      if (current && current.name) {
+        setManagerProfile({
+          name: current.name,
+          email: current.email || '',
+          phone: current.phone || '',
+          role: 'Restaurant Manager',
+          empId: current.empId || 'RMSM-01',
+          avatarUrl: current.avatarUrl || ''
+        });
       }
     };
 
@@ -581,12 +600,15 @@ export default function ManagerLayout({ setActivePage }) {
                       label="Logout"
                       onPowerOff={() => {
                         setUserMenuOpen(false);
-                        sessionStorage.removeItem('flavora_auth_token');
-                        sessionStorage.removeItem('flavora_logged_in');
-                        sessionStorage.removeItem('flavora_user_role');
+                        sessionStorage.clear();
                         localStorage.removeItem('flavora_auth_token');
                         localStorage.removeItem('flavora_logged_in');
                         localStorage.removeItem('flavora_user_role');
+                        localStorage.removeItem('flavora_user_data');
+                        localStorage.removeItem('flavora_profile_manager');
+                        localStorage.removeItem('flavora_profile_chef');
+                        localStorage.removeItem('flavora_profile_receptionist');
+                        localStorage.removeItem('flavora_profile_admin');
                         localStorage.setItem('flavora_active_page', 'home');
                         window.history.pushState({}, '', '/');
                         setActivePage('home');

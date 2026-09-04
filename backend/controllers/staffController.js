@@ -2,17 +2,6 @@ const User = require('../models/User');
 
 const getStaff = async (req, res) => {
   try {
-    // Purge legacy dummy seeded records from MongoDB database
-    await User.deleteMany({
-      $or: [
-        { email: /flavorakitchen\.in/i },
-        { email: /flavora\.in/i },
-        { name: /master chef vikram/i },
-        { name: /suresh kumar/i },
-        { name: /ananya roy/i }
-      ]
-    });
-
     const staff = await User.find({}).select('-password').sort({ createdAt: 1 });
 
     const roleCounters = {};

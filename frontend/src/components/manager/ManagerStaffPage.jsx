@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical, ShieldCheck, Mail, Phone, RefreshCw, Eye, Ban } from 'lucide-react';
+import { Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical, ShieldCheck, Mail, Phone, RefreshCw, Eye, EyeOff, Ban } from 'lucide-react';
 import { api } from '../../services/api';
 
 const format24to12 = (time24) => {
@@ -45,6 +45,7 @@ export default function ManagerStaffPage() {
   const [editingStaff, setEditingStaff] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
 
   const [staffList, setStaffList] = useState([]);
 
@@ -77,6 +78,7 @@ export default function ManagerStaffPage() {
     name: '',
     role: 'Waiter',
     email: '',
+    password: '',
     phone: '',
     shiftStart: '09:00',
     shiftEnd: '17:00',
@@ -98,10 +100,12 @@ export default function ManagerStaffPage() {
 
   const handleOpenAddModal = () => {
     setEditingStaff(null);
+    setShowStaffPassword(false);
     setFormData({
       name: '',
       role: 'Waiter',
       email: '',
+      password: '',
       phone: '',
       shiftStart: '09:00',
       shiftEnd: '17:00',
@@ -113,11 +117,13 @@ export default function ManagerStaffPage() {
 
   const handleOpenEditModal = (stf) => {
     setEditingStaff(stf);
+    setShowStaffPassword(false);
     const parsedTimes = parseShiftTo24(stf.shift || '09:00 AM – 05:00 PM');
     setFormData({
       name: stf.name || '',
       role: stf.role || 'Waiter',
       email: stf.email || '',
+      password: '',
       phone: stf.phone || '',
       shiftStart: parsedTimes.start,
       shiftEnd: parsedTimes.end,
@@ -132,6 +138,10 @@ export default function ManagerStaffPage() {
     e.preventDefault();
     if (!formData.name.trim()) {
       alert('Please enter staff name.');
+      return;
+    }
+    if (!editingStaff && (!formData.password || !formData.password.trim())) {
+      alert('Please enter account login password for the staff member.');
       return;
     }
     // Only validate phone when creating a new staff member and phone is entered
@@ -154,7 +164,7 @@ export default function ManagerStaffPage() {
       checkInTime: format24to12(formData.shiftStart),
       checkOutTime: format24to12(formData.shiftEnd),
       status: formData.status,
-      password: 'password123'
+      password: formData.password || 'password123'
     };
 
     const broadcastShiftChange = (updatedMember) => {
@@ -636,7 +646,7 @@ export default function ManagerStaffPage() {
             </div>
 
             {/* Modal Form Content */}
-            <form onSubmit={handleSubmitStaff} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <form onSubmit={handleSubmitStaff} autoComplete="off" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
                   Full Name <span style={{ color: '#DC2626' }}>*</span>
@@ -648,6 +658,7 @@ export default function ManagerStaffPage() {
                   placeholder="e.g. Suresh Kumar"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  autoComplete="off"
                   style={{
                     width: '100%',
                     padding: '0.6rem 0.85rem',
@@ -698,6 +709,7 @@ export default function ManagerStaffPage() {
                     maxLength={10}
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^0-9]/g, '') })}
+                    autoComplete="off"
                     style={{
                       width: '100%',
                       padding: '0.6rem 0.85rem',
@@ -722,6 +734,7 @@ export default function ManagerStaffPage() {
                   placeholder="e.g. name@flavora.in"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  autoComplete="off"
                   style={{
                     width: '100%',
                     padding: '0.6rem 0.85rem',
@@ -734,6 +747,54 @@ export default function ManagerStaffPage() {
                   }}
                 />
               </div>
+
+              {!editingStaff && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>
+                    Account Login Password *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showStaffPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Enter login password for new staff member"
+                      value={formData.password || ''}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      autoComplete="new-password"
+                      style={{
+                        width: '100%',
+                        padding: '0.6rem 2.5rem 0.6rem 0.85rem',
+                        borderRadius: '10px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '0.85rem',
+                        outline: 'none',
+                        backgroundColor: '#F8FAFC',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStaffPassword(!showStaffPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '0.75rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#64748B',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.2rem'
+                      }}
+                    >
+                      {showStaffPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Dedicated Full-Width Assigned Shift Hours Section */}
               <div style={{
