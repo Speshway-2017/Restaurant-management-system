@@ -191,7 +191,7 @@ export default function MenuPage({ onOpenDemoModal }) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
             return parsed.filter(o => {
-              const isClosedOrPaid = o.status === 'Completed' || o.status === 'Paid' || o.status === 'Cancelled' || o.status === 'Served' || o.payment === 'Paid' || o.payment === 'Completed' || o.paymentStatus === 'Paid';
+              const isClosedOrPaid = o.status === 'Completed' || o.status === 'Paid' || o.status === 'Cancelled' || o.payment === 'Paid' || o.payment === 'Completed' || o.paymentStatus === 'Paid';
               return o.status && !isClosedOrPaid;
             });
           }
@@ -233,7 +233,7 @@ export default function MenuPage({ onOpenDemoModal }) {
           activeBackendOrders = orders.filter(ord => {
             const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
             const isMatch = ordTableDigits && cleanTableNum && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
-            const isClosedOrPaid = ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled' || ord.status === 'Served' || ord.payment === 'Paid' || ord.payment === 'Completed' || ord.paymentStatus === 'Paid';
+            const isClosedOrPaid = ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled' || ord.payment === 'Paid' || ord.payment === 'Completed' || ord.paymentStatus === 'Paid';
             return isMatch && !isClosedOrPaid;
           });
         }
@@ -1044,7 +1044,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                               {activeTableSession.guestName}
                             </div>
                             <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.15rem' }}>
-                              Name assigned by Reception
+                              Name assigned by Receptionist
                             </div>
                           </div>
                         </div>
@@ -1057,11 +1057,11 @@ export default function MenuPage({ onOpenDemoModal }) {
                 ) : (
                   <div className="admin-form-group mb-3">
                     <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D' }}>
-                      Your Name / Diner Name
+                      Your Name 
                     </label>
                     <input
                       type="text"
-                      placeholder="Enter your name (e.g. Sai Kiran / Deepak)"
+                      placeholder="Enter your name"
                       value={guestName}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -2078,7 +2078,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                   </label>
                   <input
                     type="text"
-                    placeholder="Enter your name (e.g. Sai Kiran / Deepak)"
+                    placeholder="Enter your name"
                     value={guestName}
                     onChange={(e) => {
                       const val = e.target.value;

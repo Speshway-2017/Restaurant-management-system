@@ -88,23 +88,43 @@ export default function CustomerBillModal({
     }
   };
 
-  // Items fetched strictly from MongoDB active order
-  const items = Array.isArray(activeOrder?.items) ? activeOrder.items : [];
+  const [lastKnownItems, setLastKnownItems] = useState([]);
+  const [paidReceiptDetails, setPaidReceiptDetails] = useState(null);
 
-  const foodTotal = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+  useEffect(() => {
+    if (Array.isArray(activeOrder?.items) && activeOrder.items.length > 0) {
+      setLastKnownItems(activeOrder.items);
+    }
+  }, [activeOrder]);
+
+  // Items fetched strictly from MongoDB active order with fallback to last known items
+  const activeItemsList = Array.isArray(activeOrder?.items) && activeOrder.items.length > 0
+    ? activeOrder.items
+    : (lastKnownItems.length > 0 ? lastKnownItems : []);
+
+  const items = (showInvoice && paidReceiptDetails?.items) ? paidReceiptDetails.items : activeItemsList;
+
+  const calculatedFoodTotal = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+  const foodTotal = (showInvoice && paidReceiptDetails?.foodTotal !== undefined) ? paidReceiptDetails.foodTotal : calculatedFoodTotal;
 
   // Dynamic GST Tax calculation (configurable via Admin Settings)
   const gstRate = dynamicGstRate;
-  const gstAmount = Math.round(foodTotal * gstRate);
-  const gstPctLabel = Math.round(gstRate * 100);
+  const calculatedGst = Math.round(foodTotal * gstRate);
+  const gstAmount = (showInvoice && paidReceiptDetails?.gstAmount !== undefined) ? paidReceiptDetails.gstAmount : calculatedGst;
+  const gstPctLabel = (showInvoice && paidReceiptDetails?.gstPctLabel !== undefined) ? paidReceiptDetails.gstPctLabel : Math.round(gstRate * 100);
 
   // Discount
-  const couponDiscount = appliedCoupon ? Number(appliedCoupon.discountAmount || 0) : 0;
+  const couponDiscount = (showInvoice && paidReceiptDetails?.couponDiscount !== undefined)
+    ? paidReceiptDetails.couponDiscount
+    : (appliedCoupon ? Number(appliedCoupon.discountAmount || 0) : 0);
   const totalDiscount = couponDiscount;
 
   // Final Payable
+  const totalBeforeDiscount = foodTotal + gstAmount;
   const netAmount = Math.max(0, foodTotal - couponDiscount);
-  const grandTotal = Math.max(0, netAmount + gstAmount + tipAmount);
+  const grandTotal = (showInvoice && paidReceiptDetails?.grandTotal !== undefined)
+    ? paidReceiptDetails.grandTotal
+    : Math.max(0, netAmount + gstAmount + tipAmount);
 
   const handleApplyCoupon = async () => {
     if (!couponCodeInput.trim()) return;
@@ -185,6 +205,28 @@ export default function CustomerBillModal({
         paidAt: new Date().toISOString()
       };
 
+      // Freeze receipt details snapshot before backend state update
+      const receiptSnapshot = {
+        items: items.map(it => ({
+          name: it.name || 'Dish Item',
+          quantity: Number(it.quantity || 1),
+          price: Number(it.price || 0)
+        })),
+        foodTotal: foodTotal,
+        gstAmount: gstAmount,
+        gstPctLabel: gstPctLabel,
+        couponDiscount: couponDiscount,
+        couponCode: appliedCoupon?.code || '',
+        tipAmount: tipAmount,
+        netAmount: netAmount,
+        grandTotal: grandTotal,
+        tableNum: activeTableStr,
+        orderId: targetOrderId,
+        transactionId: payData.transactionId,
+        paidAt: payData.paidAt
+      };
+      setPaidReceiptDetails(receiptSnapshot);
+
       // 1. Update backend MongoDB database
       await api.updateOrderStatus(targetOrderId, 'Paid', payData);
 
@@ -195,9 +237,14 @@ export default function CustomerBillModal({
         if (raw) localOrders = JSON.parse(raw);
 
         const cleanTargetId = String(targetOrderId).replace(/^#/i, '').trim();
+        const cleanTableStr = String(activeTableStr).replace(/[^0-9]/g, '');
+
         const updatedLocal = localOrders.map(lo => {
           const loId = String(lo.orderId || lo._id || lo.id || lo.table || '').replace(/^#/i, '').trim();
-          if (loId === cleanTargetId || lo.table === activeTableStr) {
+          const loTableDigits = String(lo.table || lo.tableNumber || '').replace(/[^0-9]/g, '');
+          const isTableMatch = cleanTableStr && loTableDigits && String(parseInt(cleanTableStr, 10)) === String(parseInt(loTableDigits, 10));
+
+          if (loId === cleanTargetId || lo.table === activeTableStr || isTableMatch) {
             return {
               ...lo,
               status: 'Completed',
@@ -224,6 +271,7 @@ export default function CustomerBillModal({
         window.dispatchEvent(new Event('flavora_orders_updated'));
         window.dispatchEvent(new Event('flavora_tables_updated'));
         window.dispatchEvent(new CustomEvent('flavora_payment_completed', { detail: { orderId: targetOrderId, table: activeTableStr } }));
+        localStorage.setItem('flavora_orders_sync', Date.now().toString());
       } catch (e) { }
 
       setIsProcessingPayment(false);
@@ -234,6 +282,7 @@ export default function CustomerBillModal({
       try {
         window.dispatchEvent(new Event('flavora_orders_updated'));
         window.dispatchEvent(new Event('flavora_tables_updated'));
+        localStorage.setItem('flavora_orders_sync', Date.now().toString());
       } catch (e) { }
       setIsProcessingPayment(false);
       setShowInvoice(true);
@@ -371,11 +420,11 @@ export default function CustomerBillModal({
                 {/* Invoice Info Meta */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '1rem' }}>
                   <div>
-                    <div><strong>Invoice #:</strong> INV-{Date.now().toString().slice(-6)}</div>
-                    <div><strong>Table:</strong> {tableNum || activeOrder?.table || 'T-01'}</div>
+                    <div><strong>Invoice #:</strong> {paidReceiptDetails?.transactionId ? `INV-${paidReceiptDetails.transactionId.slice(-6)}` : `INV-${Date.now().toString().slice(-6)}`}</div>
+                    <div><strong>Table:</strong> {paidReceiptDetails?.tableNum || tableNum || activeOrder?.table || 'T-01'}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div><strong>Date:</strong> {new Date().toLocaleDateString()}</div>
+                    <div><strong>Date:</strong> {paidReceiptDetails?.paidAt ? new Date(paidReceiptDetails.paidAt).toLocaleDateString() : new Date().toLocaleDateString()}</div>
                     <div><strong>Status:</strong> <span style={{ color: '#15803D', fontWeight: 900 }}>PAID ✓</span></div>
                   </div>
                 </div>
@@ -391,7 +440,7 @@ export default function CustomerBillModal({
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#1E293B', marginBottom: '0.4rem' }}>
                       <span style={{ flex: 2, fontWeight: 600 }}>{it.name}</span>
                       <span style={{ flex: 1, textAlign: 'center', color: '#64748B' }}>{it.quantity} x ₹{it.price}</span>
-                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 800, color: '#0F2A1D' }}>₹{it.quantity * it.price}</span>
+                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 800, color: '#0F2A1D' }}>₹{(Number(it.quantity) || 1) * (Number(it.price) || 0)}</span>
                     </div>
                   ))}
                 </div>
@@ -404,7 +453,7 @@ export default function CustomerBillModal({
                   </div>
                   {couponDiscount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#15803D', fontWeight: 700, marginBottom: '0.35rem' }}>
-                      <span>Coupon Discount ({appliedCoupon?.code})</span>
+                      <span>Coupon Discount ({paidReceiptDetails?.couponCode || appliedCoupon?.code})</span>
                       <span>-₹{couponDiscount}</span>
                     </div>
                   )}
@@ -415,7 +464,7 @@ export default function CustomerBillModal({
                   {tipAmount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#B45309', fontWeight: 700, marginBottom: '0.35rem' }}>
                       <span>Staff Tip / Gratuity</span>
-                      <span>₹{tipAmount}</span>
+                      <span>+₹{tipAmount}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.05rem', fontWeight: 900, color: '#0F2A1D', borderTop: '1.5px solid #E2E8F0', paddingTop: '0.65rem', marginTop: '0.5rem' }}>
@@ -680,7 +729,7 @@ export default function CustomerBillModal({
 
                 <div style={{
                   display: 'flex',
-                  justify: 'space-between',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
                   fontSize: '1.15rem',
                   fontWeight: 900,
