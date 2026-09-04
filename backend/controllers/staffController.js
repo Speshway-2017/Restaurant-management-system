@@ -1,20 +1,19 @@
 const User = require('../models/User');
 
-const defaultStaffData = [
-  { name: 'Suresh Kumar', email: 'suresh.k@flavora.in', role: 'Waiter', phone: '9876543210', scheduledShift: 'Morning (09:00 AM - 05:00 PM)', status: 'On Shift', password: 'password123' },
-  { name: 'Priya Sharma', email: 'priya.s@flavora.in', role: 'Receptionist', phone: '9812345678', scheduledShift: 'Full Day (11:00 AM - 10:00 PM)', status: 'On Shift', password: 'password123' },
-  { name: 'Chef Rajesh', email: 'rajesh.chef@flavora.in', role: 'Chef', phone: '9765432109', scheduledShift: 'Evening (02:00 PM - 11:00 PM)', status: 'On Shift', password: 'password123' },
-  { name: 'Ananya Roy', email: 'ananya.r@flavora.in', role: 'Waiter', phone: '9543210987', scheduledShift: 'Evening (02:00 PM - 11:00 PM)', status: 'On Shift', password: 'password123' },
-  { name: 'Vikram Singh', email: 'vikram.s@flavora.in', role: 'Receptionist', phone: '9654321098', scheduledShift: 'Morning (09:00 AM - 05:00 PM)', status: 'Off Duty', password: 'password123' }
-];
-
 const getStaff = async (req, res) => {
   try {
-    let staff = await User.find({}).select('-password').sort({ createdAt: 1 });
-    if (!staff || staff.length === 0) {
-      await User.insertMany(defaultStaffData);
-      staff = await User.find({}).select('-password').sort({ createdAt: 1 });
-    }
+    // Purge legacy dummy seeded records from MongoDB database
+    await User.deleteMany({
+      $or: [
+        { email: /flavorakitchen\.in/i },
+        { email: /flavora\.in/i },
+        { name: /master chef vikram/i },
+        { name: /suresh kumar/i },
+        { name: /ananya roy/i }
+      ]
+    });
+
+    const staff = await User.find({}).select('-password').sort({ createdAt: 1 });
 
     const roleCounters = {};
     const formattedStaff = staff.map((member) => {

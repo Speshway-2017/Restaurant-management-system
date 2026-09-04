@@ -257,7 +257,10 @@ export default function ManagerStaffPage() {
     fetchBackendStaff();
   };
 
-  const nonManagerStaff = staffList.filter(stf => !String(stf.role || '').toLowerCase().includes('manager'));
+  const nonManagerStaff = staffList.filter(stf => {
+    const r = String(stf.role || '').toLowerCase();
+    return !r.includes('manager') && !r.includes('admin');
+  });
 
   const filteredStaff = nonManagerStaff.filter(stf => {
     const matchesSearch = !searchQuery || 
@@ -375,7 +378,7 @@ export default function ManagerStaffPage() {
         {/* Role Filter Pills */}
         <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
           {[
-            { id: 'All', label: `All (${staffList.length})` },
+            { id: 'All', label: `All (${nonManagerStaff.length})` },
             { id: 'On Shift', label: `On Shift (${onShiftCount})` },
             { id: 'Waiters', label: 'Waiters' },
             { id: 'Receptionists', label: 'Receptionists' },

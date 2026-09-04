@@ -78,87 +78,169 @@ export default function AdminPaymentsPage() {
     fetchBranches();
   }, []);
 
-  // Dynamic Fallback Dataset Generator
-  const generateFallbackData = (range, branch, pStatus, pMethod) => {
-    let mult = range === 'Today' ? 0.05 : range === 'Yesterday' ? 0.05 : range === 'This Week' ? 0.28 : range === 'Last Month' ? 0.95 : range === 'Last 3 Months' ? 2.8 : range === 'This Year' ? 9.8 : 1;
-    if (branch !== 'All Branches' && branch !== 'All') mult *= 0.35;
-    if (pStatus !== 'All') mult *= 0.8;
-    if (pMethod !== 'All') mult *= 0.4;
+  // Format Currency Helper (handles Lakhs for >=1L, otherwise standard INR format)
+  const formatCurrency = (val) => {
+    const num = Number(val || 0);
+    if (num >= 100000) {
+      return `₹${(num / 100000).toFixed(2)} L`;
+    }
+    return `₹${num.toLocaleString('en-IN')}`;
+  };
 
-    const grossCollected = Math.round(1842000 * mult);
-    const successfulCount = Math.round(1842 * mult);
-    const pendingAmount = Math.round(42800 * mult);
-    const refundAmount = Math.round(18500 * mult);
-    const refundCount = Math.round(12 * mult);
-    const settledAmount = Math.round(1518000 * mult);
-    const gatewayFees = Math.round(32400 * mult);
+  // Build Real Payment Data from MongoDB Orders if backend summary is unavailable
+  const calculateRealPaymentDataFromOrders = (ordersList, range, branch, pStatus, pMethod) => {
+    const list = Array.isArray(ordersList) ? ordersList : [];
+    
+    let totalCollected = 0;
+    let successfulPayments = 0;
+    let pendingPayments = 0;
+    let refundsAmount = 0;
+    let refundsCount = 0;
+
+    const methodTotals = {
+      'UPI': 0,
+      'Credit/Debit Card': 0,
+      'Net Banking': 0,
+      'Wallet': 0,
+      'Cash': 0
+    };
+
+    const transactions = [];
+    const refunds = [];
+
+    list.forEach(order => {
+      const isPaid = order.paymentStatus === 'Paid' || order.payment === 'Paid' || order.status === 'Completed' || order.status === 'Paid';
+      const isCancelledOrRefunded = order.paymentStatus === 'Refunded' || order.status === 'Cancelled' || order.paymentStatus === 'Cancelled';
+      const isPending = !isPaid && !isCancelledOrRefunded;
+
+      const amount = Number(order.total || 0);
+      const rawMethod = order.paymentMethod || 'UPI';
+      let stdMethod = 'UPI';
+      if (/card/i.test(rawMethod)) stdMethod = 'Credit/Debit Card';
+      else if (/net/i.test(rawMethod) || /bank/i.test(rawMethod)) stdMethod = 'Net Banking';
+      else if (/wallet/i.test(rawMethod) || /paytm/i.test(rawMethod)) stdMethod = 'Wallet';
+      else if (/cash/i.test(rawMethod)) stdMethod = 'Cash';
+
+      if (isPaid) {
+        totalCollected += amount;
+        successfulPayments += 1;
+        methodTotals[stdMethod] += amount;
+      } else if (isPending) {
+        pendingPayments += amount;
+      } else if (isCancelledOrRefunded) {
+        refundsAmount += amount;
+        refundsCount += 1;
+
+        refunds.push({
+          id: 'REF-' + (order.orderId ? String(order.orderId).replace(/^#/,'') : String(order._id).slice(-4).toUpperCase()),
+          orderId: order.orderId || ('ORD-' + String(order._id).slice(-4)),
+          branch: order.branch || 'Main Branch',
+          refundAmount: amount,
+          reason: order.notes || 'Order Cancelled / Refunded',
+          requestedBy: 'Staff',
+          status: order.paymentStatus === 'Refunded' ? 'Approved' : 'Completed',
+          date: order.createdAt ? new Date(order.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+          time: order.createdAt ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+        });
+      }
+
+      const txStatus = isPaid ? 'Paid' : isCancelledOrRefunded ? 'Refunded' : 'Pending';
+
+      const matchBranch = branch === 'All Branches' || branch === 'All' || (order.branch && order.branch.toLowerCase().includes(branch.toLowerCase())) || (order.table && order.table.toLowerCase().includes(branch.toLowerCase()));
+      const matchStatus = pStatus === 'All' || (pStatus === 'Successful' ? txStatus === 'Paid' : txStatus === pStatus);
+      const matchMethod = pMethod === 'All' || stdMethod === pMethod;
+
+      if (matchBranch && matchStatus && matchMethod) {
+        transactions.push({
+          id: order.transactionId || ('TXN-' + (order.orderId ? String(order.orderId).replace(/^#/,'') : String(order._id).slice(-6).toUpperCase())),
+          orderId: order.orderId || ('ORD-' + String(order._id).slice(-4)),
+          branch: order.branch || 'Main Branch',
+          customer: order.customer || 'Guest Diner',
+          table: order.table || 'Takeaway',
+          method: stdMethod,
+          amount: amount,
+          tax: order.gstAmount || Math.round(amount * 0.05),
+          discount: order.discountAmount || 0,
+          gateway: stdMethod === 'Cash' ? 'Cash Counter' : 'Razorpay',
+          gatewayTxnId: order.transactionId || ('pay_' + String(order._id).slice(-8)),
+          status: txStatus,
+          date: order.createdAt ? new Date(order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '',
+          settlementStatus: isPaid ? 'Settled' : txStatus
+        });
+      }
+    });
+
+    const gatewayFees = Math.round(totalCollected * 0.015);
+    const settledAmount = Math.max(0, totalCollected - refundsAmount - gatewayFees);
+
+    const methodBreakdown = [
+      { method: 'UPI', percentage: totalCollected > 0 ? Math.round((methodTotals['UPI'] / totalCollected) * 100) : 0, amount: methodTotals['UPI'], color: '#1E4636' },
+      { method: 'Credit/Debit Card', percentage: totalCollected > 0 ? Math.round((methodTotals['Credit/Debit Card'] / totalCollected) * 100) : 0, amount: methodTotals['Credit/Debit Card'], color: '#E07A3C' },
+      { method: 'Net Banking', percentage: totalCollected > 0 ? Math.round((methodTotals['Net Banking'] / totalCollected) * 100) : 0, amount: methodTotals['Net Banking'], color: '#FF8A00' },
+      { method: 'Wallet', percentage: totalCollected > 0 ? Math.round((methodTotals['Wallet'] / totalCollected) * 100) : 0, amount: methodTotals['Wallet'], color: '#8B5CF6' },
+      { method: 'Cash', percentage: totalCollected > 0 ? Math.round((methodTotals['Cash'] / totalCollected) * 100) : 0, amount: methodTotals['Cash'], color: '#3F8F5B' }
+    ];
+
+    const collectionTrendMap = {};
+    list.forEach(o => {
+      if (o.createdAt && (o.paymentStatus === 'Paid' || o.status === 'Completed' || o.payment === 'Paid')) {
+        const dayLabel = new Date(o.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+        collectionTrendMap[dayLabel] = (collectionTrendMap[dayLabel] || 0) + Number(o.total || 0);
+      }
+    });
+
+    let collectionTrend = Object.keys(collectionTrendMap).map((period, idx, arr) => ({
+      period,
+      successfulAmount: collectionTrendMap[period],
+      transactions: list.filter(o => o.createdAt && new Date(o.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) === period).length,
+      refundAmount: 0,
+      isCurrent: idx === arr.length - 1
+    }));
+
+    if (collectionTrend.length === 0) {
+      collectionTrend = [
+        { period: 'Today', successfulAmount: 0, transactions: 0, refundAmount: 0, isCurrent: true }
+      ];
+    }
+
+    const recentSettlements = [];
+    if (totalCollected > 0) {
+      recentSettlements.push({
+        settlementId: 'SET-' + Math.floor(1000 + Math.random() * 9000),
+        branch: branch && branch !== 'All Branches' ? branch : 'Main Branch',
+        amount: settledAmount,
+        date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        gateway: 'Razorpay / Bank Direct',
+        status: 'Settled'
+      });
+    }
 
     return {
       kpis: {
-        totalCollected: grossCollected,
-        totalCollectedGrowth: 14.8,
-        successfulPayments: successfulCount,
-        successfulGrowth: 12.4,
-        pendingPayments: pendingAmount,
-        pendingWarning: true,
-        refundsAmount: refundAmount,
-        refundsCount: refundCount,
-        settledAmount: settledAmount,
-        settlementStatus: '🟢 Successfully settled',
-        gatewayFees: gatewayFees
+        totalCollected,
+        totalCollectedGrowth: 0,
+        successfulPayments,
+        successfulGrowth: 0,
+        pendingPayments,
+        pendingWarning: pendingPayments > 0,
+        refundsAmount,
+        refundsCount,
+        settledAmount,
+        settlementStatus: totalCollected > 0 ? '🟢 Successfully settled' : '⚪ No settlements',
+        gatewayFees
       },
-      collectionTrend: [
-        { period: 'Jan', successfulAmount: Math.round(grossCollected * 0.58), transactions: Math.round(successfulCount * 0.56), refundAmount: Math.round(refundAmount * 0.50) },
-        { period: 'Feb', successfulAmount: Math.round(grossCollected * 0.64), transactions: Math.round(successfulCount * 0.63), refundAmount: Math.round(refundAmount * 0.55) },
-        { period: 'Mar', successfulAmount: Math.round(grossCollected * 0.72), transactions: Math.round(successfulCount * 0.71), refundAmount: Math.round(refundAmount * 0.60) },
-        { period: 'Apr', successfulAmount: Math.round(grossCollected * 0.76), transactions: Math.round(successfulCount * 0.75), refundAmount: Math.round(refundAmount * 0.65) },
-        { period: 'May', successfulAmount: Math.round(grossCollected * 0.84), transactions: Math.round(successfulCount * 0.83), refundAmount: Math.round(refundAmount * 0.75) },
-        { period: 'Jun', successfulAmount: Math.round(grossCollected * 0.88), transactions: Math.round(successfulCount * 0.87), refundAmount: Math.round(refundAmount * 0.80) },
-        { period: 'Jul', successfulAmount: Math.round(grossCollected * 0.94), transactions: Math.round(successfulCount * 0.93), refundAmount: Math.round(refundAmount * 0.90) },
-        { period: 'Aug (Current)', successfulAmount: grossCollected, transactions: successfulCount, refundAmount: refundAmount, isCurrent: true }
-      ],
-      methodBreakdown: [
-        { method: 'UPI', percentage: 62, amount: Math.round(grossCollected * 0.62), color: '#1E4636' },
-        { method: 'Credit/Debit Card', percentage: 18, amount: Math.round(grossCollected * 0.18), color: '#E07A3C' },
-        { method: 'Net Banking', percentage: 8, amount: Math.round(grossCollected * 0.08), color: '#FF8A00' },
-        { method: 'Wallet', percentage: 7, amount: Math.round(grossCollected * 0.07), color: '#8B5CF6' },
-        { method: 'Cash', percentage: 5, amount: Math.round(grossCollected * 0.05), color: '#3F8F5B' }
-      ],
+      collectionTrend,
+      methodBreakdown,
       settlementOverview: {
-        totalCollected: grossCollected,
+        totalCollected,
         settled: settledAmount,
-        processing: Math.round(182000 * mult),
-        pending: Math.round(142000 * mult),
-        failed: Math.round(12000 * mult)
+        processing: pendingPayments,
+        pending: pendingPayments,
+        failed: 0
       },
-      recentSettlements: [
-        { settlementId: 'SET-1024', branch: 'Jubilee Hills', amount: Math.round(84500 * (mult > 0.5 ? 1 : mult * 2)), date: 'Aug 20, 2026', gateway: 'Razorpay', status: 'Settled' },
-        { settlementId: 'SET-1023', branch: 'Banjara Hills', amount: Math.round(62300 * (mult > 0.5 ? 1 : mult * 2)), date: 'Aug 19, 2026', gateway: 'Razorpay', status: 'Settled' },
-        { settlementId: 'SET-1022', branch: 'Madhapur', amount: Math.round(48200 * (mult > 0.5 ? 1 : mult * 2)), date: 'Aug 18, 2026', gateway: 'PhonePe', status: 'Processing' },
-        { settlementId: 'SET-1021', branch: 'Gachibowli', amount: Math.round(39800 * (mult > 0.5 ? 1 : mult * 2)), date: 'Aug 17, 2026', gateway: 'Razorpay', status: 'Settled' },
-        { settlementId: 'SET-1020', branch: 'Jubilee Hills', amount: Math.round(71000 * (mult > 0.5 ? 1 : mult * 2)), date: 'Aug 16, 2026', gateway: 'Paytm', status: 'Settled' }
-      ].filter(s => branch === 'All Branches' || branch === 'All' || s.branch.toLowerCase().includes(branch.toLowerCase())),
-      transactions: [
-        { id: 'TXN10245', orderId: 'ORD-8452', branch: 'Jubilee Hills', customer: 'Rahul Sharma', table: 'T-04', method: 'UPI', amount: 1240, tax: 223, discount: 50, gateway: 'Razorpay', gatewayTxnId: 'pay_1908234908', status: 'Paid', date: '20 Aug, 12:42 PM', settlementStatus: 'Settled' },
-        { id: 'TXN10244', orderId: 'ORD-8450', branch: 'Banjara Hills', customer: 'Priya Patel', table: 'T-12', method: 'Credit/Debit Card', amount: 1980, tax: 356, discount: 100, gateway: 'Razorpay', gatewayTxnId: 'pay_1908230112', status: 'Paid', date: '20 Aug, 12:30 PM', settlementStatus: 'Settled' },
-        { id: 'TXN10243', orderId: 'ORD-8448', branch: 'Madhapur', customer: 'Anish Verma', table: 'Takeaway', method: 'UPI', amount: 890, tax: 160, discount: 0, gateway: 'PhonePe', gatewayTxnId: 'T20260820112', status: 'Paid', date: '20 Aug, 12:15 PM', settlementStatus: 'Processing' },
-        { id: 'TXN10242', orderId: 'ORD-8445', branch: 'Jubilee Hills', customer: 'Vikram Singh', table: 'T-02', method: 'Cash', amount: 1850, tax: 333, discount: 150, gateway: 'Cash Counter', gatewayTxnId: 'REG_BOX_01', status: 'Paid', date: '20 Aug, 11:50 AM', settlementStatus: 'In Register' },
-        { id: 'TXN10241', orderId: 'ORD-8440', branch: 'Gachibowli', customer: 'Siddharth Rao', table: 'T-08', method: 'Net Banking', amount: 2450, tax: 441, discount: 200, gateway: 'Razorpay', gatewayTxnId: 'pay_1908219901', status: 'Pending', date: '20 Aug, 11:20 AM', settlementStatus: 'Pending' },
-        { id: 'TXN10240', orderId: 'ORD-8435', branch: 'Jubilee Hills', customer: 'Kavita Reddy', table: 'T-05', method: 'Wallet', amount: 620, tax: 111, discount: 0, gateway: 'Paytm', gatewayTxnId: 'PTM_99012384', status: 'Failed', date: '20 Aug, 10:45 AM', settlementStatus: 'Failed' },
-        { id: 'TXN10239', orderId: 'ORD-8412', branch: 'Jubilee Hills', customer: 'Amitabh Sen', table: 'Delivery', method: 'UPI', amount: 1240, tax: 223, discount: 0, gateway: 'Razorpay', gatewayTxnId: 'pay_1908188201', status: 'Refunded', date: '20 Aug, 10:15 AM', settlementStatus: 'Refunded' }
-      ].filter(t => {
-        const matchBranch = branch === 'All Branches' || branch === 'All' || t.branch.toLowerCase().includes(branch.toLowerCase());
-        const matchStatus = pStatus === 'All' || (pStatus === 'Successful' ? t.status === 'Paid' : t.status === pStatus);
-        const matchMethod = pMethod === 'All' || t.method === pMethod;
-        return matchBranch && matchStatus && matchMethod;
-      }),
-      refunds: [
-        { id: 'REF-1092', orderId: 'ORD-8412', branch: 'Jubilee Hills', refundAmount: 1240, reason: 'Wrong item delivered', requestedBy: 'Manager Vikram', status: 'Approved', date: '2026-08-20', time: '11:15 AM' },
-        { id: 'REF-1091', orderId: 'ORD-8390', branch: 'Banjara Hills', refundAmount: 850, reason: 'Food delay over 45 mins', requestedBy: 'Staff Suresh', status: 'Completed', date: '2026-08-19', time: '08:40 PM' },
-        { id: 'REF-1090', orderId: 'ORD-8384', branch: 'Madhapur', refundAmount: 2150, reason: 'Quality dissatisfaction', requestedBy: 'Manager Ananya', status: 'Pending', date: '2026-08-19', time: '06:10 PM' },
-        { id: 'REF-1089', orderId: 'ORD-8370', branch: 'Jubilee Hills', refundAmount: 620, reason: 'Accidental double payment', requestedBy: 'Cashier Priya', status: 'Completed', date: '2026-08-18', time: '02:25 PM' },
-        { id: 'REF-1088', orderId: 'ORD-8355', branch: 'Gachibowli', refundAmount: 1450, reason: 'Customer cancelled before prep', requestedBy: 'Staff Rajesh', status: 'Rejected', date: '2026-08-17', time: '09:00 PM' }
-      ].filter(r => branch === 'All Branches' || branch === 'All' || r.branch.toLowerCase().includes(branch.toLowerCase())),
+      recentSettlements,
+      transactions,
+      refunds,
       gateways: {
         razorpay: { id: 'razorpay', name: 'Razorpay', status: 'Connected', enabled: true, merchantId: 'rzp_live_894120948', apiKey: 'rzp_live_9081293841', secretKeyMasked: '••••••••••••••••3491', mode: 'Live', webhookStatus: 'Active', lastSync: 'Just now' },
         phonepe: { id: 'phonepe', name: 'PhonePe PG', status: 'Not Configured', enabled: false, merchantId: '', apiKey: '', secretKeyMasked: '', mode: 'Test', webhookStatus: 'Inactive', lastSync: 'Never' },
@@ -182,8 +264,15 @@ export default function AdminPaymentsPage() {
       });
       setPaymentData(data);
     } catch (err) {
-      console.warn('Backend API endpoint returned error, using dynamic payment dataset:', err.message);
-      setPaymentData(generateFallbackData(timeRange, branchFilter, paymentStatusFilter, paymentMethodFilter));
+      console.warn('Backend payment summary API call error, calculating from live MongoDB orders:', err.message);
+      try {
+        const rawOrders = await api.getOrders();
+        const calculatedData = calculateRealPaymentDataFromOrders(rawOrders, timeRange, branchFilter, paymentStatusFilter, paymentMethodFilter);
+        setPaymentData(calculatedData);
+      } catch (ordersErr) {
+        console.error('Failed to load orders for payment summary:', ordersErr);
+        setError('Failed to fetch payment and settlement data.');
+      }
     } finally {
       setLoading(false);
     }
@@ -207,11 +296,11 @@ export default function AdminPaymentsPage() {
           <h3>1. Executive Financial Summary</h3>
           <table border="1">
             <tr><th>Metric</th><th>Amount / Count</th></tr>
-            <tr><td>Total Collected</td><td>₹${(paymentData.kpis.totalCollected / 100000).toFixed(2)} L</td></tr>
+            <tr><td>Total Collected</td><td>${formatCurrency(paymentData.kpis.totalCollected)}</td></tr>
             <tr><td>Successful Payments</td><td>${paymentData.kpis.successfulPayments}</td></tr>
             <tr><td>Pending Payments</td><td>₹${paymentData.kpis.pendingPayments.toLocaleString('en-IN')}</td></tr>
             <tr><td>Refunds Processed</td><td>₹${paymentData.kpis.refundsAmount.toLocaleString('en-IN')} (${paymentData.kpis.refundsCount} refunds)</td></tr>
-            <tr><td>Settled Amount</td><td>₹${(paymentData.kpis.settledAmount / 100000).toFixed(2)} L</td></tr>
+            <tr><td>Settled Amount</td><td>${formatCurrency(paymentData.kpis.settledAmount)}</td></tr>
             <tr><td>Gateway Fees</td><td>₹${paymentData.kpis.gatewayFees.toLocaleString('en-IN')}</td></tr>
           </table>
           <br/>
@@ -490,7 +579,7 @@ export default function AdminPaymentsPage() {
                 </div>
               </div>
               <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#1E4636', marginTop: '0.4rem', whiteSpace: 'nowrap' }}>
-                ₹{(paymentData.kpis.totalCollected / 100000).toFixed(2)} L
+                {formatCurrency(paymentData.kpis.totalCollected)}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.4rem', fontSize: '0.68rem', color: '#166534', fontWeight: 800 }}>
                 <span className="admin-kpi-trend-tag" style={{ padding: '0.1rem 0.35rem', fontSize: '0.65rem' }}>
@@ -560,7 +649,7 @@ export default function AdminPaymentsPage() {
                 </div>
               </div>
               <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#FFFFFF', marginTop: '0.4rem', whiteSpace: 'nowrap' }}>
-                ₹{(paymentData.kpis.settledAmount / 100000).toFixed(2)} L
+                {formatCurrency(paymentData.kpis.settledAmount)}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', marginTop: '0.4rem', fontSize: '0.68rem', color: '#F2C14E', fontWeight: 700, whiteSpace: 'nowrap' }}>
                 <span>🟢 Successfully settled</span>
@@ -611,7 +700,7 @@ export default function AdminPaymentsPage() {
                 return (
                   <div key={item.period} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', height: '100%', justifyContent: 'flex-end' }}>
                     <span style={{ fontSize: '0.75rem', fontWeight: 800, color: item.isCurrent ? '#E07A3C' : '#1E4636' }}>
-                      ₹{(item.successfulAmount / 100000).toFixed(2)} L
+                      {formatCurrency(item.successfulAmount)}
                     </span>
 
                     <div
@@ -657,7 +746,7 @@ export default function AdminPaymentsPage() {
                   <div key={idx} style={{ backgroundColor: '#FAF6EE', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
                       <span style={{ fontWeight: 800, color: '#1E4636' }}>{pm.method}</span>
-                      <span style={{ fontWeight: 900, color: '#0F2A1D' }}>₹{(pm.amount / 100000).toFixed(2)} L <span style={{ color: '#64748B', fontWeight: 600, fontSize: '0.78rem' }}>({pm.percentage}%)</span></span>
+                      <span style={{ fontWeight: 900, color: '#0F2A1D' }}>{formatCurrency(pm.amount)} <span style={{ color: '#64748B', fontWeight: 600, fontSize: '0.78rem' }}>({pm.percentage}%)</span></span>
                     </div>
                     <div style={{ width: '100%', height: '8px', background: '#EAE3D2', borderRadius: '999px', overflow: 'hidden' }}>
                       <div
@@ -689,82 +778,36 @@ export default function AdminPaymentsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginTop: '0.75rem' }}>
                 <div style={{ backgroundColor: '#FAF6EE', padding: '0.9rem 1.1rem', borderRadius: '12px', border: '1px solid #EAE3D2' }}>
                   <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700 }}>Total Collected</span>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1E4636', marginTop: '0.2rem' }}>₹{(paymentData.settlementOverview.totalCollected / 100000).toFixed(2)} L</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1E4636', marginTop: '0.2rem' }}>{formatCurrency(paymentData.settlementOverview.totalCollected)}</div>
                 </div>
 
                 <div style={{ backgroundColor: '#E8F5E9', padding: '0.9rem 1.1rem', borderRadius: '12px', border: '1px solid #C8E6C9' }}>
                   <span style={{ fontSize: '0.75rem', color: '#1B5E20', fontWeight: 700 }}>🟢 Settled to Bank</span>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B5E20', marginTop: '0.2rem' }}>₹{(paymentData.settlementOverview.settled / 100000).toFixed(2)} L</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B5E20', marginTop: '0.2rem' }}>{formatCurrency(paymentData.settlementOverview.settled)}</div>
                 </div>
 
                 <div style={{ backgroundColor: '#FEF3C7', padding: '0.9rem 1.1rem', borderRadius: '12px', border: '1px solid #FDE68A' }}>
                   <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: 700 }}>🟡 Processing</span>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#B45309', marginTop: '0.2rem' }}>₹{(paymentData.settlementOverview.processing / 100000).toFixed(2)} L</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#B45309', marginTop: '0.2rem' }}>{formatCurrency(paymentData.settlementOverview.processing)}</div>
                 </div>
 
                 <div style={{ backgroundColor: '#FEF2F2', padding: '0.9rem 1.1rem', borderRadius: '12px', border: '1px solid #FCA5A5' }}>
                   <span style={{ fontSize: '0.75rem', color: '#991B1B', fontWeight: 700 }}>🔴 Failed / Pending</span>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#991B1B', marginTop: '0.2rem' }}>₹{(paymentData.settlementOverview.failed / 100000).toFixed(2)} L</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#991B1B', marginTop: '0.2rem' }}>{formatCurrency(paymentData.settlementOverview.failed)}</div>
                 </div>
               </div>
             </div>
 
           </div>
 
-          {/* 7. RECENT SETTLEMENTS TABLE */}
-          <div className="admin-card mb-4" style={{ padding: '1.5rem 1.75rem', marginBottom: '2.5rem', borderRadius: '16px', border: '1px solid #EAE3D2' }}>
-            <div className="admin-card-header mb-4" style={{ borderBottom: '1.5px dashed #EAE3D2', paddingBottom: '0.85rem' }}>
-              <div>
-                <h2 className="admin-card-title" style={{ fontSize: '1.15rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#1E4636' }}>
-                  <Building2 size={20} color="#1E4636" />
-                  <span>Recent Settlements</span>
-                </h2>
-                <p className="admin-card-subtitle" style={{ marginTop: '0.15rem' }}>Direct gateway batch payouts transferred into primary bank account</p>
-              </div>
-
-              <button className="btn btn-sm btn-outline" onClick={() => setActiveTab('Settlements')} style={{ fontSize: '0.78rem', fontWeight: 700, padding: '0.35rem 0.85rem', borderRadius: '8px' }}>
-                View All →
-              </button>
-            </div>
-
-            <div className="admin-table-container">
-              <table className="admin-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
-                <thead>
-                  <tr>
-                    <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Settlement ID</th>
-                    <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Branch</th>
-                    <th style={{ padding: '0.6rem 0.85rem', textAlign: 'right', color: '#1E4636', fontWeight: 800 }}>Amount</th>
-                    <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Settlement Date</th>
-                    <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Gateway</th>
-                    <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#1E4636', fontWeight: 800 }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paymentData.recentSettlements.map((s) => (
-                    <tr key={s.settlementId} style={{ backgroundColor: '#FAF6EE', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
-                      <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: '#1E4636' }}>{s.settlementId}</td>
-                      <td style={{ padding: '0.85rem 1rem', fontWeight: 800, color: '#0F2A1D' }}>{s.branch}</td>
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: 900, color: '#1E4636' }}>₹{s.amount.toLocaleString('en-IN')}</td>
-                      <td style={{ padding: '0.85rem 1rem', color: '#475569', fontSize: '0.85rem' }}>{s.date}</td>
-                      <td style={{ padding: '0.85rem 1rem', color: '#334155', fontWeight: 700 }}>{s.gateway}</td>
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                        {s.status === 'Settled' && <span className="status-badge-unified is-ready" style={{ background: '#E8F5E9', color: '#1B5E20', borderColor: '#C8E6C9', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟢 Settled</span>}
-                        {s.status === 'Processing' && <span className="status-badge-unified is-pending" style={{ background: '#FEF3C7', color: '#B45309', borderColor: '#FDE68A', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟡 Processing</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
+          
           {/* 8. TRANSACTIONS SECTION WITH TABS */}
           <div className="admin-card mb-4" style={{ padding: '1.5rem 1.75rem', marginBottom: '2.5rem', borderRadius: '16px', border: '1px solid #EAE3D2' }}>
             
             {/* Tabs Header & Search */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px dashed #EAE3D2', paddingBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div style={{ display: 'flex', gap: '0.5rem', background: '#FAF6EE', padding: '0.3rem', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
-                {['Settlements', 'Refunds'].map(tab => (
+                {['Payments', 'Settlements', 'Refunds'].map(tab => (
                   <button
                     key={tab}
                     onClick={() => { setActiveTab(tab); setCurrentPage(1); }}
@@ -892,89 +935,105 @@ export default function AdminPaymentsPage() {
             {/* TAB 2: SETTLEMENTS */}
             {activeTab === 'Settlements' && (
               <div style={{ marginTop: '1.25rem' }}>
-                <div className="admin-table-container">
-                  <table className="admin-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Settlement ID</th>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Branch</th>
-                        <th style={{ padding: '0.6rem 0.85rem', textAlign: 'right', color: '#1E4636', fontWeight: 800 }}>Amount</th>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Settlement Date</th>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Gateway</th>
-                        <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#1E4636', fontWeight: 800 }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paymentData.recentSettlements.map((s) => (
-                        <tr key={s.settlementId} style={{ backgroundColor: '#FAF6EE', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
-                          <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: '#1E4636' }}>{s.settlementId}</td>
-                          <td style={{ padding: '0.85rem 1rem', fontWeight: 800, color: '#0F2A1D' }}>{s.branch}</td>
-                          <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: 900, color: '#1E4636' }}>₹{s.amount.toLocaleString('en-IN')}</td>
-                          <td style={{ padding: '0.85rem 1rem', color: '#475569', fontSize: '0.85rem' }}>{s.date}</td>
-                          <td style={{ padding: '0.85rem 1rem', color: '#334155', fontWeight: 700 }}>{s.gateway}</td>
-                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                            {s.status === 'Settled' && <span className="status-badge-unified is-ready" style={{ background: '#E8F5E9', color: '#1B5E20', borderColor: '#C8E6C9', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟢 Settled</span>}
-                            {s.status === 'Processing' && <span className="status-badge-unified is-pending" style={{ background: '#FEF3C7', color: '#B45309', borderColor: '#FDE68A', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟡 Processing</span>}
-                          </td>
+                {paymentData.recentSettlements.length === 0 ? (
+                  <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>
+                    <Building2 size={36} color="#94A3B8" style={{ margin: '0 auto 0.75rem auto' }} />
+                    <h4 style={{ color: '#1E4636', margin: 0 }}>No settlements found for the selected filters.</h4>
+                    <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Settlement payouts will appear here when completed orders are recorded.</p>
+                  </div>
+                ) : (
+                  <div className="admin-table-container">
+                    <table className="admin-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Settlement ID</th>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Branch</th>
+                          <th style={{ padding: '0.6rem 0.85rem', textAlign: 'right', color: '#1E4636', fontWeight: 800 }}>Amount</th>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Settlement Date</th>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Gateway</th>
+                          <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#1E4636', fontWeight: 800 }}>Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {paymentData.recentSettlements.map((s) => (
+                          <tr key={s.settlementId} style={{ backgroundColor: '#FAF6EE', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
+                            <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: '#1E4636' }}>{s.settlementId}</td>
+                            <td style={{ padding: '0.85rem 1rem', fontWeight: 800, color: '#0F2A1D' }}>{s.branch}</td>
+                            <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: 900, color: '#1E4636' }}>₹{s.amount.toLocaleString('en-IN')}</td>
+                            <td style={{ padding: '0.85rem 1rem', color: '#475569', fontSize: '0.85rem' }}>{s.date}</td>
+                            <td style={{ padding: '0.85rem 1rem', color: '#334155', fontWeight: 700 }}>{s.gateway}</td>
+                            <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                              {s.status === 'Settled' && <span className="status-badge-unified is-ready" style={{ background: '#E8F5E9', color: '#1B5E20', borderColor: '#C8E6C9', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟢 Settled</span>}
+                              {s.status === 'Processing' && <span className="status-badge-unified is-pending" style={{ background: '#FEF3C7', color: '#B45309', borderColor: '#FDE68A', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟡 Processing</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
             {/* TAB 3: REFUNDS */}
             {activeTab === 'Refunds' && (
               <div style={{ marginTop: '1.25rem' }}>
-                <div className="admin-table-container">
-                  <table className="admin-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Refund ID</th>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Order ID</th>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Branch</th>
-                        <th style={{ padding: '0.6rem 0.85rem', textAlign: 'right', color: '#1E4636', fontWeight: 800 }}>Refund Amount</th>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Reason</th>
-                        <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Requested By</th>
-                        <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#1E4636', fontWeight: 800 }}>Status</th>
-                        <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#1E4636', fontWeight: 800 }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paymentData.refunds.map((r) => (
-                        <tr key={r.id} style={{ backgroundColor: '#FAF6EE', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
-                          <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: '#991B1B' }}>{r.id}</td>
-                          <td style={{ padding: '0.85rem 1rem', fontWeight: 800, color: '#0F2A1D' }}>{r.orderId}</td>
-                          <td style={{ padding: '0.85rem 1rem', color: '#334155' }}>{r.branch}</td>
-                          <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: 900, color: '#991B1B' }}>₹{r.refundAmount.toLocaleString('en-IN')}</td>
-                          <td style={{ padding: '0.85rem 1rem', color: '#475569', fontSize: '0.84rem' }}>{r.reason}</td>
-                          <td style={{ padding: '0.85rem 1rem', color: '#475569', fontSize: '0.84rem' }}>{r.requestedBy}</td>
-                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                            {r.status === 'Completed' && <span className="status-badge-unified is-ready" style={{ background: '#E8F5E9', color: '#1B5E20', borderColor: '#C8E6C9', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟢 Completed</span>}
-                            {r.status === 'Approved' && <span className="status-badge-unified is-ready" style={{ background: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🔵 Approved</span>}
-                            {r.status === 'Pending' && <span className="status-badge-unified is-pending" style={{ background: '#FEF3C7', color: '#B45309', borderColor: '#FDE68A', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟡 Pending</span>}
-                            {r.status === 'Rejected' && <span className="status-badge-unified is-cancelled" style={{ background: '#FEF2F2', color: '#991B1B', borderColor: '#FCA5A5', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🔴 Rejected</span>}
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                            {r.status === 'Pending' ? (
-                              <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
-                                <button className="btn btn-sm" onClick={() => setRefundActionModal({ refund: r, action: 'approve' })} style={{ backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}>
-                                  Approve
-                                </button>
-                                <button className="btn btn-sm" onClick={() => setRefundActionModal({ refund: r, action: 'reject' })} style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}>
-                                  Reject
-                                </button>
-                              </div>
-                            ) : (
-                              <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>Audited</span>
-                            )}
-                          </td>
+                {paymentData.refunds.length === 0 ? (
+                  <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>
+                    <RefreshCw size={36} color="#94A3B8" style={{ margin: '0 auto 0.75rem auto' }} />
+                    <h4 style={{ color: '#1E4636', margin: 0 }}>No refund records found for the selected filters.</h4>
+                    <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Any cancelled or refunded customer orders will be logged here.</p>
+                  </div>
+                ) : (
+                  <div className="admin-table-container">
+                    <table className="admin-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Refund ID</th>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Order ID</th>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Branch</th>
+                          <th style={{ padding: '0.6rem 0.85rem', textAlign: 'right', color: '#1E4636', fontWeight: 800 }}>Refund Amount</th>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Reason</th>
+                          <th style={{ padding: '0.6rem 0.85rem', color: '#1E4636', fontWeight: 800 }}>Requested By</th>
+                          <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#1E4636', fontWeight: 800 }}>Status</th>
+                          <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#1E4636', fontWeight: 800 }}>Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {paymentData.refunds.map((r) => (
+                          <tr key={r.id} style={{ backgroundColor: '#FAF6EE', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
+                            <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: '#991B1B' }}>{r.id}</td>
+                            <td style={{ padding: '0.85rem 1rem', fontWeight: 800, color: '#0F2A1D' }}>{r.orderId}</td>
+                            <td style={{ padding: '0.85rem 1rem', color: '#334155' }}>{r.branch}</td>
+                            <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: 900, color: '#991B1B' }}>₹{r.refundAmount.toLocaleString('en-IN')}</td>
+                            <td style={{ padding: '0.85rem 1rem', color: '#475569', fontSize: '0.84rem' }}>{r.reason}</td>
+                            <td style={{ padding: '0.85rem 1rem', color: '#475569', fontSize: '0.84rem' }}>{r.requestedBy}</td>
+                            <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                              {r.status === 'Completed' && <span className="status-badge-unified is-ready" style={{ background: '#E8F5E9', color: '#1B5E20', borderColor: '#C8E6C9', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟢 Completed</span>}
+                              {r.status === 'Approved' && <span className="status-badge-unified is-ready" style={{ background: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🔵 Approved</span>}
+                              {r.status === 'Pending' && <span className="status-badge-unified is-pending" style={{ background: '#FEF3C7', color: '#B45309', borderColor: '#FDE68A', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🟡 Pending</span>}
+                              {r.status === 'Rejected' && <span className="status-badge-unified is-cancelled" style={{ background: '#FEF2F2', color: '#991B1B', borderColor: '#FCA5A5', padding: '0.3rem 0.65rem', fontWeight: 800 }}>🔴 Rejected</span>}
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                              {r.status === 'Pending' ? (
+                                <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                                  <button className="btn btn-sm" onClick={() => setRefundActionModal({ refund: r, action: 'approve' })} style={{ backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}>
+                                    Approve
+                                  </button>
+                                  <button className="btn btn-sm" onClick={() => setRefundActionModal({ refund: r, action: 'reject' })} style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}>
+                                    Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>Audited</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 

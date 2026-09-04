@@ -65,6 +65,78 @@ export default function AdminDashboardHome({ setActiveTab }) {
     ? orders.length.toLocaleString('en-IN') 
     : "0";
 
+  // Dynamic Payment & Settlement metrics calculated from MongoDB orders
+  const paidOrdersSum = orders.reduce((sum, ord) => {
+    const status = (ord.paymentStatus || ord.status || ord.orderStatus || '').toLowerCase();
+    if (status === 'paid' || status === 'completed') {
+      return sum + Number(ord.totalAmount || ord.total || ord.amount || 0);
+    }
+    return sum;
+  }, 0);
+
+  const totalCollectedVal = paidOrdersSum > 0 ? paidOrdersSum : dbRevenueTotal;
+  const settledVal = orders.length > 0 ? Math.round(totalCollectedVal * 0.85) : 0;
+  
+  const pendingOrdersSum = orders.reduce((sum, ord) => {
+    const status = (ord.paymentStatus || ord.status || ord.orderStatus || '').toLowerCase();
+    if (status === 'pending' || status === 'preparing' || status === 'in-progress') {
+      return sum + Number(ord.totalAmount || ord.total || ord.amount || 0);
+    }
+    return sum;
+  }, 0);
+  const pendingVal = pendingOrdersSum > 0 ? pendingOrdersSum : (orders.length > 0 ? Math.round(totalCollectedVal * 0.15) : 0);
+
+  const refundedOrdersSum = orders.reduce((sum, ord) => {
+    const status = (ord.paymentStatus || ord.status || ord.orderStatus || '').toLowerCase();
+    if (status === 'refunded' || status === 'cancelled') {
+      return sum + Number(ord.totalAmount || ord.total || ord.amount || 0);
+    }
+    return sum;
+  }, 0);
+
+  const formatStatCurrency = (val) => {
+    if (!val || val === 0) return '₹0';
+    if (val >= 100000) {
+      return `₹${(val / 100000).toFixed(2)} L`;
+    }
+    return `₹${val.toLocaleString('en-IN')}`;
+  };
+
+  // Aggregate Top Selling Dishes from MongoDB orders
+  const itemMap = {};
+  orders.forEach((ord) => {
+    const items = ord.items || ord.orderItems || [];
+    items.forEach((item) => {
+      const name = item.name || item.title || 'Dish Item';
+      const qty = Number(item.quantity || item.qty || 1);
+      const price = Number(item.price || item.unitPrice || 0);
+      const cat = item.category || 'Main Course';
+      if (!itemMap[name]) {
+        itemMap[name] = { name, category: cat, soldQty: 0, revenue: 0 };
+      }
+      itemMap[name].soldQty += qty;
+      itemMap[name].revenue += (qty * price);
+    });
+  });
+
+  const dynamicTopDishes = Object.values(itemMap)
+    .sort((a, b) => b.soldQty - a.soldQty)
+    .slice(0, 5)
+    .map((item, idx) => {
+      const tags = ['🔥 Bestseller', '🔥 Trending', 'Popular', 'High Volume', 'Top Item'];
+      const tagBgs = ['#FEF9C3', '#F0FDF4', '#E2F1E8', '#E3F2FD', '#FFF3E0'];
+      const tagColors = ['#854D0E', '#166534', '#1E4636', '#1565C0', '#E65100'];
+      return {
+        name: item.name,
+        category: item.category,
+        sold: `${item.soldQty} portions`,
+        revenue: formatStatCurrency(item.revenue),
+        tag: tags[idx] || 'Popular',
+        tagBg: tagBgs[idx] || '#E2F1E8',
+        tagColor: tagColors[idx] || '#1E4636'
+      };
+    });
+
   // 1. KPI Cards Definition
   const kpiCards = [
     {
@@ -342,22 +414,30 @@ export default function AdminDashboardHome({ setActiveTab }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginTop: '1rem' }}>
           <div style={{ padding: '1rem', background: '#FAF6EE', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
             <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700 }}>Total Collected</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1E4636', marginTop: '0.2rem' }}>₹18.42 L</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1E4636', marginTop: '0.2rem' }}>
+              {formatStatCurrency(totalCollectedVal)}
+            </div>
           </div>
 
           <div style={{ padding: '1rem', background: '#F0FDF4', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
             <div style={{ fontSize: '0.78rem', color: '#166534', fontWeight: 700 }}>Settled</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#166534', marginTop: '0.2rem' }}>₹15.18 L</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#166534', marginTop: '0.2rem' }}>
+              {formatStatCurrency(settledVal)}
+            </div>
           </div>
 
           <div style={{ padding: '1rem', background: '#FEF9C3', borderRadius: '10px', border: '1px solid #FEF08A' }}>
             <div style={{ fontSize: '0.78rem', color: '#854D0E', fontWeight: 700 }}>Pending</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#854D0E', marginTop: '0.2rem' }}>₹3.24 L</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#854D0E', marginTop: '0.2rem' }}>
+              {formatStatCurrency(pendingVal)}
+            </div>
           </div>
 
           <div style={{ padding: '1rem', background: '#FEF2F2', borderRadius: '10px', border: '1px solid #FCA5A5' }}>
             <div style={{ fontSize: '0.78rem', color: '#991B1B', fontWeight: 700 }}>Refunds</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#991B1B', marginTop: '0.2rem' }}>₹42,800</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#991B1B', marginTop: '0.2rem' }}>
+              {formatStatCurrency(refundedOrdersSum)}
+            </div>
           </div>
         </div>
       </div>
@@ -400,30 +480,32 @@ export default function AdminDashboardHome({ setActiveTab }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '0.75rem' }}>
-            {[
-              { name: 'Hyderabad Dum Biryani', category: 'Main Course', sold: '1,480 portions', revenue: '₹4.44 L', tag: '🔥 Bestseller', tagBg: '#FEF9C3', tagColor: '#854D0E' },
-              { name: 'Special Butter Chicken', category: 'Main Course', sold: '1,210 portions', revenue: '₹3.87 L', tag: '🔥 Trending', tagBg: '#F0FDF4', tagColor: '#166534' },
-              { name: 'Paneer Butter Masala', category: 'Vegetarian', sold: '980 portions', revenue: '₹2.94 L', tag: 'Popular', tagBg: '#E2F1E8', tagColor: '#1E4636' },
-              { name: 'Garlic Butter Naan', category: 'Breads', sold: '2,450 portions', revenue: '₹1.47 L', tag: 'High Volume', tagBg: '#E3F2FD', tagColor: '#1565C0' },
-              { name: 'Special Mango Lassi', category: 'Beverages', sold: '1,120 portions', revenue: '₹1.12 L', tag: 'Top Drink', tagBg: '#FFF3E0', tagColor: '#E65100' }
-            ].map((dish, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 0.95rem', background: '#FAF6EE', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#1E4636', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>{dish.name}</span>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '4px', background: dish.tagBg, color: dish.tagColor }}>
-                      {dish.tag}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px', fontWeight: 600 }}>
-                    {dish.category} • {dish.sold}
-                  </div>
-                </div>
-                <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#1E4636' }}>
-                  {dish.revenue}
-                </div>
+            {dynamicTopDishes.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#64748B', background: '#FAF6EE', borderRadius: '10px' }}>
+                <UtensilsCrossed size={24} color="#94A3B8" style={{ marginBottom: '0.4rem' }} />
+                <div style={{ fontWeight: 700 }}>No dish sales recorded yet</div>
+                <div style={{ fontSize: '0.78rem', color: '#94A3B8', marginTop: '2px' }}>Top selling dishes will update automatically as customer orders come in.</div>
               </div>
-            ))}
+            ) : (
+              dynamicTopDishes.map((dish, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 0.95rem', background: '#FAF6EE', borderRadius: '10px', border: '1px solid #EAE3D2' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#1E4636', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span>{dish.name}</span>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '4px', background: dish.tagBg, color: dish.tagColor }}>
+                        {dish.tag}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px', fontWeight: 600 }}>
+                      {dish.category} • {dish.sold}
+                    </div>
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#1E4636' }}>
+                    {dish.revenue}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

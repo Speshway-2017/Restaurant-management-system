@@ -22,103 +22,10 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
     return () => window.removeEventListener('click', handleOutsideClick);
   }, []);
 
-  const defaultAdminStaff = [
-    { 
-      id: 'RMSM-01', 
-      name: 'Chef Srikanth', 
-      email: 'srikanth@flavorakitchen.in', 
-      role: 'Manager', 
-      phone: '+91 98765 12345', 
-      status: 'On Shift', 
-      ordersHandled: 48, 
-      rating: '4.9 ★',
-      checkInTime: '09:45 AM',
-      checkOutTime: '07:15 PM',
-      scheduledShift: '10:00 AM - 07:00 PM',
-      hoursLogged: '9h 30m',
-      attendanceStatus: 'On Time'
-    },
-    { 
-      id: 'RMSM-02', 
-      name: 'Rajesh Kumar', 
-      email: 'rajesh.mgr@flavorakitchen.in', 
-      role: 'Manager', 
-      phone: '+91 98123 54321', 
-      status: 'On Shift', 
-      ordersHandled: 82, 
-      rating: '4.8 ★',
-      checkInTime: '10:00 AM',
-      checkOutTime: '07:00 PM',
-      scheduledShift: '10:00 AM - 07:00 PM',
-      hoursLogged: '9h 00m',
-      attendanceStatus: 'On Time'
-    }
-  ];
+  const defaultAdminStaff = [];
+  const defaultManagerStaff = [];
 
-  const defaultManagerStaff = [
-    { 
-      id: 'RMSW-01', 
-      name: 'Raju Kumar', 
-      email: 'raju.waiter@flavorakitchen.in', 
-      role: 'Waiter', 
-      phone: '+91 98765 11111', 
-      status: 'On Shift', 
-      ordersHandled: 48, 
-      rating: '4.9 ★',
-      checkInTime: '09:45 AM',
-      checkOutTime: '07:15 PM',
-      scheduledShift: '10:00 AM - 07:00 PM',
-      hoursLogged: '9h 30m',
-      attendanceStatus: 'On Time'
-    },
-    { 
-      id: 'RMSR-01', 
-      name: 'Priya Sharma', 
-      email: 'priya.host@flavorakitchen.in', 
-      role: 'Receptionist', 
-      phone: '+91 98765 22222', 
-      status: 'On Shift', 
-      ordersHandled: 120, 
-      rating: '4.9 ★',
-      checkInTime: '10:00 AM',
-      checkOutTime: '07:00 PM',
-      scheduledShift: '10:00 AM - 07:00 PM',
-      hoursLogged: '9h 00m',
-      attendanceStatus: 'On Time'
-    },
-    { 
-      id: 'RMSC-01', 
-      name: 'Chef Vikram Singh', 
-      email: 'vikram.chef@flavorakitchen.in', 
-      role: 'Chef', 
-      phone: '+91 98765 33333', 
-      status: 'On Shift', 
-      ordersHandled: 84, 
-      rating: '5.0 ★',
-      checkInTime: '08:30 AM',
-      checkOutTime: '05:30 PM',
-      scheduledShift: '08:30 AM - 05:30 PM',
-      hoursLogged: '9h 00m',
-      attendanceStatus: 'On Time'
-    },
-    { 
-      id: 'RMSW-02', 
-      name: 'Suresh Reddy', 
-      email: 'suresh.waiter@flavorakitchen.in', 
-      role: 'Waiter', 
-      phone: '+91 98765 44444', 
-      status: 'On Shift', 
-      ordersHandled: 34, 
-      rating: '4.8 ★',
-      checkInTime: '11:00 AM',
-      checkOutTime: '08:00 PM',
-      scheduledShift: '11:00 AM - 08:00 PM',
-      hoursLogged: '9h 00m',
-      attendanceStatus: 'On Time'
-    }
-  ];
-
-  const [staffMembers, setStaffMembers] = useState(isManagerMode ? defaultManagerStaff : defaultAdminStaff);
+  const [staffMembers, setStaffMembers] = useState([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -339,10 +246,14 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
   };
 
   const visibleStaff = staffMembers.filter(stf => {
-    const isOperationalRole = ['waiter', 'receptionist', 'chef', 'head chef'].includes((stf.role || '').toLowerCase());
-    if (!isManagerMode && isOperationalRole) return false;
-    if (isManagerMode && !isOperationalRole) return false;
-    return true;
+    const roleNorm = (stf.role || '').toLowerCase().trim();
+    const isManagerRole = roleNorm.includes('manager') && !roleNorm.includes('admin');
+    const isOperationalRole = ['waiter', 'receptionist', 'chef', 'head chef'].includes(roleNorm);
+
+    if (!isManagerMode) {
+      return isManagerRole;
+    }
+    return isOperationalRole;
   });
 
   const filteredStaff = visibleStaff.filter(stf => {
@@ -457,7 +368,7 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
               className={`admin-pill-btn ${activeTab === 'all' ? 'is-active' : ''}`}
               onClick={() => setActiveTab('all')}
             >
-              All Staff ({visibleStaff.length})
+              {isManagerMode ? `All Staff (${visibleStaff.length})` : `All Managers (${visibleStaff.length})`}
             </button>
 
             {isManagerMode && (
