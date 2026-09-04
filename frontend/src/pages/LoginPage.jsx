@@ -265,7 +265,7 @@ export default function LoginPage({ setActivePage }) {
           </div>
 
           {/* D. FOOTER SUBTEXT */}
-          <div style={{ color: '#475569', fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.02em' }}>
+          <div style={{ color: '#0F172A', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.02em', textShadow: '0 1px 4px rgba(255, 255, 255, 0.95)' }}>
             © 2026 {brandName}. Powering Pan-India Restaurants.
           </div>
 

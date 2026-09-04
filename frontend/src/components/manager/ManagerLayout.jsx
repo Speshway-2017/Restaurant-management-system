@@ -535,8 +535,12 @@ export default function ManagerLayout({ setActivePage }) {
                 className="admin-user-profile-box"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
               >
-                <div className="admin-user-avatar">
-                  {getInitials(managerProfile?.name)}
+                <div className="admin-user-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+                  {managerProfile?.avatarUrl ? (
+                    <img src={managerProfile.avatarUrl} alt={managerProfile.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    getInitials(managerProfile?.name)
+                  )}
                 </div>
                 <div className="admin-user-info-text">
                   <div className="admin-user-name">{managerProfile?.name || 'Resto Manager'}</div>
