@@ -80,37 +80,52 @@ export default function ChefLayout({ setActivePage }) {
   const previousOrderCountRef = useRef(0);
   const optimisticStatusesRef = useRef({});
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
   const [chefProfile, setChefProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flavora_profile_chef');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && parsed.name) return parsed;
-      }
-    } catch (e) { }
+    const current = getSessionUser();
+    if (current && current.name) {
+      return {
+        name: current.name,
+        email: current.email || 'chef@rms.com',
+        role: current.role || 'Executive Chef',
+        empId: current.empId || 'RMSC-01'
+      };
+    }
     return {
-      name: 'Chef Vikrant',
-      email: 'chef@flavorakitchen.in',
+      name: 'Chef',
+      email: 'chef@rms.com',
       role: 'Executive Chef',
-      empId: 'CHEF-01'
+      empId: 'RMSC-01'
     };
   });
 
   useEffect(() => {
     const fetchChefFromDb = async () => {
       try {
+        const current = getSessionUser();
+        if (!current) return;
+
         const staffList = await api.getStaff();
         if (Array.isArray(staffList) && staffList.length > 0) {
-          const chefInDb = staffList.find(s => s.role === 'Chef' || s.role === 'Head Chef' || (s.empId && s.empId.startsWith('CHEF')));
-          if (chefInDb && chefInDb.name) {
-            const fetched = {
-              name: chefInDb.name,
-              email: chefInDb.email || 'chef@flavorakitchen.in',
-              role: chefInDb.role || 'Executive Chef',
-              empId: chefInDb.empId || 'CHEF-01'
-            };
-            setChefProfile(fetched);
-            localStorage.setItem('flavora_profile_chef', JSON.stringify(fetched));
+          const match = staffList.find(s => 
+            (current._id && String(s._id || s.id) === String(current._id)) ||
+            (current.id && String(s._id || s.id) === String(current.id)) ||
+            (current.email && s.email && s.email.toLowerCase() === current.email.toLowerCase())
+          );
+          if (match && match.name) {
+            setChefProfile({
+              name: match.name,
+              email: match.email || current.email,
+              role: match.role || current.role || 'Executive Chef',
+              empId: match.empId || current.empId || 'RMSC-01'
+            });
           }
         }
       } catch (err) { }

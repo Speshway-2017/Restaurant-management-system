@@ -141,7 +141,17 @@ export default function LoginPage({ setActivePage }) {
 
         const normRole = String(role).toLowerCase().trim();
 
-        // Save session credentials
+        // Clear any old/stale profile keys from previous logins to prevent account data leakage
+        sessionStorage.removeItem('flavora_profile_manager');
+        sessionStorage.removeItem('flavora_profile_chef');
+        sessionStorage.removeItem('flavora_profile_receptionist');
+        sessionStorage.removeItem('flavora_profile_admin');
+        localStorage.removeItem('flavora_profile_manager');
+        localStorage.removeItem('flavora_profile_chef');
+        localStorage.removeItem('flavora_profile_receptionist');
+        localStorage.removeItem('flavora_profile_admin');
+
+        // Save session credentials for the exact newly authenticated user
         sessionStorage.setItem('flavora_auth_token', token);
         sessionStorage.setItem('flavora_logged_in', 'true');
         sessionStorage.setItem('flavora_user_role', normRole);

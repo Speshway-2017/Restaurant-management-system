@@ -38,45 +38,75 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
   });
 
   const fetchStaff = () => {
-    api.getStaff()
-      .then((data) => {
-        if (data && data.length > 0) {
-          const roleCounters = {};
-          setStaffMembers(data.map((stf) => {
-            const role = stf.role || (isManagerMode ? 'Waiter' : 'Manager');
-            let prefix = 'RMSM';
-            if (role.toLowerCase().includes('waiter')) prefix = 'RMSW';
-            else if (role.toLowerCase().includes('receptionist')) prefix = 'RMSR';
-            else if (role.toLowerCase().includes('chef')) prefix = 'RMSC';
-            else if (role.toLowerCase().includes('admin')) prefix = 'RMSA';
+    Promise.all([
+      api.getStaff().catch(() => []),
+      api.getOrders().catch(() => [])
+    ]).then(([data, fetchedOrders]) => {
+      if (data && data.length > 0) {
+        const roleCounters = {};
+        setStaffMembers(data.map((stf) => {
+          const role = stf.role || (isManagerMode ? 'Waiter' : 'Manager');
+          let prefix = 'RMSM';
+          if (role.toLowerCase().includes('waiter')) prefix = 'RMSW';
+          else if (role.toLowerCase().includes('receptionist')) prefix = 'RMSR';
+          else if (role.toLowerCase().includes('chef')) prefix = 'RMSC';
+          else if (role.toLowerCase().includes('admin')) prefix = 'RMSA';
 
-            roleCounters[prefix] = (roleCounters[prefix] || 0) + 1;
-            const numStr = String(roleCounters[prefix]).padStart(2, '0');
-            const formattedId = (stf.empId && stf.empId.startsWith(prefix)) ? stf.empId : `${prefix}-${numStr}`;
+          roleCounters[prefix] = (roleCounters[prefix] || 0) + 1;
+          const numStr = String(roleCounters[prefix]).padStart(2, '0');
+          const formattedId = (stf.empId && stf.empId.startsWith(prefix)) ? stf.empId : `${prefix}-${numStr}`;
 
-            return {
-              id: formattedId,
-              dbId: stf._id || stf.id,
-              name: stf.name,
-              email: stf.email || '',
-              role: role,
-              phone: stf.phone || '+91 98000 00000',
-              documentUrl: stf.documentUrl || '',
-              status: stf.status || 'On Shift',
-              ordersHandled: stf.ordersHandled || Math.floor(Math.random() * 50) + 10,
-              rating: '4.9 ★',
-              checkInTime: stf.checkInTime || '09:45 AM',
-              checkOutTime: stf.checkOutTime || '07:15 PM',
-              scheduledShift: stf.scheduledShift || '10:00 AM - 07:00 PM',
-              hoursLogged: stf.hoursLogged || '9h 30m',
-              attendanceStatus: stf.attendanceStatus || 'On Time'
-            };
-          }));
-        }
-      })
-      .catch((err) => {
-        console.log('Using local fallback for staff list:', err.message);
-      });
+          // Calculate exact orders handled dynamically from MongoDB orders collection
+          const sId = String(stf._id || stf.id || '').toLowerCase();
+          const eId = String(formattedId).toLowerCase();
+          const sEmail = String(stf.email || '').toLowerCase();
+          const sName = String(stf.name || '').toLowerCase();
+          const isManagerRole = role.toLowerCase().includes('manager') || role.toLowerCase().includes('admin');
+
+          let realOrdersHandled = 0;
+          if (Array.isArray(fetchedOrders) && fetchedOrders.length > 0) {
+            const explicitMatches = fetchedOrders.filter(ord => {
+              const oWaiterId = String(ord.waiterId || ord.staffId || ord.createdBy || ord.userId || ord.managerId || '').toLowerCase();
+              const oWaiterName = String(ord.waiterName || ord.waiter || ord.takenBy || ord.serverName || ord.server || ord.managerName || '').toLowerCase();
+              const oEmail = String(ord.email || ord.waiterEmail || ord.managerEmail || '').toLowerCase();
+
+              if (sId && oWaiterId === sId) return true;
+              if (eId && oWaiterId === eId) return true;
+              if (sEmail && oEmail && oEmail === sEmail) return true;
+              if (sName && oWaiterName && (oWaiterName.includes(sName) || sName.includes(oWaiterName))) return true;
+              return false;
+            }).length;
+
+            if (explicitMatches > 0) {
+              realOrdersHandled = explicitMatches;
+            } else if (isManagerRole) {
+              // For Managers overseeing floor operations, count all live branch floor orders
+              realOrdersHandled = fetchedOrders.length;
+            }
+          }
+
+          return {
+            id: formattedId,
+            dbId: stf._id || stf.id,
+            name: stf.name,
+            email: stf.email || '',
+            role: role,
+            phone: stf.phone || '+91 98000 00000',
+            documentUrl: stf.documentUrl || '',
+            status: stf.status || 'Active',
+            ordersHandled: (stf.ordersHandled && Number(stf.ordersHandled) > 0) ? Number(stf.ordersHandled) : realOrdersHandled,
+            rating: '4.9 ★',
+            checkInTime: stf.checkInTime || '09:45 AM',
+            checkOutTime: stf.checkOutTime || '07:15 PM',
+            scheduledShift: stf.scheduledShift || '10:00 AM - 07:00 PM',
+            hoursLogged: stf.hoursLogged || '9h 30m',
+            attendanceStatus: stf.attendanceStatus || 'On Time'
+          };
+        }));
+      }
+    }).catch((err) => {
+      console.log('Error fetching staff list:', err.message);
+    });
   };
 
   useEffect(() => {
@@ -178,16 +208,6 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
 
       try {
         await api.createStaff(payload);
-        if (role === 'Manager') {
-          localStorage.setItem('flavora_profile_manager', JSON.stringify({
-            name: payload.name,
-            email: payload.email,
-            phone: payload.phone,
-            role: 'Restaurant Manager',
-            empId: formattedEmpId
-          }));
-          window.dispatchEvent(new Event('flavora_profile_updated'));
-        }
         showToast(`New ${role} "${formData.name}" (${formattedEmpId}) saved to Database!`);
         await fetchStaff();
         setIsAddModalOpen(false);

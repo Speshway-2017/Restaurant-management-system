@@ -21,13 +21,15 @@ export default function ManagerProfilePage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.name) return parsed;
+        if (parsed && parsed.email && sessionUser?.email && parsed.email.toLowerCase() === sessionUser.email.toLowerCase()) {
+          return parsed;
+        }
       } catch (e) {}
     }
     return {
-      name: sessionUser?.name || 'Manager Ram',
-      email: sessionUser?.email || 'manager1@rms.com',
-      phone: sessionUser?.phone || '+91 98712 34605',
+      name: sessionUser?.name || 'Manager',
+      email: sessionUser?.email || 'manager@rms.com',
+      phone: sessionUser?.phone || '',
       role: 'Restaurant Manager',
       branch: sessionUser?.branch || 'Jubilee Hills (Main Branch)',
       empId: sessionUser?.empId || 'RMSM-01',
@@ -133,9 +135,9 @@ export default function ManagerProfilePage() {
         const staffList = await api.getStaff();
         if (Array.isArray(staffList)) {
           const match = staffList.find(s => 
+            (sessionUser?._id && String(s._id || s.id) === String(sessionUser._id)) ||
             (s.email && s.email.toLowerCase() === profile.email.toLowerCase()) || 
-            (profile.empId && s.empId === profile.empId) ||
-            (s.role && s.role.toLowerCase().includes('manager'))
+            (profile.empId && s.empId === profile.empId)
           );
           if (match && (match._id || match.id)) {
             await api.updateStaff(match._id || match.id, {
