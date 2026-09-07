@@ -11,6 +11,7 @@ import WaiterProfilePage from './WaiterProfilePage';
 import WaiterSettingsPage from './WaiterSettingsPage';
 import { api } from '../../services/api';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
+import { onSocketEvent, joinSocketRooms } from '../../services/socket';
 
 const WAITER_PATH_TO_TAB = {
   '/waiter': 'waiter-dashboard',
@@ -71,8 +72,14 @@ export default function WaiterLayout({ setActivePage }) {
   const [notificationsList, setNotificationsList] = useState([]);
 
   useEffect(() => {
+    const session = getSessionUser();
+    joinSocketRooms(session);
+
     const fetchNotifications = async () => {
       try {
+        const currentWaiter = getSessionUser();
+        const currentWaiterId = currentWaiter?._id || currentWaiter?.id;
+
         const [orders, assistance] = await Promise.all([
           api.getOrders().catch(() => []),
           api.getAssistanceRequests().catch(() => [])
@@ -80,19 +87,25 @@ export default function WaiterLayout({ setActivePage }) {
 
         const notifs = [];
 
-        // 1. Order Ready Alerts
+        // 1. Order Ready Alerts - routed specifically to assigned waiter
         (orders || []).forEach(ord => {
           const readyItems = (ord.items || []).filter(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'DELIVERED');
-          if (ord.status === 'Ready' || readyItems.length > 0) {
-            notifs.push({
-              id: `notif-ready-${ord.orderId || ord._id}`,
-              type: 'ORDER_READY',
-              title: `🔔 Order Ready - ${ord.table || 'T-01'}`,
-              message: `${readyItems.length || 'All'} dish(es) ready for pickup on ${ord.orderId || 'Order'}`,
-              time: ord.time || 'Just now',
-              table: ord.table,
-              isRead: false
-            });
+          const isFoodReady = ord.chefStatus === 'READY' || ord.status === 'Ready' || readyItems.length > 0;
+          
+          if (isFoodReady && ord.waiterStatus !== 'SERVED' && ord.status !== 'Completed') {
+            const isAssignedToMe = !ord.waiterId || (currentWaiterId && String(ord.waiterId) === String(currentWaiterId));
+            if (isAssignedToMe) {
+              notifs.push({
+                id: `notif-ready-${ord.orderId || ord._id}`,
+                type: 'ORDER_READY',
+                title: `🔔 Order #${ord.orderId || 'Order'} is ready for Table ${ord.table || 'T-01'}`,
+                message: `Prepared by Chef ${ord.chefName || 'Kitchen'}. Ready for pickup & service!`,
+                time: ord.time || 'Just now',
+                table: ord.table,
+                orderId: ord.orderId || ord._id,
+                isRead: false
+              });
+            }
           }
         });
 
@@ -119,10 +132,29 @@ export default function WaiterLayout({ setActivePage }) {
     const interval = setInterval(fetchNotifications, 4000);
     window.addEventListener('flavora_orders_updated', fetchNotifications);
     window.addEventListener('flavora_tables_updated', fetchNotifications);
+
+    // Socket.io real-time listener for chef_ready events
+    const unsubReady = onSocketEvent('chef_ready', (data) => {
+      const current = getSessionUser();
+      const currentWaiterId = current?._id || current?.id;
+      const targetWaiterId = data?.order?.waiterId;
+      if (!targetWaiterId || String(targetWaiterId) === String(currentWaiterId)) {
+        fetchNotifications();
+        window.dispatchEvent(new Event('flavora_orders_updated'));
+      }
+    });
+
+    const unsubWaiterNotif = onSocketEvent('waiter_notification', () => {
+      fetchNotifications();
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+    });
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('flavora_orders_updated', fetchNotifications);
       window.removeEventListener('flavora_tables_updated', fetchNotifications);
+      unsubReady();
+      unsubWaiterNotif();
     };
   }, []);
 

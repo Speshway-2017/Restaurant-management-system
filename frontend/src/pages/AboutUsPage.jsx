@@ -364,8 +364,20 @@ export default function AboutUsPage({ setActivePage, onOpenDemoModal }) {
           </p>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+            <MagneticButton
+              variant="default"
+              style={{ backgroundColor: '#0F2A1D', color: '#FFFFFF' }}
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new Event('flavora_open_book_table'));
+                }
+              }}
+            >
+              📅 Book a Table
+            </MagneticButton>
+
             <MagneticButton variant="default" onClick={() => setActivePage('menu')}>
-              Get Started
+              Explore Menu
             </MagneticButton>
 
             <MagneticButton variant="outline" onClick={() => setActivePage('features')}>

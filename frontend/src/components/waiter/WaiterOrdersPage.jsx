@@ -3,6 +3,7 @@ import { ShoppingBag, CheckCircle2, Clock, RefreshCw, AlertTriangle, Utensils, S
 import { api } from '../../services/api';
 import { mergeOrderItems, normalizeOrderItem, clearTableSessionStorage } from '../../utils/orderUtils';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
+import { onSocketEvent } from '../../services/socket';
 
 export default function WaiterOrdersPage() {
   const brandingContext = useRestaurantBranding ? useRestaurantBranding() : null;
@@ -76,6 +77,12 @@ export default function WaiterOrdersPage() {
 
   const handleExecuteCancellation = async () => {
     if (!cancelModalOrder) return;
+    const wStatus = String(cancelModalOrder.waiterStatus || 'PENDING').toUpperCase();
+    const isAccepted = wStatus === 'ACCEPTED' || wStatus === 'SERVING' || wStatus === 'SERVED';
+    if (!isAccepted) {
+      alert('You must accept the order first before requesting cancellation of items.');
+      return;
+    }
     try {
       const targetId = cancelModalOrder._id || cancelModalOrder.id || cancelModalOrder.orderId;
       const orderNum = getOrderId(cancelModalOrder);
@@ -156,28 +163,41 @@ export default function WaiterOrdersPage() {
     window.addEventListener('flavora_orders_updated', handleSync);
     window.addEventListener('flavora_payment_completed', handleSync);
     window.addEventListener('storage', handleSync);
+
+    const unsubReady = onSocketEvent('chef_ready', () => fetchOrders());
+    const unsubWaiterAccepted = onSocketEvent('waiter_accepted', () => fetchOrders());
+    const unsubWaiterServing = onSocketEvent('waiter_serving', () => fetchOrders());
+    const unsubWaiterServed = onSocketEvent('waiter_served', () => fetchOrders());
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('flavora_orders_updated', handleSync);
       window.removeEventListener('flavora_payment_completed', handleSync);
       window.removeEventListener('storage', handleSync);
+      unsubReady();
+      unsubWaiterAccepted();
+      unsubWaiterServing();
+      unsubWaiterServed();
     };
   }, []);
 
   const fetchOrders = async () => {
     try {
-      let data = [];
+      let data = null;
       try {
         data = await api.getOrders();
-      } catch (e) { }
+      } catch (e) {
+        console.warn("Failed to fetch backend orders:", e);
+      }
 
+      const isBackendLive = Array.isArray(data);
       let localOrders = [];
       try {
         const raw = localStorage.getItem('flavora_manager_orders');
         if (raw) localOrders = JSON.parse(raw);
       } catch (e) { }
 
-      const dbList = Array.isArray(data) ? data : [];
+      const dbList = isBackendLive ? data : [];
       const localList = Array.isArray(localOrders) ? localOrders : [];
 
       const getCleanOrderId = (ord, idx) => {
@@ -187,38 +207,31 @@ export default function WaiterOrdersPage() {
         return String(raw).replace(/^#/i, '').trim();
       };
 
-      const orderMap = new Map();
-
-      dbList.forEach((d, idx) => {
-        if (!d) return;
-        const key = getCleanOrderId(d, idx);
-        orderMap.set(key, d);
-      });
-
-      localList.forEach((l, idx) => {
-        if (!l) return;
-        const key = getCleanOrderId(l, idx);
-        if (!orderMap.has(key)) {
-          orderMap.set(key, l);
-        }
-      });
-
-      const sourceOrders = Array.from(orderMap.values());
+      // When backend is connected, DATABASE is the single source of truth.
+      // We must NOT resurrect orders deleted from the database.
+      let sourceOrders = [];
+      if (isBackendLive) {
+        sourceOrders = dbList;
+        try {
+          localStorage.setItem('flavora_manager_orders', JSON.stringify(dbList));
+        } catch (e) { }
+      } else {
+        sourceOrders = localList;
+      }
 
       const merged = sourceOrders.map((ordDoc, idx) => {
         const cleanId = getCleanOrderId(ordDoc, idx);
 
-        const dbMatch = dbList.find((d, dIdx) => d && getCleanOrderId(d, dIdx) === cleanId);
+        const dbMatch = ordDoc;
+        const dbStatus = ordDoc?.status;
         const localMatch = localList.find((l, lIdx) => l && getCleanOrderId(l, lIdx) === cleanId);
-
-        const dbStatus = dbMatch?.status;
         const localStatus = localMatch?.status;
-        const isOrderReady = dbStatus === 'Ready' || localStatus === 'Ready' || ordDoc.status === 'Ready';
+        const isOrderReady = ordDoc.status === 'Ready' || ordDoc.chefStatus === 'READY';
 
-        const dbItems = Array.isArray(dbMatch?.items) ? dbMatch.items : (Array.isArray(ordDoc.items) ? ordDoc.items : []);
-        const localItems = Array.isArray(localMatch?.items) ? localMatch.items : [];
+        const dbItems = Array.isArray(ordDoc.items) ? ordDoc.items : [];
+        const localItems = (!isBackendLive && Array.isArray(localMatch?.items)) ? localMatch.items : [];
 
-        const mergedItems = mergeOrderItems(dbItems, localItems);
+        const mergedItems = (!isBackendLive && localItems.length > 0) ? mergeOrderItems(dbItems, localItems) : dbItems;
         const finalItems = mergedItems.map(it => {
           const stUpper = String(it.status || '').toUpperCase().trim();
           if (stUpper === 'CANCELLED' || stUpper === 'CANCEL') {
@@ -323,12 +336,15 @@ export default function WaiterOrdersPage() {
 
         const totalCount = newItems.length;
         const deliveredCount = newItems.filter(i => i.status === 'DELIVERED' || i.isDelivered).length;
-        const newStatus = (totalCount > 0 && deliveredCount === totalCount) ? 'Served' : (deliveredCount > 0 ? 'PARTIALLY DELIVERED' : o.status);
+        const isAllDone = totalCount > 0 && deliveredCount === totalCount;
+        const newStatus = isAllDone ? 'Served' : (deliveredCount > 0 ? 'PARTIALLY DELIVERED' : o.status);
+        const newWaiterStatus = isAllDone ? 'SERVED' : (deliveredCount > 0 ? 'SERVING' : o.waiterStatus);
 
         return {
           ...o,
           items: newItems,
-          status: newStatus
+          status: newStatus,
+          waiterStatus: newWaiterStatus
         };
       }
       return o;
@@ -340,6 +356,9 @@ export default function WaiterOrdersPage() {
       window.dispatchEvent(new Event('flavora_orders_updated'));
       window.dispatchEvent(new Event('flavora_tables_updated'));
     } catch (e) { }
+
+    showNotification(`✓ ${itemsToDeliver.length} ready dish(es) marked as Served!`);
+    fetchOrders();
   };
 
   const handleUpdateStatus = async (orderId, newStatus, extra = {}) => {
@@ -364,6 +383,91 @@ export default function WaiterOrdersPage() {
       await api.updateOrderStatus(orderId, newStatus, extra);
     } catch (e) {
       console.warn("Backend order status sync warning:", e);
+    }
+  };
+
+
+  const handleWaiterAccept = async (order) => {
+    const targetOrderId = order._id || order.id || order.orderId;
+    const cleanId = String(targetOrderId).replace(/^#/i, '').trim();
+    const session = getSessionUser();
+    const waiterId = session?._id || session?.id;
+    const waiterName = session?.name || 'Waiter';
+
+    try {
+      await api.waiterAcceptOrder(cleanId);
+      const updated = orders.map(o => {
+        if (o.id === order.id || o._id === order._id || o.orderId === order.orderId) {
+          return {
+            ...o,
+            waiterStatus: 'ACCEPTED',
+            waiterId,
+            waiterName
+          };
+        }
+        return o;
+      });
+      setOrders(updated);
+      showNotification(`✓ Order #${getOrderId(order)} accepted by you for service!`);
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+      fetchOrders();
+    } catch (err) {
+      alert(err.message || 'Failed to accept order');
+    }
+  };
+
+  const handleWaiterServing = async (order) => {
+    const targetOrderId = order._id || order.id || order.orderId;
+    const cleanId = String(targetOrderId).replace(/^#/i, '').trim();
+
+    try {
+      await api.waiterUpdateStatus(cleanId, 'SERVING');
+      const updated = orders.map(o => {
+        if (o.id === order.id || o._id === order._id || o.orderId === order.orderId) {
+          return {
+            ...o,
+            waiterStatus: 'SERVING'
+          };
+        }
+        return o;
+      });
+      setOrders(updated);
+      showNotification(`🚀 Serving dishes for Table ${order.table || ''}...`);
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+      fetchOrders();
+    } catch (err) {
+      alert(err.message || 'Failed to update serving status');
+    }
+  };
+
+  const handleWaiterServed = async (order) => {
+    const targetOrderId = order._id || order.id || order.orderId;
+    const cleanId = String(targetOrderId).replace(/^#/i, '').trim();
+
+    try {
+      await api.waiterUpdateStatus(cleanId, 'SERVED');
+      const updated = orders.map(o => {
+        if (o.id === order.id || o._id === order._id || o.orderId === order.orderId) {
+          const newItems = (o.items || []).map(it => {
+            if (it.status === 'CANCELLED') return it;
+            return { ...it, status: 'SERVED', isDelivered: true, isReady: true };
+          });
+          return {
+            ...o,
+            status: 'Served',
+            waiterStatus: 'SERVED',
+            items: newItems
+          };
+        }
+        return o;
+      });
+      setOrders(updated);
+      showNotification(`✅ Order #${getOrderId(order)} marked as Served!`);
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+      window.dispatchEvent(new Event('flavora_tables_updated'));
+      fetchOrders();
+    } catch (err) {
+      alert(err.message || 'Failed to mark order as served');
     }
   };
 
@@ -468,13 +572,13 @@ export default function WaiterOrdersPage() {
     o.payment === 'Paid' || o.payment === 'Completed'
   );
 
-  const getSessionUser = () => {
+  function getSessionUser() {
     const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
     if (raw) {
       try { return JSON.parse(raw); } catch (e) {}
     }
     return null;
-  };
+  }
 
   const sessionUser = getSessionUser();
 
@@ -614,25 +718,7 @@ export default function WaiterOrdersPage() {
                 </button>
               ))}
 
-              <button
-                onClick={() => setShowPreparedOnly(!showPreparedOnly)}
-                style={{
-                  backgroundColor: showPreparedOnly ? '#166534' : '#F0FDF4',
-                  color: showPreparedOnly ? '#FFFFFF' : '#166534',
-                  border: '1.5px solid #86EFAC',
-                  padding: '0.4rem 0.85rem',
-                  borderRadius: '8px',
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem'
-                }}
-              >
-                <Bell size={13} />
-                <span>{showPreparedOnly ? '✓ Showing Prepared Items Only' : 'Filter Prepared Items Only'}</span>
-              </button>
+              
             </div>
 
             <button
@@ -878,71 +964,289 @@ export default function WaiterOrdersPage() {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      {/* ITEM-LEVEL DELIVERY BUTTONS (Req #4, #5, #13) */}
-                      {!isPaid && !isBillGenerated && (
-                        <div style={{ marginBottom: '0.2rem' }}>
-                          <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#64748B', marginBottom: '0.3rem', textAlign: 'center' }}>
-                            {deliveredCount > 0 ? `Delivered: ${deliveredCount} / ${totalItemsCount} • Remaining: ${totalItemsCount - deliveredCount}` : `${readyCount} of ${totalItemsCount} dishes ready`}
-                          </div>
+                      {/* WAITER WORKFLOW CONTROLS (Req #4, #5, #6, #7, #12) */}
+                      {(() => {
+                        if (isPaid || isBillGenerated) return null;
 
-                          {readyCount > 0 ? (
-                            <button
-                              onClick={() => handleDeliverReadyDishes(order)}
-                              style={{
-                                width: '100%',
-                                backgroundColor: '#1E4636',
-                                color: '#FFFFFF',
-                                border: 'none',
-                                padding: '0.65rem',
-                                borderRadius: '10px',
-                                fontSize: '0.82rem',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.4rem',
-                                boxShadow: '0 4px 12px rgba(30, 70, 54, 0.2)'
-                              }}
-                            >
-                              <CheckCircle2 size={16} />
-                              <span>Mark Ready Dishes as Delivered</span>
-                            </button>
-                          ) : (!isAllDelivered && (
-                            <button
-                              disabled
-                              style={{
-                                width: '100%',
-                                backgroundColor: '#F1F5F9',
-                                color: '#94A3B8',
-                                border: '1px solid #CBD5E1',
-                                padding: '0.6rem',
-                                borderRadius: '10px',
-                                fontSize: '0.8rem',
-                                fontWeight: 800,
-                                cursor: 'not-allowed',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.4rem'
-                              }}
-                            >
-                              <Clock size={16} />
-                              <span>{readyCount} of {totalItemsCount} dishes ready</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                        const isKitchenReady = order.chefStatus === 'READY' || order.status === 'Ready' || readyCount > 0;
+                        const isPartiallyReady = readyCount > 0 && (readyCount + deliveredCount) < totalItemsCount;
+                        const isPreparing = order.chefStatus === 'PREPARING' || order.status === 'Preparing' || order.status === 'Cooking';
+                        const wStatus = String(order.waiterStatus || 'PENDING').toUpperCase();
 
-                      {!isPaid && !isBillGenerated && (isAllDelivered || isServed) && (
-                        <button
-                          onClick={() => handleGenerateBill(order)}
-                          style={{ width: '100%', backgroundColor: '#FFF3EB', color: '#E07A3C', border: '1px solid #FDBA74', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', boxShadow: '0 2px 8px rgba(224, 122, 60, 0.15)' }}
-                        >
-                          <Receipt size={16} />
-                          <span>📄 Generate & Present Bill</span>
-                        </button>
-                      )}
+                        const isUnaccepted = wStatus === 'PENDING' || !order.waiterStatus;
+                        // Waiter can accept the order when food is ready, partially prepared, or cooking/preparing
+                        const canAccept = (isKitchenReady || isPartiallyReady || isPreparing) && isUnaccepted;
+
+                        // 1. Unaccepted and Kitchen hasn't started yet
+                        if (isUnaccepted && !canAccept) {
+                          return (
+                            <div style={{ marginBottom: '0.2rem' }}>
+                              <button
+                                disabled
+                                style={{
+                                  width: '100%',
+                                  backgroundColor: '#F1F5F9',
+                                  color: '#64748B',
+                                  border: '1px solid #CBD5E1',
+                                  padding: '0.65rem',
+                                  borderRadius: '10px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 800,
+                                  cursor: 'not-allowed',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '0.4rem'
+                                }}
+                              >
+                                <Clock size={15} />
+                                <span>Order Placed • Waiting for Kitchen</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        // 2. Unaccepted but Food is ready, partially prepared, or preparing -> Waiter accepts
+                        if (isUnaccepted && canAccept) {
+                          const bannerBg = isAllReady ? '#DCFCE7' : (isPartiallyReady ? '#FEF3C7' : '#FFF3EB');
+                          const bannerBorder = isAllReady ? '1px solid #86EFAC' : (isPartiallyReady ? '1px solid #FCD34D' : '1px solid #FDBA74');
+                          const bannerColor = isAllReady ? '#166534' : (isPartiallyReady ? '#92400E' : '#C2410C');
+                          const bannerText = isAllReady
+                            ? `🔔 Ready from Kitchen (${order.chefName ? `Chef ${order.chefName}` : 'Pass Queue'})`
+                            : (isPartiallyReady
+                              ? `🔔 Partially Prepared (${readyCount}/${totalItemsCount} dishes ready)`
+                              : `⏳ Food Preparing in Kitchen (${order.chefName ? `Chef ${order.chefName}` : 'Chef'})`);
+
+                          return (
+                            <div style={{ marginBottom: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              <div style={{
+                                backgroundColor: bannerBg,
+                                border: bannerBorder,
+                                borderRadius: '8px',
+                                padding: '0.35rem 0.6rem',
+                                fontSize: '0.76rem',
+                                color: bannerColor,
+                                fontWeight: 800,
+                                textAlign: 'center'
+                              }}>
+                                {bannerText}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleWaiterAccept(order)}
+                                style={{
+                                  width: '100%',
+                                  backgroundColor: '#0F2A1D',
+                                  color: '#FFFFFF',
+                                  border: 'none',
+                                  padding: '0.65rem',
+                                  borderRadius: '10px',
+                                  fontSize: '0.84rem',
+                                  fontWeight: 900,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '0.4rem',
+                                  boxShadow: '0 4px 12px rgba(15, 42, 29, 0.25)'
+                                }}
+                              >
+                                <Utensils size={16} />
+                                <span>Accept Order</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        // 3. Waiter accepted or serving -> Strict Ready & Serving Workflow
+                        if (wStatus === 'ACCEPTED' || wStatus === 'SERVING') {
+                          const isFullyDelivered = (totalItemsCount > 0 && deliveredCount === totalItemsCount) || isAllDelivered || isServed;
+
+                          // Case A: All items in the order have been served -> Present Bill
+                          if (isFullyDelivered) {
+                            return (
+                              <div style={{ marginBottom: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <div style={{
+                                  backgroundColor: '#DCFCE7',
+                                  border: '1px solid #86EFAC',
+                                  borderRadius: '8px',
+                                  padding: '0.35rem 0.6rem',
+                                  fontSize: '0.76rem',
+                                  color: '#166534',
+                                  fontWeight: 800,
+                                  textAlign: 'center'
+                                }}>
+                                  ✓ All {totalItemsCount} Dishes Served to Table {order.table || '01'}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleGenerateBill(order)}
+                                  style={{
+                                    width: '100%',
+                                    backgroundColor: '#0F2A1D',
+                                    color: '#FFFFFF',
+                                    border: 'none',
+                                    padding: '0.65rem',
+                                    borderRadius: '10px',
+                                    fontSize: '0.84rem',
+                                    fontWeight: 900,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.4rem',
+                                    boxShadow: '0 4px 12px rgba(15, 42, 29, 0.25)'
+                                  }}
+                                >
+                                  <Receipt size={16} />
+                                  <span>📄 Generate & Present Bill</span>
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          // Case B: Some or all remaining dishes are marked ready by the chef -> Serve ready dishes
+                          if (readyCount > 0) {
+                            const isRemainingAllReady = (readyCount + deliveredCount) === totalItemsCount;
+                            return (
+                              <div style={{ marginBottom: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <div style={{
+                                  backgroundColor: isRemainingAllReady ? '#DCFCE7' : '#FEF3C7',
+                                  border: isRemainingAllReady ? '1px solid #86EFAC' : '1px solid #FCD34D',
+                                  borderRadius: '8px',
+                                  padding: '0.35rem 0.6rem',
+                                  fontSize: '0.76rem',
+                                  color: isRemainingAllReady ? '#166534' : '#92400E',
+                                  fontWeight: 800,
+                                  textAlign: 'center'
+                                }}>
+                                  {isRemainingAllReady
+                                    ? `🔔 All ${readyCount} Remaining Dish(es) Ready from Kitchen`
+                                    : `🔔 ${readyCount} of ${totalItemsCount} Dish(es) Ready to Serve`
+                                  }
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeliverReadyDishes(order)}
+                                  style={{
+                                    width: '100%',
+                                    backgroundColor: '#166534',
+                                    color: '#FFFFFF',
+                                    border: 'none',
+                                    padding: '0.65rem',
+                                    borderRadius: '10px',
+                                    fontSize: '0.84rem',
+                                    fontWeight: 900,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.4rem',
+                                    boxShadow: '0 4px 12px rgba(22, 101, 52, 0.35)'
+                                  }}
+                                >
+                                  <CheckCircle2 size={16} />
+                                  <span>
+                                    {isRemainingAllReady
+                                      ? 'Mark as Served'
+                                      : `Serve Ready Dishes (${readyCount})`}
+                                  </span>
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          // Case C: Dishes still in cooking/preparing state (chef has not marked ready yet) -> Mark as Served is DISABLED
+                          return (
+                            <div style={{ marginBottom: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              <div style={{
+                                backgroundColor: deliveredCount > 0 ? '#EEF2FF' : '#FEF3C7',
+                                border: deliveredCount > 0 ? '1px solid #C7D2FE' : '1px solid #FCD34D',
+                                borderRadius: '8px',
+                                padding: '0.35rem 0.6rem',
+                                fontSize: '0.76rem',
+                                color: deliveredCount > 0 ? '#3730A3' : '#92400E',
+                                fontWeight: 800,
+                                textAlign: 'center'
+                              }}>
+                                {deliveredCount > 0
+                                  ? `⚡ ${deliveredCount}/${totalItemsCount} Served • Remaining Cooking in Kitchen`
+                                  : `✓ Accepted by ${order.waiterName || 'You'}`
+                                }
+                              </div>
+                              <button
+                                type="button"
+                                disabled
+                                title="Waiting for chef to mark dishes as ready in kitchen"
+                                style={{
+                                  width: '100%',
+                                  backgroundColor: '#F1F5F9',
+                                  color: '#94A3B8',
+                                  border: '1px solid #CBD5E1',
+                                  padding: '0.65rem',
+                                  borderRadius: '10px',
+                                  fontSize: '0.84rem',
+                                  fontWeight: 800,
+                                  cursor: 'not-allowed',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '0.4rem',
+                                  opacity: 0.85
+                                }}
+                              >
+                                <Clock size={16} color="#94A3B8" />
+                                <span>Mark as Served (Dishes Cooking)</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        // 4. Food served fallback -> Present Bill option
+                        if (wStatus === 'SERVED' || isServed || isAllDelivered) {
+                          return (
+                            <div style={{ marginBottom: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              <div style={{
+                                backgroundColor: '#DCFCE7',
+                                border: '1px solid #86EFAC',
+                                borderRadius: '8px',
+                                padding: '0.35rem 0.6rem',
+                                fontSize: '0.76rem',
+                                color: '#166534',
+                                fontWeight: 800,
+                                textAlign: 'center'
+                              }}>
+                                ✓ All Dishes Served to Table {order.table || '01'}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateBill(order)}
+                                style={{
+                                  width: '100%',
+                                  backgroundColor: '#0F2A1D',
+                                  color: '#FFFFFF',
+                                  border: 'none',
+                                  padding: '0.65rem',
+                                  borderRadius: '10px',
+                                  fontSize: '0.84rem',
+                                  fontWeight: 900,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '0.4rem',
+                                  boxShadow: '0 4px 12px rgba(15, 42, 29, 0.25)'
+                                }}
+                              >
+                                <Receipt size={16} />
+                                <span>📄 Generate & Present Bill</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return null;
+                      })()}
 
                       {!isPaid && isBillGenerated && (
                         <div
@@ -970,6 +1274,11 @@ export default function WaiterOrdersPage() {
                       {!isPaid && (
                         <div style={{ marginTop: '0.4rem' }}>
                           {(() => {
+                            // Only after accepting the order does the waiter get access to perform operations/cancellations
+                            const wStatus = String(order.waiterStatus || 'PENDING').toUpperCase();
+                            const isAcceptedByWaiter = wStatus === 'ACCEPTED' || wStatus === 'SERVING' || wStatus === 'SERVED';
+                            if (!isAcceptedByWaiter) return null;
+
                             const hasCancellableItems = Array.isArray(order.items) && order.items.some(it => {
                               const isServed = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
                               const isReady = Boolean(it.isReady || it.status === 'READY' || it.status === 'READY_FOR_PASS');

@@ -52,6 +52,52 @@ const getStaff = async (req, res) => {
   }
 };
 
+const extractLast10Digits = (phone) => {
+  if (!phone) return '';
+  const digits = String(phone).replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+};
+
+const checkPhoneExists = async (req, res) => {
+  try {
+    const { phone, excludeId } = req.query;
+    if (!phone) {
+      return res.json({ exists: false });
+    }
+    const targetLast10 = extractLast10Digits(phone);
+    if (targetLast10.length < 10) {
+      return res.json({ exists: false, message: 'Phone number must be at least 10 digits.' });
+    }
+
+    const query = {
+      phone: { $exists: true, $ne: '' }
+    };
+    if (excludeId) {
+      query._id = { $ne: excludeId };
+    }
+
+    const usersWithPhone = await User.find(query).select('name email role phone');
+    const duplicate = usersWithPhone.find(u => extractLast10Digits(u.phone) === targetLast10);
+
+    if (duplicate) {
+      return res.json({
+        exists: true,
+        message: `Mobile number ${phone} already exists in database (registered to ${duplicate.name} - ${duplicate.role})`,
+        duplicateUser: {
+          id: duplicate._id,
+          name: duplicate.name,
+          role: duplicate.role,
+          phone: duplicate.phone
+        }
+      });
+    }
+
+    return res.json({ exists: false });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const createStaff = async (req, res) => {
   try {
     const data = { ...req.body };
@@ -61,10 +107,29 @@ const createStaff = async (req, res) => {
       return res.status(400).json({ message: 'Email address is required' });
     }
 
-    // Check if staff member already exists
+    // Check if staff member with email already exists
     const existingUser = await User.findOne({ email: data.email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ message: `Staff member with email "${data.email}" already exists.` });
+    }
+
+    // Check if staff member with mobile number already exists
+    if (data.phone) {
+      const targetLast10 = extractLast10Digits(data.phone);
+      if (targetLast10.length >= 10) {
+        const usersWithPhone = await User.find({ phone: { $exists: true, $ne: '' } }).select('name email role phone');
+        const duplicate = usersWithPhone.find(u => extractLast10Digits(u.phone) === targetLast10);
+        if (duplicate) {
+          return res.status(400).json({
+            message: `Mobile number ${data.phone} already exists in database (registered to ${duplicate.name} - ${duplicate.role}).`,
+            duplicateUser: {
+              name: duplicate.name,
+              role: duplicate.role,
+              phone: duplicate.phone
+            }
+          });
+        }
+      }
     }
 
     // Auto-generate Formatted Employee ID (e.g. RMSM-01 for Manager, RMSW-01 for Waiter, RMSC-01 for Chef, RMSR-01 for Receptionist)
@@ -106,6 +171,20 @@ const updateStaff = async (req, res) => {
       return res.status(404).json({ message: 'Staff member not found' });
     }
 
+    // Check if new mobile number already exists in database for another user
+    if (req.body.phone) {
+      const targetLast10 = extractLast10Digits(req.body.phone);
+      if (targetLast10.length >= 10) {
+        const usersWithPhone = await User.find({ _id: { $ne: req.params.id }, phone: { $exists: true, $ne: '' } }).select('name email role phone');
+        const duplicate = usersWithPhone.find(u => extractLast10Digits(u.phone) === targetLast10);
+        if (duplicate) {
+          return res.status(400).json({
+            message: `Mobile number ${req.body.phone} already exists in database (registered to ${duplicate.name} - ${duplicate.role}).`
+          });
+        }
+      }
+    }
+
     if (req.body.scheduledShift || req.body.shift) {
       member.scheduledShift = req.body.scheduledShift || req.body.shift;
     }
@@ -133,4 +212,4 @@ const deleteStaff = async (req, res) => {
   }
 };
 
-module.exports = { getStaff, createStaff, updateStaff, deleteStaff };
+module.exports = { getStaff, createStaff, updateStaff, deleteStaff, checkPhoneExists };

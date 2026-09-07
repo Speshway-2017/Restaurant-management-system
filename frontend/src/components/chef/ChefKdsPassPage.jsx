@@ -40,7 +40,18 @@ export default function ChefKdsPassPage({
   const isCompact = kdsSettings.ticketLayout === 'compact';
   const isHighContrast = Boolean(kdsSettings.highContrastMode);
 
-  if (activeKdsOrders.length === 0) {
+  // Filter out any tickets claimed by another chef
+  const displayOrders = (activeKdsOrders || []).filter(ord => {
+    const isMine = Boolean(
+      (currentChefId && ord.chefId && String(ord.chefId) === String(currentChefId)) ||
+      (currentChefName && ord.chefName && String(ord.chefName).toLowerCase().trim() === String(currentChefName).toLowerCase().trim())
+    );
+    const hasChefAssigned = Boolean(ord.chefId || ord.chefName);
+    const isOtherChef = hasChefAssigned && !isMine;
+    return !isOtherChef;
+  });
+
+  if (displayOrders.length === 0) {
     return (
       <div style={{
         textAlign: 'center',
@@ -57,7 +68,7 @@ export default function ChefKdsPassPage({
           No Active Tickets in Kitchen Queue
         </h3>
         <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.85rem', color: '#64748B' }}>
-          All orders have been prepared and dispatched. New QR orders will appear here automatically.
+          All incoming orders have been claimed or prepared. New QR orders will appear here automatically.
         </p>
       </div>
     );
@@ -69,7 +80,7 @@ export default function ChefKdsPassPage({
       gridTemplateColumns: isCompact ? 'repeat(auto-fill, minmax(210px, 1fr))' : 'repeat(auto-fill, minmax(320px, 1fr))',
       gap: isCompact ? '0.75rem' : '1.25rem'
     }}>
-      {activeKdsOrders.map(ord => {
+      {displayOrders.map(ord => {
         const elapsedMins = getElapsedMins(ord.createdAt);
         const isOverdue = elapsedMins > overdueLimit;
         const isWarning = elapsedMins >= Math.floor(overdueLimit / 2) && elapsedMins <= overdueLimit;
@@ -116,24 +127,29 @@ export default function ChefKdsPassPage({
                       borderRadius: '6px',
                       fontWeight: 800
                     }}>
-                      {(currentChefId && String(ord.chefId) === String(currentChefId)) ? '👨‍🍳 Cooking by You' : `👨‍🍳 ${ord.chefName}`}
+                      {ord.chefStatus === 'READY' || ord.status === 'Ready'
+                        ? '✅ Food Ready'
+                        : ord.chefStatus === 'PREPARING' || ord.status === 'Preparing'
+                          ? ((currentChefId && String(ord.chefId) === String(currentChefId)) ? '👨‍🍳 Cooking by You' : `👨‍🍳 Cooking by ${ord.chefName}`)
+                          : ((currentChefId && String(ord.chefId) === String(currentChefId)) ? '👨‍🍳 Accepted by You' : `👨‍🍳 Accepted by ${ord.chefName}`)
+                      }
                     </span>
                   ) : (
                     <span style={{
                       fontSize: '0.68rem',
-                      backgroundColor: '#F1F5F9',
-                      color: '#64748B',
-                      border: '1px dashed #CBD5E1',
+                      backgroundColor: '#FEF2F2',
+                      color: '#DC2626',
+                      border: '1px solid #FECACA',
                       padding: '0.1rem 0.4rem',
                       borderRadius: '6px',
-                      fontWeight: 700
+                      fontWeight: 800
                     }}>
-                      ⚡ Open / Unclaimed
+                      ⚡ NEW ORDER
                     </span>
                   )}
                 </div>
                 <div style={{ fontSize: isCompact ? '0.68rem' : '0.74rem', color: isHighContrast ? '#000000' : '#64748B', marginTop: '0.1rem', fontWeight: isHighContrast ? 800 : 600 }}>
-                  Ticket {ord.id} • {ord.time}
+                  Ticket {ord.id} • {ord.time} {ord.customer ? `• 👤 ${ord.customer}` : ''}
                 </div>
               </div>
 
@@ -327,81 +343,180 @@ export default function ChefKdsPassPage({
                 const hasAnyItemStarted = Array.isArray(activeItems) && activeItems.some(it =>
                   it.status === 'COOKING' || it.status === 'PREPARING' || it.status === 'READY' || it.isReady
                 );
-                const isStarted = !isPlacedOrNew || hasAnyItemStarted;
+                const chefSt = String(ord.chefStatus || '').toUpperCase();
+                const isReady = chefSt === 'READY' || ord.status === 'Ready';
+                const isPreparing = !isReady && (chefSt === 'PREPARING' || ord.status === 'Preparing' || ord.status === 'Cooking');
+                const isNew = !isReady && !isPreparing && (!ord.chefId || ord.chefId === '') && (chefSt === 'NEW' || !chefSt || ord.status === 'Placed');
+                const isAccepted = !isReady && !isPreparing && !isNew;
 
-                return !isStarted ? (
-                  <div style={{ flex: 1, display: 'flex', gap: '0.4rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(ord.id, 'Preparing')}
-                      style={{
-                        flex: 1,
-                        padding: '0.7rem',
-                        borderRadius: '10px',
-                        border: 'none',
-                        backgroundColor: '#E07A3C',
-                        color: '#FFFFFF',
-                        fontSize: '0.86rem',
-                        fontWeight: 900,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.45rem',
-                        boxShadow: '0 4px 12px rgba(224, 122, 60, 0.35)'
-                      }}
-                    >
-                      <Flame size={18} />
-                      <span>🔥 Start Cooking</span>
-                    </button>
-                    {(!ord.chefId || (currentChefId && String(ord.chefId) !== String(currentChefId))) && handleClaimOrder && (
+                const effectiveChefId = currentChefId || (() => {
+                  try {
+                    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+                    if (raw) {
+                      const u = JSON.parse(raw);
+                      return u._id || u.id || '';
+                    }
+                  } catch (e) {}
+                  return '';
+                })();
+
+                const isMine = Boolean(
+                  (effectiveChefId && ord.chefId && String(ord.chefId) === String(effectiveChefId)) ||
+                  (currentChefName && ord.chefName && String(ord.chefName).toLowerCase() === String(currentChefName).toLowerCase())
+                );
+                const isOtherChef = Boolean(ord.chefId && !isMine);
+
+                if (isNew) {
+                  return (
+                    <div style={{ flex: 1, display: 'flex', gap: '0.4rem' }}>
                       <button
                         type="button"
-                        onClick={() => handleClaimOrder(ord.id)}
-                        title="Claim this ticket for your station"
+                        onClick={() => handleClaimOrder && handleClaimOrder(ord.id)}
                         style={{
-                          padding: '0.7rem 0.9rem',
+                          flex: 1,
+                          padding: '0.75rem',
                           borderRadius: '10px',
-                          border: '1px solid #CBD5E1',
-                          backgroundColor: '#FFFFFF',
-                          color: '#0F2A1D',
-                          fontSize: '0.78rem',
-                          fontWeight: 800,
+                          border: 'none',
+                          backgroundColor: '#0F2A1D',
+                          color: '#FFFFFF',
+                          fontSize: '0.9rem',
+                          fontWeight: 900,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '0.3rem'
+                          justifyContent: 'center',
+                          gap: '0.45rem',
+                          boxShadow: '0 4px 14px rgba(15, 42, 29, 0.3)'
                         }}
                       >
-                        ✋ Claim
+                        <ChefHat size={18} />
+                        <span>Accept Order</span>
                       </button>
-                    )}
-                  </div>
-                ) : (
+                    </div>
+                  );
+                }
+
+                if (isAccepted) {
+                  return (
+                    <div style={{ flex: 1, display: 'flex', gap: '0.4rem' }}>
+                      {isMine ? (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(ord.id, 'Preparing')}
+                          style={{
+                            flex: 1,
+                            padding: '0.75rem',
+                            borderRadius: '10px',
+                            border: 'none',
+                            backgroundColor: '#E07A3C',
+                            color: '#FFFFFF',
+                            fontSize: '0.9rem',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.45rem',
+                            boxShadow: '0 4px 12px rgba(224, 122, 60, 0.35)'
+                          }}
+                        >
+                          <Flame size={18} />
+                          <span>🔥 Start Cooking</span>
+                        </button>
+                      ) : (
+                        <div style={{
+                          flex: 1,
+                          padding: '0.75rem',
+                          borderRadius: '10px',
+                          backgroundColor: '#FEF3C7',
+                          color: '#92400E',
+                          border: '1px solid #FCD34D',
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem'
+                        }}>
+                          🔒 Claimed by {ord.chefName || 'Other Chef'}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (isPreparing) {
+                  return (
+                    <div style={{ flex: 1, display: 'flex', gap: '0.4rem' }}>
+                      {isMine ? (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(ord.id, 'Ready')}
+                          style={{
+                            flex: 1,
+                            padding: '0.75rem',
+                            borderRadius: '10px',
+                            border: 'none',
+                            backgroundColor: '#166534',
+                            color: '#FFFFFF',
+                            fontSize: '0.9rem',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.45rem',
+                            boxShadow: '0 4px 12px rgba(22, 101, 52, 0.4)'
+                          }}
+                        >
+                          <CheckCircle2 size={18} />
+                          <span>✅ Mark Ready</span>
+                        </button>
+                      ) : (
+                        <div style={{
+                          flex: 1,
+                          padding: '0.75rem',
+                          borderRadius: '10px',
+                          backgroundColor: '#FEF3C7',
+                          color: '#92400E',
+                          border: '1px solid #FCD34D',
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem'
+                        }}>
+                          👨‍🍳 Cooking by {ord.chefName || 'Other Chef'}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // If Ready
+                return (
                   <div style={{ flex: 1, display: 'flex', gap: '0.4rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(ord.id, 'Ready')}
-                      style={{
-                        flex: 1,
-                        padding: '0.7rem',
-                        borderRadius: '10px',
-                        border: 'none',
-                        backgroundColor: (ord.chefId && currentChefId && String(ord.chefId) !== String(currentChefId)) ? '#D97706' : '#166534',
-                        color: '#FFFFFF',
-                        fontSize: '0.86rem',
-                        fontWeight: 900,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.45rem',
-                        boxShadow: '0 4px 12px rgba(22, 101, 52, 0.4)'
-                      }}
-                    >
-                      <CheckCircle2 size={18} />
-                      <span>{(ord.chefId && currentChefId && String(ord.chefId) !== String(currentChefId)) ? `✅ Pass (${ord.chefName || 'Other Chef'})` : '✅ Mark Ready for Pass'}</span>
-                    </button>
+                    <div style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      borderRadius: '10px',
+                      backgroundColor: '#DCFCE7',
+                      color: '#166534',
+                      border: '1px solid #86EFAC',
+                      fontSize: '0.84rem',
+                      fontWeight: 900,
+                      textAlign: 'center',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem'
+                    }}>
+                      <CheckCircle2 size={16} />
+                      <span>Ready for Waiter Pickup</span>
+                    </div>
                   </div>
                 );
               })()}

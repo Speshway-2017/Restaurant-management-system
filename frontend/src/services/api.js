@@ -99,6 +99,28 @@ export const api = {
     const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
     return request(`/orders/${cleanId}/claim`, { method: 'PATCH' });
   },
+  chefAcceptOrder: (id) => {
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/orders/${cleanId}/chef-accept`, { method: 'PATCH' });
+  },
+  chefUpdateStatus: (id, status) => {
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/orders/${cleanId}/chef-status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+  },
+  waiterAcceptOrder: (id) => {
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/orders/${cleanId}/waiter-accept`, { method: 'PATCH' });
+  },
+  waiterUpdateStatus: (id, status) => {
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/orders/${cleanId}/waiter-status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+  },
   clearAllOrders: () => request('/orders/all', { method: 'DELETE' }),
 
   // Tables API
@@ -342,6 +364,13 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ chefId, chefName })
   }),
-  getStaffWorkload: () => request('/staff/workload')
+  getStaffWorkload: () => request('/staff/workload'),
+
+  // Staff Management API
+  getStaff: () => request('/staff'),
+  createStaff: (data) => request('/staff', { method: 'POST', body: JSON.stringify(data) }),
+  updateStaff: (id, data) => request(`/staff/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStaff: (id) => request(`/staff/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  checkStaffPhone: (phone, excludeId = '') => request(`/staff/check-phone?phone=${encodeURIComponent(phone)}${excludeId ? `&excludeId=${encodeURIComponent(excludeId)}` : ''}`)
 };
 

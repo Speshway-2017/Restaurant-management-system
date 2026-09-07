@@ -619,7 +619,9 @@ export default function MenuPage({ onOpenDemoModal }) {
       notes: chefNotes.trim(),
       items: orderItems,
       total: totalCartPrice,
-      status: 'Placed'
+      status: 'Placed',
+      chefStatus: 'NEW',
+      waiterStatus: 'PENDING'
     };
 
     try {

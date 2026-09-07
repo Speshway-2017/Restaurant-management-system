@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { Table2, Plus, QrCode, Eye, EyeOff, CheckCircle2, Users, Clock, RefreshCw, Search, X, Printer, Check, Sparkles, Link2, UploadCloud, Image as ImageIcon, Edit, Trash2, Clipboard, MoreVertical } from 'lucide-react';
+import { Table2, Plus, QrCode, Eye, EyeOff, CheckCircle2, Users, Clock, RefreshCw, Search, X, Printer, Check, Sparkles, Link2, UploadCloud, Image as ImageIcon, Edit, Trash2, Clipboard, MoreVertical, Copy } from 'lucide-react';
 import { api } from '../../services/api';
+import { getTableMenuUrl, compositeQrWithLogo } from '../../utils/qrUrlHelper';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 export default function ManagerTablesPage() {
+  const { brandLogo } = useRestaurantBranding ? useRestaurantBranding() : { brandLogo: '/logo.png' };
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
   const [selectedZoneFilter, setSelectedZoneFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -159,13 +162,25 @@ export default function ManagerTablesPage() {
             const customQr = savedT && savedT.customQrUrl ? savedT.customQrUrl : (dbT.customQrUrl || '');
 
             const activeOrder = combinedOrders.find(o => {
+              if (!o) return false;
+              const isClosed = o.status === 'Completed' || o.status === 'Cancelled' || o.status === 'Paid' || o.payment === 'Completed' || o.payment === 'Paid';
+              if (isClosed) return false;
+
+              // 1. Match by table currentOrder ID
+              if (dbT.currentOrder) {
+                const cleanCurrent = String(dbT.currentOrder).replace(/^#/i, '').trim();
+                const cleanOrdId = String(o.orderId || o.id || o._id || '').replace(/^#/i, '').trim();
+                if (cleanCurrent && cleanOrdId && cleanCurrent === cleanOrdId) return true;
+              }
+
+              // 2. Match by table number digits
               const oClean = extractDigits(o.tableNumber || o.table);
-              return oClean && cleanT && oClean === cleanT && o.status !== 'Completed' && o.status !== 'Cancelled' && o.status !== 'Paid' && o.payment !== 'Completed' && o.payment !== 'Paid';
+              return Boolean(oClean && cleanT && oClean === cleanT);
             });
 
             if (activeOrder) {
-              const custName = activeOrder.customer || activeOrder.guestName || 'Guest Diner';
-              const amtVal = `₹${activeOrder.total || activeOrder.totalAmount || 0}`;
+              const custName = String(activeOrder.customer || activeOrder.guestName || activeOrder.customerName || 'Guest Diner').trim();
+              const amtVal = `₹${activeOrder.total !== undefined && activeOrder.total !== null ? activeOrder.total : (activeOrder.totalAmount || 0)}`;
 
               return {
                 id: dbT._id || dbT.id,
@@ -178,6 +193,7 @@ export default function ManagerTablesPage() {
                 amount: amtVal,
                 customer: custName,
                 guest: custName,
+                elapsed: activeOrder.time || 'Just Now',
                 qrPlaced: isQrPlaced,
                 customQrUrl: customQr
               };
@@ -246,6 +262,7 @@ export default function ManagerTablesPage() {
   };
 
   const [backendQrDataUrl, setBackendQrDataUrl] = useState('');
+  const [selectedQrLink, setSelectedQrLink] = useState('');
 
   // View QR Modal (integrates backend node qrcode package)
   const handleOpenQrModal = async (tbl) => {
@@ -253,22 +270,31 @@ export default function ManagerTablesPage() {
     setCustomQrUrlInput(tbl.customQrUrl || '');
     setQrModalTab(tbl.customQrUrl ? 'custom' : 'generated');
 
-    // Default dynamic scannable QR link (Uses local Wi-Fi IP address 192.168.1.34 for mobile accessibility)
-    const host = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? '192.168.1.4'
-      : window.location.hostname;
-    const port = window.location.port ? `:${window.location.port}` : ':5173';
-    const targetLink = `${window.location.protocol}//${host}${port}/menu?table=${encodeURIComponent(tbl.num)}`;
-    const defaultQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetLink)}`;
+    // Customer menu QR link dynamically generated without port 5173 in production
+    const targetLink = getTableMenuUrl(tbl.num);
+    setSelectedQrLink(targetLink);
+    const defaultQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&ecc=H&data=${encodeURIComponent(targetLink)}`;
     setBackendQrDataUrl(defaultQrImage);
 
+    // Composite circular emblem logo in the center of the QR code image
+    const activeLogo = '/qr-logo.png';
     try {
       const res = await api.generateTableQr(tbl.num, targetLink);
       if (res && res.qrDataUrl) {
-        setBackendQrDataUrl(res.qrDataUrl);
+        const composited = await compositeQrWithLogo(res.qrDataUrl, activeLogo);
+        setBackendQrDataUrl(composited);
+      } else {
+        const composited = await compositeQrWithLogo(defaultQrImage, activeLogo);
+        setBackendQrDataUrl(composited);
       }
     } catch (err) {
       console.warn('Using fallback dynamic QR Code image generator:', err.message);
+      try {
+        const composited = await compositeQrWithLogo(defaultQrImage, activeLogo);
+        setBackendQrDataUrl(composited);
+      } catch {
+        setBackendQrDataUrl(defaultQrImage);
+      }
     }
   };
 
@@ -912,16 +938,49 @@ export default function ManagerTablesPage() {
                       <img
                         src={selectedQrTable.customQrUrl}
                         alt={`Custom QR Code for ${selectedQrTable.num}`}
-                        style={{ width: '135px', height: '135px', objectFit: 'contain', margin: '0 auto', display: 'block' }}
-                      />
-                    ) : backendQrDataUrl ? (
-                      <img
-                        src={backendQrDataUrl}
-                        alt={`Backend Generated QR Code for ${selectedQrTable.num}`}
-                        style={{ width: '135px', height: '135px', objectFit: 'contain', margin: '0 auto', display: 'block' }}
+                        style={{ width: '155px', height: '155px', objectFit: 'contain', margin: '0 auto', display: 'block' }}
                       />
                     ) : (
-                      <QrCode size={135} color="#0F2A1D" style={{ margin: '0 auto' }} />
+                      <div style={{ position: 'relative', width: '155px', height: '155px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {backendQrDataUrl ? (
+                          <img
+                            src={backendQrDataUrl}
+                            alt={`Backend Generated QR Code for ${selectedQrTable.num}`}
+                            style={{ width: '155px', height: '155px', objectFit: 'contain', margin: '0 auto', display: 'block' }}
+                          />
+                        ) : (
+                          <QrCode size={155} color="#0F2A1D" style={{ margin: '0 auto' }} />
+                        )}
+
+                        {/* Restaurant Brand Logo in middle of QR */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: '40px',
+                            height: '40px',
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '50%',
+                            border: '1.5px solid #0F2A1D',
+                            boxShadow: '0 2px 8px rgba(15, 42, 29, 0.22)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '3px',
+                            pointerEvents: 'none',
+                            zIndex: 2
+                          }}
+                        >
+                          <img
+                            src="/qr-logo.png"
+                            alt="Flavora Emblem"
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                            onError={(e) => { e.target.src = brandLogo || '/logo.png'; }}
+                          />
+                        </div>
+                      </div>
                     )}
                     <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0F2A1D', marginTop: '0.5rem' }}>
                       {selectedQrTable.num} • SCAN TO ORDER & PAY
@@ -936,6 +995,29 @@ export default function ManagerTablesPage() {
                       Place this QR Standee on {selectedQrTable.num} ({selectedQrTable.zone}). Guests scanning this QR can browse the menu & place orders instantly.
                     </span>
                   </div>
+
+                  {/* Encoded Customer Menu URL */}
+                  {selectedQrLink && (
+                    <div style={{ marginTop: '0.75rem', textAlign: 'left', backgroundColor: '#F8FAFC', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600, marginBottom: '0.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Customer Menu URL:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedQrLink);
+                            showToast('Menu URL copied to clipboard!');
+                          }}
+                          style={{ background: 'none', border: 'none', color: '#0F2A1D', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <Copy size={12} />
+                          <span>Copy Link</span>
+                        </button>
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: '#0F2A1D', fontFamily: 'monospace', wordBreak: 'break-all', fontWeight: 600 }}>
+                        {selectedQrLink}
+                      </div>
+                    </div>
+                  )}
 
                   {selectedQrTable.customQrUrl && (
                     <button
