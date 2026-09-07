@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import DemoModal from './components/DemoModal';
+import BookTableModal from './components/BookTableModal';
 import { useRestaurantBranding } from './context/RestaurantBrandingContext';
 import { api } from './services/api';
 
@@ -93,6 +94,13 @@ export default function App() {
   });
 
   const [demoModalOpen, setDemoModalOpen] = useState(false);
+  const [bookTableModalOpen, setBookTableModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenBookTable = () => setBookTableModalOpen(true);
+    window.addEventListener('flavora_open_book_table', handleOpenBookTable);
+    return () => window.removeEventListener('flavora_open_book_table', handleOpenBookTable);
+  }, []);
 
   // Validate existing auth session/token with backend on app startup/refresh
   useEffect(() => {
@@ -235,7 +243,13 @@ export default function App() {
       case 'receptionist':
         return <ReceptionistLayout setActivePage={setActivePage} />;
       default:
-        return <HomePage setActivePage={setActivePage} onOpenDemoModal={() => setDemoModalOpen(true)} />;
+        return (
+          <HomePage
+            setActivePage={setActivePage}
+            onOpenDemoModal={() => setDemoModalOpen(true)}
+            onOpenBookTable={() => setBookTableModalOpen(true)}
+          />
+        );
     }
   };
 
@@ -250,6 +264,7 @@ export default function App() {
           activePage={activePage}
           setActivePage={setActivePage}
           onOpenDemoModal={() => setDemoModalOpen(true)}
+          onOpenBookTable={() => setBookTableModalOpen(true)}
         />
       )}
 
@@ -261,12 +276,18 @@ export default function App() {
         <Footer
           setActivePage={setActivePage}
           onOpenDemoModal={() => setDemoModalOpen(true)}
+          onOpenBookTable={() => setBookTableModalOpen(true)}
         />
       )}
 
       <DemoModal
         isOpen={demoModalOpen}
         onClose={() => setDemoModalOpen(false)}
+      />
+
+      <BookTableModal
+        isOpen={bookTableModalOpen}
+        onClose={() => setBookTableModalOpen(false)}
       />
     </div>
   );

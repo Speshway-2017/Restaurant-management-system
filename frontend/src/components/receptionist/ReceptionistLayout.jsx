@@ -17,6 +17,7 @@ import ReceptionistSettingsPage from './ReceptionistSettingsPage';
 import ReceptionistProfilePage from './ReceptionistProfilePage';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 import { api } from '../../services/api';
+import { onSocketEvent } from '../../services/socket';
 
 const RECEPTIONIST_PATH_TO_TAB = {
   '/receptionist': 'receptionist-dashboard',
@@ -90,6 +91,34 @@ export default function ReceptionistLayout({ setActivePage }) {
   const [navbarClockStr, setNavbarClockStr] = useState('');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [powerModalOpen, setPowerModalOpen] = useState(false);
+  const [activeBookingsBadge, setActiveBookingsBadge] = useState(0);
+
+  useEffect(() => {
+    const fetchResvCount = () => {
+      api.getReceptionistReservations().then(res => {
+        const list = Array.isArray(res) ? res : (res && res.data ? res.data : []);
+        const today = new Date().toISOString().split('T')[0];
+        const active = list.filter(r => r.date >= today && r.status === 'Confirmed');
+        setActiveBookingsBadge(active.length);
+      }).catch(() => {});
+    };
+
+    fetchResvCount();
+    const interval = setInterval(fetchResvCount, 5000);
+
+    const unsub = onSocketEvent('reservation_created', () => {
+      fetchResvCount();
+    });
+
+    const handleWin = () => fetchResvCount();
+    window.addEventListener('flavora_reservation_created', handleWin);
+
+    return () => {
+      clearInterval(interval);
+      if (typeof unsub === 'function') unsub();
+      window.removeEventListener('flavora_reservation_created', handleWin);
+    };
+  }, []);
 
   const getSessionUser = () => {
     const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
@@ -235,7 +264,7 @@ export default function ReceptionistLayout({ setActivePage }) {
     { id: 'receptionist-dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'receptionist-floor-plan', label: 'Floor Plan', icon: Table2 },
     { id: 'receptionist-waitlist', label: 'Waitlist Queue', icon: Clock },
-    { id: 'receptionist-reservations', label: 'Reservations', icon: CalendarDays },
+    { id: 'receptionist-reservations', label: 'Reservations', icon: CalendarDays, badge: activeBookingsBadge },
     { id: 'receptionist-guests', label: 'Guests', icon: Users },
     { id: 'receptionist-queue-display', label: 'Queue Display', icon: Tv },
     { id: 'receptionist-notifications', label: 'Notifications', icon: Bell },
@@ -291,9 +320,25 @@ export default function ReceptionistLayout({ setActivePage }) {
                     className={`admin-nav-btn ${isActive ? 'is-active' : ''}`}
                     title={sidebarCollapsed ? item.label : ''}
                     onClick={() => handleTabChange(item.id)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                   >
-                    <Icon size={18} className="admin-nav-icon" />
-                    <span className="admin-nav-label">{item.label}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <Icon size={18} className="admin-nav-icon" />
+                      <span className="admin-nav-label">{item.label}</span>
+                    </div>
+                    {item.badge > 0 && !sidebarCollapsed && (
+                      <span style={{
+                        backgroundColor: '#E07A3C',
+                        color: '#FFFFFF',
+                        fontSize: '0.7rem',
+                        fontWeight: 900,
+                        padding: '0.12rem 0.45rem',
+                        borderRadius: '9999px',
+                        lineHeight: 1.2
+                      }}>
+                        {item.badge}
+                      </span>
+                    )}
                   </button>
                 </li>
               );

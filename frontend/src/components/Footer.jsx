@@ -4,7 +4,7 @@ import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 import { api } from '../services/api';
 import { isRestaurantOpenNow } from '../utils/restaurantTimings';
 
-export default function Footer({ setActivePage }) {
+export default function Footer({ setActivePage, onOpenBookTable }) {
   const { branding, brandName, brandLogo } = useRestaurantBranding();
 
   const [settings, setSettings] = useState(() => {
@@ -159,6 +159,20 @@ export default function Footer({ setActivePage }) {
           <div className="footer-col">
             <h4 className="footer-col-title">EXPLORE</h4>
             <ul className="footer-link-list">
+              <li>
+                <button
+                  onClick={() => {
+                    if (onOpenBookTable) {
+                      onOpenBookTable();
+                    } else if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new Event('flavora_open_book_table'));
+                    }
+                  }}
+                  style={{ color: '#FF8A00', fontWeight: 800, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <span>📅 Book a Table</span>
+                </button>
+              </li>
               <li><button onClick={() => handleNavClick('menu')}>Menu</button></li>
               <li><button onClick={() => handleNavClick('offer')}>Offer</button></li>
               <li><button onClick={() => handleNavClick('contact')}>Contact Us</button></li>

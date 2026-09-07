@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { groupTablesForFloorPlan } from '../../utils/floorPlanUtils';
+import { onSocketEvent } from '../../services/socket';
 
 export default function ReceptionistDashboardHome({ onNavigate }) {
   const [kpis, setKpis] = useState({
@@ -99,7 +100,26 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
   useEffect(() => {
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 3000);
-    return () => clearInterval(interval);
+
+    const unsubResv = onSocketEvent('reservation_created', (data) => {
+      fetchDashboardData();
+      const r = data.reservation || data;
+      showToast(`🔔 New Table Booking! ${r.guestName} (${r.guests} guests) for ${r.date} at ${r.timeSlot}`);
+    });
+
+    const handleWindowResv = (e) => {
+      fetchDashboardData();
+      if (e.detail) {
+        showToast(`🔔 New Table Booking! ${e.detail.guestName} (${e.detail.guests} guests) for ${e.detail.date} at ${e.detail.timeSlot}`);
+      }
+    };
+    window.addEventListener('flavora_reservation_created', handleWindowResv);
+
+    return () => {
+      clearInterval(interval);
+      if (typeof unsubResv === 'function') unsubResv();
+      window.removeEventListener('flavora_reservation_created', handleWindowResv);
+    };
   }, []);
 
   const totalTablesCount = floorPlanTables.length || 1;
@@ -703,18 +723,36 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-              {reservations.slice(0, 4).map((resv) => (
-                <div key={resv._id || resv.bookingId} style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1rem', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-                  <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0F2A1D' }}>{resv.guestName}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
-                      🕒 {resv.timeSlot} • 👥 {resv.guests} Guests • Table: {resv.tableNo || 'Unassigned'}
+              {reservations.slice(0, 5).map((resv) => (
+                <div key={resv._id || resv.bookingId} style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1rem', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D' }}>{resv.guestName}</span>
+                      <span style={{ fontSize: '0.72rem', color: '#166534', backgroundColor: '#DCFCE7', padding: '0.12rem 0.4rem', borderRadius: '5px', fontWeight: 800 }}>
+                        {resv.bookingId}
+                      </span>
                     </div>
+
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#1E40AF', backgroundColor: '#DBEAFE', padding: '0.3rem 0.65rem', borderRadius: '8px' }}>
+                      {resv.status || 'Confirmed'}
+                    </span>
                   </div>
 
-                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#1E40AF', backgroundColor: '#DBEAFE', padding: '0.35rem 0.65rem', borderRadius: '8px' }}>
-                    {resv.status || 'Confirmed'}
-                  </span>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
+                    🕒 {resv.timeSlot} • 👥 {resv.guests} Guests • Table: <strong style={{ color: '#0F2A1D' }}>{resv.tableNo || 'Unassigned'}</strong> • 📍 {resv.section || 'Main Dining'}
+                  </div>
+
+                  {resv.specialOccasion && resv.specialOccasion !== 'None' && (
+                    <div style={{ fontSize: '0.72rem', color: '#DC2626', fontWeight: 800 }}>
+                      🎉 Occasion: {resv.specialOccasion}
+                    </div>
+                  )}
+
+                  {resv.notes && (
+                    <div style={{ fontSize: '0.74rem', color: '#92400E', backgroundColor: '#FEF3C7', padding: '0.25rem 0.5rem', borderRadius: '6px', fontWeight: 700 }}>
+                      📝 Note: "{resv.notes}"
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { LogIn, Menu, X, Sparkles } from 'lucide-react';
+import { LogIn, Menu, X, Sparkles, Calendar, Utensils } from 'lucide-react';
 import MagneticButton from './MagneticButton';
 import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 
-export default function Navbar({ activePage, setActivePage }) {
+export default function Navbar({ activePage, setActivePage, onOpenBookTable }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
   const { branding, brandName, brandLogo } = useRestaurantBranding();
@@ -102,7 +102,35 @@ export default function Navbar({ activePage, setActivePage }) {
           </nav>
 
           {/* Right Actions & Mobile Hamburger */}
+          {/* Right Actions & Mobile Hamburger */}
           <div className="nav-actions">
+            <MagneticButton
+              onClick={() => {
+                if (onOpenBookTable) {
+                  onOpenBookTable();
+                } else if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new Event('flavora_open_book_table'));
+                }
+              }}
+              variant="primary"
+              style={{
+                backgroundColor: '#0F2A1D',
+                color: '#FFFFFF',
+                padding: '0.45rem 1.15rem',
+                fontSize: '0.82rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                borderRadius: '9999px',
+                border: '1.5px solid #0F2A1D',
+                boxShadow: '0 4px 12px rgba(15, 42, 29, 0.18)',
+                cursor: 'pointer'
+              }}
+            >
+              <Calendar size={14} color="#FF8A00" />
+              <span style={{ fontWeight: 800, letterSpacing: '0.02em' }}>BOOK TABLE</span>
+            </MagneticButton>
+
             {activePage !== 'menu' && (
               <MagneticButton
                 onClick={() => handleNavClick('login')}
@@ -127,6 +155,38 @@ export default function Navbar({ activePage, setActivePage }) {
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
           <div className="mobile-nav-drawer">
+            <div style={{ padding: '0.75rem 1rem 0.25rem 1rem' }}>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onOpenBookTable) {
+                    onOpenBookTable();
+                  } else if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('flavora_open_book_table'));
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  backgroundColor: '#0F2A1D',
+                  color: '#FFFFFF',
+                  padding: '0.75rem',
+                  borderRadius: '12px',
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(15, 42, 29, 0.25)'
+                }}
+              >
+                <Calendar size={16} color="#FF8A00" />
+                <span>BOOK A TABLE NOW</span>
+              </button>
+            </div>
+
             <ul className="mobile-nav-list">
               {navItems.map((item) => (
                 <li key={item.id}>

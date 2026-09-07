@@ -13,7 +13,7 @@ import Cta2 from '../components/Cta2';
 import { findItemInCatalog, calculateCartTotal } from '../utils/menuRegistry';
 import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 
-export default function HomePage({ setActivePage, onOpenDemoModal }) {
+export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTable }) {
   const { brandName } = useRestaurantBranding();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeCategory, setActiveCategory] = useState('all');
@@ -137,12 +137,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
 
   // Default menu highlights
   const [menuHighlights, setMenuHighlights] = useState([
-    { id: 1, name: 'Paneer Tikka Angara', category: 'Starters', price: 340, origPrice: '₹420', isVeg: true, desc: 'Cottage cheese marinated in Kashmiri chili & tandoori spices.', img: '/hero_dish_1.png', bestseller: true },
-    { id: 2, name: 'Murgh Malai Kabab', category: 'Starters', price: 420, origPrice: '₹500', isVeg: false, desc: 'Tender chicken breast infused with cream, cheese, and cardamom.', img: '/carousel_2.png' },
-    { id: 3, name: 'Dal Makhani Gold', category: 'Main Course', price: 380, origPrice: '₹460', isVeg: true, desc: 'Slow-cooked black lentils simmered overnight with white butter.', img: '/carousel_1.png', bestseller: true },
-    { id: 4, name: 'Hyderabadi Dum Biryani', category: 'Main Course', price: 490, origPrice: '₹580', isVeg: false, desc: 'Aromatic basmati rice layered with spiced marinated lamb.', img: '/hero_dish_2.png', bestseller: true },
-    { id: 5, name: 'Saffron Shahi Tukda', category: 'Desserts', price: 260, origPrice: '₹320', isVeg: true, desc: 'Crispy fried bread soaked in saffron rabri topped with pistachios.', img: '/tandoor_oven.png' },
-    { id: 6, name: 'Mango Lassi Delight', category: 'Beverages', price: 180, origPrice: '₹220', isVeg: true, desc: 'Thick churned yogurt blended with Alphonsa mango pulp.', img: '/carousel_3.png' }
+    
   ]);
 
   const totalCartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
@@ -426,13 +421,52 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
               {activeSlideObj.subtitle}
             </p>
 
-            <Cta2
-              primaryText={activeSlideObj.btnText}
-              secondaryText="Our Heritage"
-              onPrimaryClick={activeSlideObj.action}
-              onSecondaryClick={() => setActivePage('about')}
-              style={{ marginBottom: '2.5rem' }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap', marginBottom: '2.5rem' }}>
+              <Cta2
+                primaryText={activeSlideObj.btnText}
+                secondaryText="Our Heritage"
+                onPrimaryClick={activeSlideObj.action}
+                onSecondaryClick={() => setActivePage('about')}
+                style={{ marginBottom: 0 }}
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenBookTable) {
+                    onOpenBookTable();
+                  } else if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('flavora_open_book_table'));
+                  }
+                }}
+                style={{
+                  backgroundColor: '#0F2A1D',
+                  color: '#FFFFFF',
+                  borderRadius: '12px',
+                  padding: '0.75rem 1.4rem',
+                  fontSize: '0.92rem',
+                  fontWeight: 800,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  border: '2px solid #0F2A1D',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(15, 42, 29, 0.22)',
+                  transition: 'transform 0.15s ease, background-color 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.backgroundColor = '#1E4636';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.backgroundColor = '#0F2A1D';
+                }}
+              >
+                <Calendar size={17} color="#FF8A00" />
+                <span>Book a Table</span>
+              </button>
+            </div>
 
             {/* Elevated Trust Badges Bar */}
             <div className="hero-trust-bar" style={{ backgroundColor: '#F0F7F3', border: '1px solid #D5E8DD' }}>
@@ -696,6 +730,93 @@ export default function HomePage({ setActivePage, onOpenDemoModal }) {
                 />
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* ================= 4.5. BOOK A TABLE CALLOUT BANNER ================= */}
+      <section style={{ backgroundColor: '#0F2A1D', padding: '3.5rem 1.5rem', position: 'relative', overflow: 'hidden', color: '#FFFFFF' }}>
+        <div style={{ position: 'absolute', top: '-60px', right: '-60px', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255, 138, 0, 0.25), transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: '-80px', left: '-80px', width: '350px', height: '350px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(74, 127, 181, 0.2), transparent 70%)', pointerEvents: 'none' }} />
+
+        <div style={{ maxWidth: '1180px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2.5rem', alignItems: 'center', position: 'relative', zIndex: 2 }}>
+          <div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', backgroundColor: 'rgba(255, 138, 0, 0.15)', border: '1px solid rgba(255, 138, 0, 0.4)', borderRadius: '9999px', padding: '0.35rem 0.85rem', marginBottom: '1rem' }}>
+              <Sparkles size={14} color="#FF8A00" />
+              <span style={{ fontSize: '0.78rem', color: '#FF8A00', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Hassle-Free Dining
+              </span>
+            </div>
+
+            <h2 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2, margin: '0 0 1rem 0', fontFamily: 'var(--font-heading)' }}>
+              Reserve Your Table in Advance
+            </h2>
+
+            <p style={{ fontSize: '1.02rem', color: '#CBD5E1', lineHeight: 1.65, margin: '0 0 1.5rem 0', maxWidth: '560px' }}>
+              Planning a royal family feast, romantic candlelight dinner, or business lunch? Book your table with instant confirmation, live seating preferences, and dedicated chef hospitality.
+            </p>
+
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#E2E8F0', fontWeight: 600 }}>
+                <CheckCircle2 size={16} color="#FF8A00" />
+                <span>Zero Booking Fees</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#E2E8F0', fontWeight: 600 }}>
+                <CheckCircle2 size={16} color="#FF8A00" />
+                <span>15-Min Grace Period</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#E2E8F0', fontWeight: 600 }}>
+                <CheckCircle2 size={16} color="#FF8A00" />
+                <span>Instant Confirmation</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenBookTable) {
+                  onOpenBookTable();
+                } else if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new Event('flavora_open_book_table'));
+                }
+              }}
+              style={{
+                backgroundColor: '#FF8A00',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '0.85rem 2.2rem',
+                fontSize: '1rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                boxShadow: '0 8px 24px rgba(255, 138, 0, 0.45)',
+                transition: 'transform 0.15s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.04)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              <Calendar size={18} />
+              <span>Book a Table Now</span>
+              <ArrowRight size={18} />
+            </button>
+          </div>
+
+          <div style={{ textAlign: 'center', position: 'relative' }}>
+            <img
+              src="/restaurant_ambience.png"
+              alt="Restaurant Ambience"
+              style={{
+                width: '100%',
+                maxHeight: '340px',
+                objectFit: 'cover',
+                borderRadius: '20px',
+                border: '2px solid rgba(255, 255, 255, 0.15)',
+                boxShadow: '0 16px 36px rgba(0, 0, 0, 0.4)'
+              }}
+            />
           </div>
         </div>
       </section>

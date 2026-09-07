@@ -67,7 +67,11 @@ export default function FeaturesPage({ setActivePage, onOpenDemoModal }) {
         'Birthday & Special Occasion Setup'
       ],
       btnText: 'Book Table Now',
-      btnAction: onOpenDemoModal
+      btnAction: () => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('flavora_open_book_table'));
+        }
+      }
     },
     {
       id: 'live-tracking',

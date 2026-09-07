@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { groupTablesForFloorPlan } from '../../utils/floorPlanUtils';
+import { onSocketEvent } from '../../services/socket';
 
 export default function ReceptionistFloorPlanPage() {
   const [tables, setTables] = useState([]);
@@ -34,7 +35,19 @@ export default function ReceptionistFloorPlanPage() {
   useEffect(() => {
     fetchFloorPlan();
     const interval = setInterval(fetchFloorPlan, 3000);
-    return () => clearInterval(interval);
+
+    const unsub = onSocketEvent('reservation_created', () => {
+      fetchFloorPlan();
+    });
+
+    const handleWindowResv = () => fetchFloorPlan();
+    window.addEventListener('flavora_reservation_created', handleWindowResv);
+
+    return () => {
+      clearInterval(interval);
+      if (typeof unsub === 'function') unsub();
+      window.removeEventListener('flavora_reservation_created', handleWindowResv);
+    };
   }, []);
 
   const sections = ['All', 'Main Dining', 'Window Section', 'Family Lounge', 'Patio Outdoor'];
@@ -319,6 +332,24 @@ export default function ReceptionistFloorPlanPage() {
                   <div style={{ fontSize: '0.78rem', color: '#047857', marginTop: '0.2rem' }}>
                     🎉 Occasion: {selectedTable.activeSession.specialOccasion || 'Standard Dining'}
                   </div>
+                </div>
+              ) : selectedTable.reservation ? (
+                <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #93C5FD', padding: '1rem', borderRadius: '14px' }}>
+                  <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#1E40AF', textTransform: 'uppercase' }}>CONFIRMED TABLE RESERVATION</div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#1E3A8A', marginTop: '0.2rem' }}>{selectedTable.reservation.guestName}</div>
+                  <div style={{ fontSize: '0.78rem', color: '#1E40AF', marginTop: '0.2rem' }}>
+                    📞 {selectedTable.reservation.phone} • 👥 {selectedTable.reservation.guests} Guests • 🕒 {selectedTable.reservation.timeSlot}
+                  </div>
+                  {selectedTable.reservation.specialOccasion && selectedTable.reservation.specialOccasion !== 'None' && (
+                    <div style={{ fontSize: '0.78rem', color: '#DC2626', fontWeight: 800, marginTop: '0.2rem' }}>
+                      🎉 Occasion: {selectedTable.reservation.specialOccasion}
+                    </div>
+                  )}
+                  {selectedTable.reservation.notes && (
+                    <div style={{ fontSize: '0.76rem', color: '#1E3A8A', backgroundColor: '#DBEAFE', padding: '0.35rem 0.55rem', borderRadius: '6px', marginTop: '0.35rem', fontWeight: 600 }}>
+                      📝 Customer Request: "{selectedTable.reservation.notes}"
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div style={{ backgroundColor: '#F8FAFC', border: '1px dashed #CBD5E1', padding: '1rem', borderRadius: '14px', textAlign: 'center', color: '#64748B', fontSize: '0.84rem' }}>
