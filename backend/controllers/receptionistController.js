@@ -4,6 +4,7 @@ const Waitlist = require('../models/Waitlist');
 const Guest = require('../models/Guest');
 const TableSession = require('../models/TableSession');
 const Order = require('../models/Order');
+const { notifyReservationCreated } = require('../socket');
 
 const defaultTablesList = [
   { number: 'T-01', name: 'T-01', section: 'Main Dining', seats: 4, status: 'Available', currentOrder: '' },
@@ -36,6 +37,7 @@ const getReceptionistKPIs = async (req, res) => {
     const waitlist = await Waitlist.find({ status: { $in: ['WAITING', 'CALLED'] } });
     const todayStr = new Date().toISOString().split('T')[0];
     const reservations = await Reservation.find({ date: todayStr, status: { $in: ['Confirmed', 'Pending', 'Checked_In'] } });
+    const futureCount = await Reservation.countDocuments({ date: { $gt: todayStr }, status: { $in: ['Confirmed', 'Pending'] } });
 
     const kpis = {
       totalTables: tables.length,
@@ -44,6 +46,8 @@ const getReceptionistKPIs = async (req, res) => {
       reserved: tables.filter(t => t.status === 'Reserved').length,
       waiting: waitlist.length,
       upcoming: reservations.length,
+      futureReservations: futureCount,
+      totalActiveReservations: reservations.length + futureCount,
       cleaning: tables.filter(t => t.status === 'Cleaning').length
     };
 
@@ -508,17 +512,17 @@ const getReservations = async (req, res) => {
 const createReservation = async (req, res) => {
   try {
     const { guestName, phone, guests, date, timeSlot, tableNo, section, specialOccasion, notes } = req.body;
-    const bookingId = `RES-${Math.floor(100000 + Math.random() * 900000)}`;
+    const bookingId = req.body.bookingId || `RES-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const reservation = await Reservation.create({
       bookingId,
-      guestName,
-      phone,
+      guestName: guestName || 'Valued Guest',
+      phone: phone || '',
       guests: Number(guests) || 2,
-      date,
-      timeSlot,
+      date: date || new Date().toISOString().split('T')[0],
+      timeSlot: timeSlot || '07:30 PM',
       tableNo: tableNo || 'Unassigned',
-      section: section || 'Main Hall',
+      section: section || 'Main Dining',
       specialOccasion: specialOccasion || 'None',
       notes: notes || '',
       status: 'Confirmed',
@@ -527,6 +531,14 @@ const createReservation = async (req, res) => {
 
     if (phone) {
       await createOrUpdateGuestProfile({ name: guestName, phone, specialOccasion, notes });
+    }
+
+    try {
+      if (typeof notifyReservationCreated === 'function') {
+        notifyReservationCreated(reservation);
+      }
+    } catch (e) {
+      console.warn('Socket notification error on receptionist reservation:', e.message);
     }
 
     res.status(201).json({ success: true, data: reservation });
