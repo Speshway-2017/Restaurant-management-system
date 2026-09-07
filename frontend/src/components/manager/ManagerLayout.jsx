@@ -133,20 +133,23 @@ export default function ManagerLayout({ setActivePage }) {
     const current = getSessionUser();
     if (current && current.name) {
       return {
+        id: current._id || current.id,
         name: current.name,
         email: current.email || '',
         phone: current.phone || '',
-        role: 'Restaurant Manager',
-        empId: current.empId || 'RMSM-01',
+        role: current.role || 'Restaurant Manager',
+        empId: current.empId || (current._id ? `RMSM-${String(current._id).slice(-2).toUpperCase()}` : ''),
         avatarUrl: current.avatarUrl || ''
       };
     }
     return {
-      name: 'Resto Manager',
-      email: 'manager@rms.com',
-      phone: '9876512345',
+      id: '',
+      name: 'Manager',
+      email: '',
+      phone: '',
       role: 'Restaurant Manager',
-      empId: 'RMSM-01'
+      empId: '',
+      avatarUrl: ''
     };
   });
 
@@ -155,52 +158,64 @@ export default function ManagerLayout({ setActivePage }) {
       const current = getSessionUser();
       if (!current) return;
 
-      api.getStaff()
-        .then((staffList) => {
-          if (Array.isArray(staffList) && staffList.length > 0) {
-            const match = staffList.find(s => 
-              (current._id && String(s._id || s.id) === String(current._id)) ||
-              (current.id && String(s._id || s.id) === String(current.id)) ||
-              (current.email && s.email && s.email.toLowerCase() === current.email.toLowerCase())
-            );
-            if (match && match.name) {
-              const fetchedProfile = {
-                name: match.name,
-                email: match.email || current.email,
-                phone: match.phone || current.phone || '',
-                role: 'Restaurant Manager',
-                empId: match.empId || current.empId || 'RMSM-01',
-                avatarUrl: match.avatarUrl || current.avatarUrl || ''
-              };
-              setManagerProfile(fetchedProfile);
-            }
+      api.getMe()
+        .then((res) => {
+          const u = res.user || res;
+          if (u && u.name) {
+            const fetchedProfile = {
+              id: u._id || u.id,
+              name: u.name,
+              email: u.email || current.email,
+              phone: u.phone || current.phone || '',
+              role: u.role || 'Restaurant Manager',
+              empId: u.empId || current.empId || (u._id ? `RMSM-${String(u._id).slice(-2).toUpperCase()}` : ''),
+              avatarUrl: u.avatarUrl || current.avatarUrl || ''
+            };
+            setManagerProfile(fetchedProfile);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (current.name) {
+            setManagerProfile({
+              id: current._id || current.id,
+              name: current.name,
+              email: current.email || '',
+              phone: current.phone || '',
+              role: current.role || 'Restaurant Manager',
+              empId: current.empId || (current._id ? `RMSM-${String(current._id).slice(-2).toUpperCase()}` : ''),
+              avatarUrl: current.avatarUrl || ''
+            });
+          }
+        });
     };
 
     syncManagerFromAuth();
 
-    const updateManagerProfile = () => {
-      const current = getSessionUser();
+    const updateManagerProfile = (evt) => {
+      const current = evt?.detail || getSessionUser();
       if (current && current.name) {
         setManagerProfile({
+          id: current._id || current.id,
           name: current.name,
           email: current.email || '',
           phone: current.phone || '',
-          role: 'Restaurant Manager',
-          empId: current.empId || 'RMSM-01',
+          role: current.role || 'Restaurant Manager',
+          empId: current.empId || (current._id ? `RMSM-${String(current._id).slice(-2).toUpperCase()}` : ''),
           avatarUrl: current.avatarUrl || ''
         });
       }
     };
 
     window.addEventListener('flavora_profile_updated', updateManagerProfile);
-    return () => window.removeEventListener('flavora_profile_updated', updateManagerProfile);
+    window.addEventListener('flavora_auth_synced', updateManagerProfile);
+    return () => {
+      window.removeEventListener('flavora_profile_updated', updateManagerProfile);
+      window.removeEventListener('flavora_auth_synced', updateManagerProfile);
+    };
   }, []);
 
   const getInitials = (nameStr) => {
-    if (!nameStr) return 'RM';
+    if (!nameStr) return 'M';
     const parts = nameStr.trim().split(' ');
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     return nameStr.slice(0, 2).toUpperCase();
@@ -213,11 +228,16 @@ export default function ManagerLayout({ setActivePage }) {
     'Hitech City Branch'
   ];
   const [selectedBranch, setSelectedBranch] = useState('Jubilee Hills (Main Branch)');
+
+  // Scoped notifications per manager account
+  const managerAccountKey = managerProfile?.id || getSessionUser()?._id || getSessionUser()?.id || getSessionUser()?.email || 'default';
+  const managerNotifStorageKey = `flavora_manager_notifications_${managerAccountKey}`;
+
   const [managerNotifications, setManagerNotifications] = useState(() => {
     try {
-      const saved = localStorage.getItem('flavora_manager_notifications');
+      const saved = localStorage.getItem(managerNotifStorageKey);
       return saved ? JSON.parse(saved) : [
-        { id: 'NOTIF-1', title: '🟢 System Online', message: 'Resto Manager KDS Terminal is synchronized.', time: '09:00 AM', read: true }
+        { id: `NOTIF-${Date.now()}-1`, title: '🟢 System Online', message: `${managerProfile?.name || 'Manager'} terminal is synchronized.`, time: '09:00 AM', read: true }
       ];
     } catch (e) {
       return [];
@@ -227,10 +247,20 @@ export default function ManagerLayout({ setActivePage }) {
   const [activeToast, setActiveToast] = useState(null);
   const notifMenuRef = useRef(null);
 
+  // Sync notifications from backend (isolated per authenticated user) and user-scoped storage
   useEffect(() => {
-    const handleNotifUpdate = () => {
+    const fetchNotifications = async () => {
       try {
-        const saved = localStorage.getItem('flavora_manager_notifications');
+        const backendNotifs = await api.getMyNotifications();
+        if (Array.isArray(backendNotifs) && backendNotifs.length > 0) {
+          setManagerNotifications(backendNotifs);
+          localStorage.setItem(managerNotifStorageKey, JSON.stringify(backendNotifs));
+          return;
+        }
+      } catch (err) {}
+
+      try {
+        const saved = localStorage.getItem(managerNotifStorageKey);
         if (saved) {
           const parsed = JSON.parse(saved);
           setManagerNotifications(parsed);
@@ -239,25 +269,29 @@ export default function ManagerLayout({ setActivePage }) {
             setTimeout(() => setActiveToast(null), 6000);
           }
         }
-      } catch (e) { }
+      } catch (e) {}
     };
-    handleNotifUpdate();
+
+    fetchNotifications();
+
+    const handleNotifUpdate = () => fetchNotifications();
     window.addEventListener('flavora_notification_created', handleNotifUpdate);
     window.addEventListener('storage', handleNotifUpdate);
     return () => {
       window.removeEventListener('flavora_notification_created', handleNotifUpdate);
       window.removeEventListener('storage', handleNotifUpdate);
     };
-  }, []);
+  }, [managerAccountKey]);
 
   const unreadCount = managerNotifications.filter(n => !n.read).length;
 
-  const handleMarkAllNotifsRead = () => {
+  const handleMarkAllNotifsRead = async () => {
     const readList = managerNotifications.map(n => ({ ...n, read: true }));
     setManagerNotifications(readList);
     try {
-      localStorage.setItem('flavora_manager_notifications', JSON.stringify(readList));
-    } catch (e) { }
+      localStorage.setItem(managerNotifStorageKey, JSON.stringify(readList));
+      await api.markMyNotificationsRead();
+    } catch (e) {}
   };
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -562,8 +596,8 @@ export default function ManagerLayout({ setActivePage }) {
                   )}
                 </div>
                 <div className="admin-user-info-text">
-                  <div className="admin-user-name">{managerProfile?.name || 'Resto Manager'}</div>
-                  <div className="admin-user-role">{managerProfile?.empId || 'RMSM-01'} • Manager</div>
+                  <div className="admin-user-name">{managerProfile?.name || 'Manager'}</div>
+                  <div className="admin-user-role">{managerProfile?.empId ? `${managerProfile.empId} • ` : ''}Manager</div>
                 </div>
                 <ChevronDown size={14} color="#5C5C5C" />
               </div>
@@ -572,8 +606,8 @@ export default function ManagerLayout({ setActivePage }) {
               {userMenuOpen && (
                 <div className="admin-profile-dropdown-menu">
                   <div className="admin-dropdown-user-info">
-                    <div className="user-info-name">{managerProfile?.name || 'Resto Manager'}</div>
-                    <div className="user-info-email">{managerProfile?.email || 'manager@flavorakitchen.in'}</div>
+                    <div className="user-info-name">{managerProfile?.name || 'Manager'}</div>
+                    <div className="user-info-email">{managerProfile?.email || ''}</div>
                   </div>
                   <button
                     className="admin-dropdown-item"

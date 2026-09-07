@@ -9,7 +9,9 @@ const tableSchema = new mongoose.Schema({
   currentOrder: { type: String, default: '' },
   activeSessionId: { type: String, default: null },
   mergedWith: [{ type: String }],
-  cleaningUntil: { type: Date, default: null }
+  cleaningUntil: { type: Date, default: null },
+  assignedWaiterId: { type: String, default: '' },
+  assignedWaiterName: { type: String, default: '' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Table', tableSchema);

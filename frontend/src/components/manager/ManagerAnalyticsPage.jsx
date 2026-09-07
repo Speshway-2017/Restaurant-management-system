@@ -23,6 +23,16 @@ export default function ManagerAnalyticsPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+  const managerAccountKey = sessionUser?._id || sessionUser?.id || sessionUser?.email || 'manager';
+
   // Fetch real database data on load
   const loadDatabaseData = async () => {
     setLoading(true);
@@ -37,8 +47,6 @@ export default function ManagerAnalyticsPage() {
       } catch (e) {
         console.warn("Backend getOrders notice:", e.message);
       }
-
-
 
       // Normalize orders
       const normalizedOrders = fetchedOrders.map((o, idx) => {
@@ -73,11 +81,11 @@ export default function ManagerAnalyticsPage() {
         if (Array.isArray(backendStaff) && backendStaff.length > 0) {
           setStaffList(backendStaff);
         } else {
-          const savedStaff = localStorage.getItem('flavora_staff_list');
+          const savedStaff = localStorage.getItem(`flavora_staff_list_${managerAccountKey}`) || localStorage.getItem('flavora_staff_list');
           setStaffList(savedStaff ? JSON.parse(savedStaff) : []);
         }
       } catch (e) {
-        const savedStaff = localStorage.getItem('flavora_staff_list');
+        const savedStaff = localStorage.getItem(`flavora_staff_list_${managerAccountKey}`) || localStorage.getItem('flavora_staff_list');
         setStaffList(savedStaff ? JSON.parse(savedStaff) : []);
       }
 
@@ -94,12 +102,14 @@ export default function ManagerAnalyticsPage() {
     // Listen for live order updates
     const handleOrderSync = () => loadDatabaseData();
     window.addEventListener('flavora_orders_updated', handleOrderSync);
+    window.addEventListener('flavora_staff_updated', handleOrderSync);
     window.addEventListener('storage', handleOrderSync);
     return () => {
       window.removeEventListener('flavora_orders_updated', handleOrderSync);
+      window.removeEventListener('flavora_staff_updated', handleOrderSync);
       window.removeEventListener('storage', handleOrderSync);
     };
-  }, []);
+  }, [managerAccountKey]);
 
   // Filter orders by time range & shift
   const validOrders = ordersList.filter(o => o.status !== 'Cancelled');

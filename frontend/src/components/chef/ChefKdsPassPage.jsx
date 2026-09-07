@@ -11,6 +11,9 @@ export default function ChefKdsPassPage({
   updatingDishItems = {},
   handleToggleItemCheck,
   handleUpdateStatus,
+  handleClaimOrder,
+  currentChefId,
+  currentChefName,
   setSelectedTicketModal
 }) {
   const [kdsSettings, setKdsSettings] = React.useState(() => {
@@ -96,13 +99,38 @@ export default function ChefKdsPassPage({
               borderBottom: '1px solid #E2E8F0'
             }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: isCompact ? '0.95rem' : '1.1rem', fontWeight: 900, color: isHighContrast ? '#000000' : '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
                     {formatTableNumber(ord.table || ord.tableNumber)}
                   </span>
                   <span style={{ fontSize: '0.68rem', backgroundColor: '#0F2A1D', color: '#FFFFFF', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 800 }}>
                     {ord.type}
                   </span>
+                  {ord.chefName ? (
+                    <span style={{
+                      fontSize: '0.68rem',
+                      backgroundColor: (currentChefId && String(ord.chefId) === String(currentChefId)) ? '#DCFCE7' : '#FEF3C7',
+                      color: (currentChefId && String(ord.chefId) === String(currentChefId)) ? '#166534' : '#92400E',
+                      border: (currentChefId && String(ord.chefId) === String(currentChefId)) ? '1px solid #86EFAC' : '1px solid #FCD34D',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '6px',
+                      fontWeight: 800
+                    }}>
+                      {(currentChefId && String(ord.chefId) === String(currentChefId)) ? '👨‍🍳 Cooking by You' : `👨‍🍳 ${ord.chefName}`}
+                    </span>
+                  ) : (
+                    <span style={{
+                      fontSize: '0.68rem',
+                      backgroundColor: '#F1F5F9',
+                      color: '#64748B',
+                      border: '1px dashed #CBD5E1',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '6px',
+                      fontWeight: 700
+                    }}>
+                      ⚡ Open / Unclaimed
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: isCompact ? '0.68rem' : '0.74rem', color: isHighContrast ? '#000000' : '#64748B', marginTop: '0.1rem', fontWeight: isHighContrast ? 800 : 600 }}>
                   Ticket {ord.id} • {ord.time}
@@ -302,53 +330,79 @@ export default function ChefKdsPassPage({
                 const isStarted = !isPlacedOrNew || hasAnyItemStarted;
 
                 return !isStarted ? (
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateStatus(ord.id, 'Preparing')}
-                    style={{
-                      flex: 1,
-                      padding: '0.7rem',
-                      borderRadius: '10px',
-                      border: 'none',
-                      backgroundColor: '#E07A3C',
-                      color: '#FFFFFF',
-                      fontSize: '0.86rem',
-                      fontWeight: 900,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.45rem',
-                      boxShadow: '0 4px 12px rgba(224, 122, 60, 0.35)'
-                    }}
-                  >
-                    <Flame size={18} />
-                    <span>🔥 Start Cooking</span>
-                  </button>
+                  <div style={{ flex: 1, display: 'flex', gap: '0.4rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(ord.id, 'Preparing')}
+                      style={{
+                        flex: 1,
+                        padding: '0.7rem',
+                        borderRadius: '10px',
+                        border: 'none',
+                        backgroundColor: '#E07A3C',
+                        color: '#FFFFFF',
+                        fontSize: '0.86rem',
+                        fontWeight: 900,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.45rem',
+                        boxShadow: '0 4px 12px rgba(224, 122, 60, 0.35)'
+                      }}
+                    >
+                      <Flame size={18} />
+                      <span>🔥 Start Cooking</span>
+                    </button>
+                    {(!ord.chefId || (currentChefId && String(ord.chefId) !== String(currentChefId))) && handleClaimOrder && (
+                      <button
+                        type="button"
+                        onClick={() => handleClaimOrder(ord.id)}
+                        title="Claim this ticket for your station"
+                        style={{
+                          padding: '0.7rem 0.9rem',
+                          borderRadius: '10px',
+                          border: '1px solid #CBD5E1',
+                          backgroundColor: '#FFFFFF',
+                          color: '#0F2A1D',
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}
+                      >
+                        ✋ Claim
+                      </button>
+                    )}
+                  </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateStatus(ord.id, 'Ready')}
-                    style={{
-                      flex: 1,
-                      padding: '0.7rem',
-                      borderRadius: '10px',
-                      border: 'none',
-                      backgroundColor: '#166534',
-                      color: '#FFFFFF',
-                      fontSize: '0.86rem',
-                      fontWeight: 900,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.45rem',
-                      boxShadow: '0 4px 12px rgba(22, 101, 52, 0.4)'
-                    }}
-                  >
-                    <CheckCircle2 size={18} />
-                    <span>✅ Mark Ready for Pass</span>
-                  </button>
+                  <div style={{ flex: 1, display: 'flex', gap: '0.4rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(ord.id, 'Ready')}
+                      style={{
+                        flex: 1,
+                        padding: '0.7rem',
+                        borderRadius: '10px',
+                        border: 'none',
+                        backgroundColor: (ord.chefId && currentChefId && String(ord.chefId) !== String(currentChefId)) ? '#D97706' : '#166534',
+                        color: '#FFFFFF',
+                        fontSize: '0.86rem',
+                        fontWeight: 900,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.45rem',
+                        boxShadow: '0 4px 12px rgba(22, 101, 52, 0.4)'
+                      }}
+                    >
+                      <CheckCircle2 size={18} />
+                      <span>{(ord.chefId && currentChefId && String(ord.chefId) !== String(currentChefId)) ? `✅ Pass (${ord.chefName || 'Other Chef'})` : '✅ Mark Ready for Pass'}</span>
+                    </button>
+                  </div>
                 );
               })()}
 

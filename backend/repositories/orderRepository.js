@@ -1,8 +1,8 @@
 const Order = require('../models/Order');
 
 class OrderRepository {
-  async findAll() {
-    return await Order.find({}).sort({ createdAt: -1 });
+  async findAll(query = {}) {
+    return await Order.find(query).sort({ createdAt: -1 });
   }
 
   async findById(id) {
@@ -89,6 +89,12 @@ class OrderRepository {
         doc.total = Number(fullOrderData.total);
       }
 
+      if (fullOrderData.chefId !== undefined) doc.chefId = String(fullOrderData.chefId);
+      if (fullOrderData.chefName !== undefined) doc.chefName = String(fullOrderData.chefName);
+      if (fullOrderData.claimedAt !== undefined) doc.claimedAt = fullOrderData.claimedAt;
+      if (fullOrderData.waiterId !== undefined) doc.waiterId = String(fullOrderData.waiterId);
+      if (fullOrderData.waiterName !== undefined) doc.waiterName = String(fullOrderData.waiterName);
+
       if (fullOrderData.items && Array.isArray(fullOrderData.items)) {
         doc.items = fullOrderData.items.map((it, idx) => {
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
@@ -117,6 +123,7 @@ class OrderRepository {
       type: fullOrderData.type || 'Dine-In',
       customer: fullOrderData.customer || 'Guest Diner',
       phone: fullOrderData.phone || '',
+      managerId: fullOrderData.managerId ? String(fullOrderData.managerId) : undefined,
       originalTotal: Number(fullOrderData.originalTotal || fullOrderData.originalAmount || fullOrderData.total || 0),
       originalAmount: Number(fullOrderData.originalAmount || fullOrderData.originalTotal || fullOrderData.total || 0),
       couponCode: fullOrderData.couponCode || '',

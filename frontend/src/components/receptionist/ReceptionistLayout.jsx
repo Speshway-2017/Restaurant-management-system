@@ -104,17 +104,17 @@ export default function ReceptionistLayout({ setActivePage }) {
     if (current && current.name) {
       return {
         name: current.name,
-        email: current.email || 'receptionist@rms.com',
+        email: current.email || '',
         phone: current.phone || '',
-        role: current.role || 'Host Desk',
-        empId: current.empId || 'RMSR-01'
+        role: current.role || 'Receptionist',
+        empId: current.empId || `RMSR-${String(current._id || current.id || '01').slice(-4).toUpperCase()}`
       };
     }
     return {
-      name: 'Reception Desk',
-      email: 'receptionist@rms.com',
-      phone: '9876543210',
-      role: 'Host Desk',
+      name: 'Receptionist',
+      email: '',
+      phone: '',
+      role: 'Receptionist',
       empId: 'RMSR-01'
     };
   });
@@ -123,9 +123,23 @@ export default function ReceptionistLayout({ setActivePage }) {
   const profileMenuRef = useRef(null);
 
   useEffect(() => {
-    const fetchStaffFromDb = () => {
+    const fetchStaffFromDb = async () => {
       const current = getSessionUser();
       if (!current) return;
+
+      try {
+        const me = await api.getMe();
+        if (me && me.name) {
+          setReceptionistProfile({
+            name: me.name,
+            email: me.email || '',
+            phone: me.phone || '',
+            role: me.role || 'Receptionist',
+            empId: me.empId || `RMSR-${String(me._id || me.id).slice(-4).toUpperCase()}`
+          });
+          return;
+        }
+      } catch (e) {}
 
       api.getStaff()
         .then((staffList) => {
@@ -138,10 +152,10 @@ export default function ReceptionistLayout({ setActivePage }) {
             if (match && match.name) {
               const fetchedProfile = {
                 name: match.name,
-                email: match.email || current.email,
+                email: match.email || current.email || '',
                 phone: match.phone || current.phone || '',
-                role: match.role || current.role || 'Host Desk',
-                empId: match.empId || current.empId || 'RMSR-01'
+                role: match.role || current.role || 'Receptionist',
+                empId: match.empId || current.empId || `RMSR-${String(match._id || match.id).slice(-4).toUpperCase()}`
               };
               setReceptionistProfile(fetchedProfile);
             }
@@ -159,10 +173,10 @@ export default function ReceptionistLayout({ setActivePage }) {
       if (current && current.name) {
         setReceptionistProfile({
           name: current.name,
-          email: current.email || 'receptionist@rms.com',
+          email: current.email || '',
           phone: current.phone || '',
-          role: current.role || 'Host Desk',
-          empId: current.empId || 'RMSR-01'
+          role: current.role || 'Receptionist',
+          empId: current.empId || `RMSR-${String(current._id || current.id || '01').slice(-4).toUpperCase()}`
         });
       }
     };

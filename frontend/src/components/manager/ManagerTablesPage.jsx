@@ -47,10 +47,20 @@ export default function ManagerTablesPage() {
     return tbl;
   };
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+  const managerAccountKey = sessionUser?._id || sessionUser?.id || sessionUser?.email || 'manager';
+
   const syncTableOrdersWithLocalStorage = (rawTables) => {
     let managerStatusMap = {};
     try {
-      const savedMgr = localStorage.getItem('flavora_manager_orders');
+      const savedMgr = localStorage.getItem(`flavora_manager_orders_${managerAccountKey}`) || localStorage.getItem('flavora_manager_orders');
       if (savedMgr) {
         const parsed = JSON.parse(savedMgr);
         if (Array.isArray(parsed)) {

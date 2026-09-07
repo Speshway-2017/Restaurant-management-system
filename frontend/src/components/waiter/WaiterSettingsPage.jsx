@@ -6,9 +6,21 @@ import {
 } from 'lucide-react';
 
 export default function WaiterSettingsPage() {
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
+  const sessionUser = getSessionUser();
+  const accountKey = sessionUser?._id || sessionUser?.id || 'default';
+  const storageKey = `flavora_waiter_settings_${accountKey}`;
+
   const [settings, setSettings] = useState(() => {
     try {
-      const saved = localStorage.getItem('flavora_waiter_settings');
+      const saved = localStorage.getItem(storageKey) || localStorage.getItem('flavora_waiter_settings');
       return saved ? JSON.parse(saved) : {
         // Notifications & Audio
         audioAlerts: true,
@@ -66,7 +78,7 @@ export default function WaiterSettingsPage() {
   const handleSave = (e) => {
     if (e) e.preventDefault();
     try {
-      localStorage.setItem('flavora_waiter_settings', JSON.stringify(settings));
+      localStorage.setItem(storageKey, JSON.stringify(settings));
       setSuccessMsg('Waiter Station preferences saved & applied live!');
       setTimeout(() => setSuccessMsg(null), 3500);
     } catch (err) {
@@ -95,7 +107,7 @@ export default function WaiterSettingsPage() {
       requirePaymentPin: false
     };
     setSettings(defaultState);
-    localStorage.setItem('flavora_waiter_settings', JSON.stringify(defaultState));
+    localStorage.setItem(storageKey, JSON.stringify(defaultState));
     setSuccessMsg('Settings reset to system defaults!');
     setTimeout(() => setSuccessMsg(null), 3500);
   };

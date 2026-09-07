@@ -63,6 +63,13 @@ export const api = {
     body: JSON.stringify({ email, otp, newPassword })
   }),
   getMe: () => request('/auth/me'),
+  updateMyProfile: (data) => request('/auth/me', { method: 'PUT', body: JSON.stringify(data) }),
+  getMySettings: () => request('/auth/me/settings'),
+  updateMySettings: (data) => request('/auth/me/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  getMyNotifications: () => request('/auth/me/notifications'),
+  markMyNotificationsRead: () => request('/auth/me/notifications/read', { method: 'PATCH' }),
+  getMyActivities: () => request('/auth/me/activities'),
+  addMyActivity: (data) => request('/auth/me/activities', { method: 'POST', body: JSON.stringify(data) }),
   getProfile: (id) => request(`/auth/profile/${id}`),
 
   // Menu API
@@ -88,10 +95,18 @@ export const api = {
       body: JSON.stringify({ itemIds, status })
     });
   },
+  claimOrder: (id) => {
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/orders/${cleanId}/claim`, { method: 'PATCH' });
+  },
   clearAllOrders: () => request('/orders/all', { method: 'DELETE' }),
 
   // Tables API
   getTables: () => request('/tables'),
+  assignTableWaiter: (tableNum, data = {}) => {
+    const cleanNum = encodeURIComponent(String(tableNum || '').trim());
+    return request(`/tables/assign-waiter/${cleanNum}`, { method: 'PATCH', body: JSON.stringify(data) });
+  },
   updateTableStatus: (id, statusData, currentOrder = '') => {
     let payload = {};
     if (typeof statusData === 'object' && statusData !== null) {

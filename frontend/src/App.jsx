@@ -104,8 +104,23 @@ export default function App() {
           const role = userObj.role || res.role;
           if (userObj && role) {
             const normRole = String(role).toLowerCase().trim();
+            const existingRaw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+            let merged = userObj;
+            if (existingRaw) {
+              try {
+                const existing = JSON.parse(existingRaw);
+                if (existing && (String(existing._id || existing.id) === String(userObj._id || userObj.id) || (existing.email && existing.email.toLowerCase() === (userObj.email || '').toLowerCase()))) {
+                  merged = { ...existing, ...userObj };
+                }
+              } catch (e) {}
+            }
             sessionStorage.setItem('flavora_user_role', normRole);
-            sessionStorage.setItem('flavora_user_data', JSON.stringify(userObj));
+            sessionStorage.setItem('flavora_user_data', JSON.stringify(merged));
+            if (localStorage.getItem('flavora_auth_token')) {
+              localStorage.setItem('flavora_user_role', normRole);
+              localStorage.setItem('flavora_user_data', JSON.stringify(merged));
+            }
+            window.dispatchEvent(new CustomEvent('flavora_auth_synced', { detail: merged }));
           }
         })
         .catch(() => {

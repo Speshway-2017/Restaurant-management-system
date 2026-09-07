@@ -16,19 +16,128 @@ const getMe = async (req, res) => {
     if (!req.user) {
       return errorResponse(res, 'Not authorized', 401);
     }
+    const u = req.user;
     return successResponse(res, {
       user: {
-        _id: req.user._id,
-        name: req.user.name,
-        email: req.user.email,
-        role: req.user.role,
-        phone: req.user.phone || '',
-        branch: req.user.branch || ''
+        _id: u._id,
+        id: u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        phone: u.phone || '',
+        branch: u.branch || '',
+        empId: u.empId || '',
+        avatarUrl: u.avatarUrl || '',
+        department: u.department || 'Operations & Floor Management',
+        joinedDate: u.joinedDate || '',
+        managerSettings: u.managerSettings || {}
       },
-      role: req.user.role
+      role: u.role
     }, 'Session active');
   } catch (error) {
     return errorResponse(res, error.message || 'Not authorized', 401);
+  }
+};
+
+const updateMe = async (req, res) => {
+  try {
+    if (!req.user) {
+      return errorResponse(res, 'Not authorized', 401);
+    }
+    const user = await authService.updateUser(req.user._id, req.body);
+    return successResponse(res, {
+      _id: user._id,
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      phone: user.phone || '',
+      branch: user.branch || '',
+      empId: user.empId || '',
+      avatarUrl: user.avatarUrl || '',
+      department: user.department || 'Operations & Floor Management',
+      joinedDate: user.joinedDate || '',
+      managerSettings: user.managerSettings || {}
+    }, 'Profile updated successfully');
+  } catch (error) {
+    return errorResponse(res, error.message || 'Error updating profile', 400);
+  }
+};
+
+const getManagerSettings = async (req, res) => {
+  try {
+    if (!req.user) return errorResponse(res, 'Not authorized', 401);
+    return successResponse(res, req.user.managerSettings || {}, 'Manager settings fetched');
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+const updateManagerSettings = async (req, res) => {
+  try {
+    if (!req.user) return errorResponse(res, 'Not authorized', 401);
+    const updatedSettings = { ...(req.user.managerSettings || {}), ...req.body };
+    req.user.managerSettings = updatedSettings;
+    await req.user.save();
+    return successResponse(res, req.user.managerSettings, 'Manager settings updated');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+const getManagerNotifications = async (req, res) => {
+  try {
+    if (!req.user) return errorResponse(res, 'Not authorized', 401);
+    const notifications = (req.user.notifications || []).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return successResponse(res, notifications, 'Manager notifications fetched');
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+const markNotificationsRead = async (req, res) => {
+  try {
+    if (!req.user) return errorResponse(res, 'Not authorized', 401);
+    if (Array.isArray(req.user.notifications)) {
+      req.user.notifications.forEach(n => { n.read = true; });
+      await req.user.save();
+    }
+    return successResponse(res, req.user.notifications || [], 'Notifications marked as read');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+const getManagerActivities = async (req, res) => {
+  try {
+    if (!req.user) return errorResponse(res, 'Not authorized', 401);
+    const activities = (req.user.activities || []).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return successResponse(res, activities, 'Manager activities fetched');
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+const addManagerActivity = async (req, res) => {
+  try {
+    if (!req.user) return errorResponse(res, 'Not authorized', 401);
+    const { title, details, type, time } = req.body;
+    if (!req.user.activities) req.user.activities = [];
+    const newAct = {
+      id: `act_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      title: title || 'Manager Action',
+      details: details || '',
+      type: type || 'action',
+      time: time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actor: req.user.name,
+      createdAt: new Date()
+    };
+    req.user.activities.unshift(newAct);
+    if (req.user.activities.length > 50) req.user.activities = req.user.activities.slice(0, 50);
+    await req.user.save();
+    return successResponse(res, newAct, 'Activity recorded');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -62,4 +171,17 @@ const resetPassword = async (req, res) => {
   }
 };
 
-module.exports = { loginUser, getMe, getProfile, forgotPassword, resetPassword };
+module.exports = {
+  loginUser,
+  getMe,
+  updateMe,
+  getManagerSettings,
+  updateManagerSettings,
+  getManagerNotifications,
+  markNotificationsRead,
+  getManagerActivities,
+  addManagerActivity,
+  getProfile,
+  forgotPassword,
+  resetPassword
+};

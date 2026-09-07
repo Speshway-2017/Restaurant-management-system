@@ -37,7 +37,13 @@ const orderSchema = new mongoose.Schema({
   transactionId: { type: String, default: '' },
   paidAt: { type: Date },
   time: { type: String, default: '' },
-  notes: { type: String, default: '' }
+  notes: { type: String, default: '' },
+  managerId: { type: String, index: true, default: '' },
+  chefId: { type: String, index: true, default: '' },
+  chefName: { type: String, default: '' },
+  claimedAt: { type: Date },
+  waiterId: { type: String, index: true, default: '' },
+  waiterName: { type: String, default: '' }
 }, { timestamps: true, strict: false });
 
 orderSchema.pre('save', function(next) {

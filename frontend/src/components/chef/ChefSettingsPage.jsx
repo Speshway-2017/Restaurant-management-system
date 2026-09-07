@@ -33,9 +33,19 @@ export default function ChefSettingsPage() {
     flashOverdueTickets: true
   };
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+  const chefAccountKey = sessionUser?._id || sessionUser?.id || sessionUser?.email || 'chef';
+
   const [settings, setSettings] = useState(() => {
     try {
-      const saved = localStorage.getItem('flavora_chef_settings');
+      const saved = localStorage.getItem(`flavora_chef_settings_${chefAccountKey}`) || localStorage.getItem('flavora_chef_settings');
       return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch (e) {
       return DEFAULT_SETTINGS;
@@ -76,7 +86,7 @@ export default function ChefSettingsPage() {
     const updated = { ...settings, ...newPartialSettings };
     setSettings(updated);
     try {
-      localStorage.setItem('flavora_chef_settings', JSON.stringify(updated));
+      localStorage.setItem(`flavora_chef_settings_${chefAccountKey}`, JSON.stringify(updated));
       window.dispatchEvent(new Event('flavora_settings_updated'));
     } catch (e) { }
   };
@@ -86,7 +96,7 @@ export default function ChefSettingsPage() {
       e.preventDefault();
     }
     try {
-      localStorage.setItem('flavora_chef_settings', JSON.stringify(settings));
+      localStorage.setItem(`flavora_chef_settings_${chefAccountKey}`, JSON.stringify(settings));
       window.dispatchEvent(new Event('flavora_settings_updated'));
     } catch (err) {
       console.error('Error saving settings:', err);

@@ -59,6 +59,8 @@ const updateTableStatus = async (req, res) => {
     const id = req.params.id;
 
     let updateData = { status, currentOrder: status === 'Available' ? '' : currentOrder };
+    if (req.body?.assignedWaiterId !== undefined) updateData.assignedWaiterId = req.body.assignedWaiterId;
+    if (req.body?.assignedWaiterName !== undefined) updateData.assignedWaiterName = req.body.assignedWaiterName;
     if (status === 'Cleaning') {
       // Set cleaning expiration to 10 minutes from now
       updateData.cleaningUntil = new Date(Date.now() + 10 * 60 * 1000);
@@ -137,6 +139,8 @@ const updateTableByNumber = async (req, res) => {
     const exactRegex = cleanNum ? new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i') : new RegExp(rawNum, 'i');
 
     let updateData = { status, currentOrder: status === 'Available' ? '' : currentOrder };
+    if (req.body?.assignedWaiterId !== undefined) updateData.assignedWaiterId = req.body.assignedWaiterId;
+    if (req.body?.assignedWaiterName !== undefined) updateData.assignedWaiterName = req.body.assignedWaiterName;
     if (status === 'Cleaning') {
       updateData.cleaningUntil = new Date(Date.now() + 10 * 60 * 1000);
     } else if (status === 'Available') {
@@ -232,5 +236,25 @@ const deleteTable = async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 };
+const assignWaiter = async (req, res) => {
+  try {
+    const rawNum = req.params.tableNum || '';
+    const cleanNum = rawNum.toUpperCase().replace('TABLE', '').replace('T-', '').trim();
+    const exactRegex = cleanNum ? new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i') : new RegExp(rawNum, 'i');
 
-module.exports = { getTables, createTable, updateTableStatus, updateTableByNumber, deleteTable, generateTableQr };
+    const waiterId = req.body.waiterId || (req.user ? req.user._id.toString() : '');
+    const waiterName = req.body.waiterName || (req.user ? req.user.name : '');
+
+    const updated = await Table.findOneAndUpdate(
+      { $or: [{ number: exactRegex }, { name: exactRegex }] },
+      { assignedWaiterId: waiterId, assignedWaiterName: waiterName },
+      { new: true }
+    );
+    res.json(updated || { message: 'Table assigned' });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+module.exports = { getTables, createTable, updateTableStatus, updateTableByNumber, deleteTable, generateTableQr, assignWaiter };
+

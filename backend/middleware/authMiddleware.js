@@ -43,4 +43,18 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
-module.exports = { protect, adminOnly, requireRole };
+const optionalAuth = async (req, res, next) => {
+  let token;
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    try {
+      token = req.headers.authorization.split(' ')[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'flavora_secret_key');
+      req.user = await User.findById(decoded.id).select('-password');
+    } catch (error) {
+      // Ignore token failure in optionalAuth to let public/customer requests continue
+    }
+  }
+  return next();
+};
+
+module.exports = { protect, adminOnly, requireRole, optionalAuth };

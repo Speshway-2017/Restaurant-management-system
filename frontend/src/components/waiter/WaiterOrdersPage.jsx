@@ -468,6 +468,16 @@ export default function WaiterOrdersPage() {
     o.payment === 'Paid' || o.payment === 'Completed'
   );
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
+  const sessionUser = getSessionUser();
+
   const sortedOrders = [...orders].sort((a, b) => {
     const timeA = new Date(a.createdAt || a.updatedAt || 0).getTime();
     const timeB = new Date(b.createdAt || b.updatedAt || 0).getTime();
@@ -476,6 +486,9 @@ export default function WaiterOrdersPage() {
 
   const filteredOrders = sortedOrders.filter(o => {
     const isPaid = getIsPaid(o);
+    if (filter === 'MY_ORDERS') {
+      return sessionUser?._id && String(o.waiterId || '') === String(sessionUser._id);
+    }
     if (filter === 'ALL') return showPreparedOnly ? (Array.isArray(o.items) && o.items.some(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'DELIVERED')) : true;
     if (filter === 'READY') {
       if (isPaid) return false;
@@ -576,6 +589,7 @@ export default function WaiterOrdersPage() {
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
               {[
                 { id: 'ALL', label: `All Orders (${orders.length})` },
+                { id: 'MY_ORDERS', label: `🧑‍🍳 My Orders (${orders.filter(o => sessionUser?._id && String(o.waiterId || '') === String(sessionUser._id)).length})` },
                 { id: 'READY', label: `Ready for Pickup (${orders.filter(o => !getIsPaid(o) && (o.status === 'Ready' || (Array.isArray(o.items) && o.items.some(i => (i.status === 'READY' || i.isReady) && !i.isDelivered && i.status !== 'DELIVERED')))).length})` },
                 { id: 'ACTIVE', label: `Preparing (${orders.filter(o => !getIsPaid(o) && (o.status === 'Placed' || o.status === 'Preparing')).length})` },
                 { id: 'SERVED', label: `Served / Billing (${orders.filter(o => !getIsPaid(o) && (o.status === 'Served' || o.status === 'Bill Generated' || o.status === 'PARTIALLY DELIVERED')).length})` },
@@ -744,6 +758,21 @@ export default function WaiterOrdersPage() {
                           <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700 }}>
                             ID: #{getOrderId(order)}
                           </span>
+                          {order.waiterName && (
+                            <div style={{ marginTop: '0.25rem' }}>
+                              <span style={{
+                                fontSize: '0.68rem',
+                                backgroundColor: (sessionUser?._id && String(order.waiterId) === String(sessionUser._id)) ? '#DCFCE7' : '#FEF3C7',
+                                color: (sessionUser?._id && String(order.waiterId) === String(sessionUser._id)) ? '#166534' : '#92400E',
+                                border: (sessionUser?._id && String(order.waiterId) === String(sessionUser._id)) ? '1px solid #86EFAC' : '1px solid #FCD34D',
+                                padding: '0.1rem 0.35rem',
+                                borderRadius: '4px',
+                                fontWeight: 800
+                              }}>
+                                {(sessionUser?._id && String(order.waiterId) === String(sessionUser._id)) ? '🧑‍🍳 Assigned to You' : `🧑‍🍳 Waiter ${order.waiterName}`}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         <span style={{

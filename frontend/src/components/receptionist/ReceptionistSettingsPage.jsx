@@ -7,6 +7,18 @@ import {
 import { api } from '../../services/api';
 
 export default function ReceptionistSettingsPage() {
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
+  const sessionUser = getSessionUser();
+  const accountKey = sessionUser?._id || sessionUser?.id || 'default';
+  const localSettingsKey = `flavora_receptionist_settings_${accountKey}`;
+
   const [loading, setLoading] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
 
@@ -29,6 +41,18 @@ export default function ReceptionistSettingsPage() {
   const [autoAdvanceTokens, setAutoAdvanceTokens] = useState(false);
 
   useEffect(() => {
+    // Load local station preferences
+    try {
+      const savedLocal = localStorage.getItem(localSettingsKey) || localStorage.getItem('flavora_receptionist_settings');
+      if (savedLocal) {
+        const parsed = JSON.parse(savedLocal);
+        if (parsed.refreshIntervalSec !== undefined) setRefreshIntervalSec(parsed.refreshIntervalSec);
+        if (parsed.soundChimeEnabled !== undefined) setSoundChimeEnabled(parsed.soundChimeEnabled);
+        if (parsed.autoAdvanceTokens !== undefined) setAutoAdvanceTokens(parsed.autoAdvanceTokens);
+        if (parsed.autoMergeSuggestion !== undefined) setAutoMergeSuggestion(parsed.autoMergeSuggestion);
+      }
+    } catch (e) {}
+
     setLoading(true);
     api.getSettings().then(res => {
       if (res && res.data) {
@@ -40,11 +64,18 @@ export default function ReceptionistSettingsPage() {
       }
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  }, [localSettingsKey]);
 
   const handleSave = async (e) => {
     e.preventDefault();
     try {
+      localStorage.setItem(localSettingsKey, JSON.stringify({
+        refreshIntervalSec,
+        soundChimeEnabled,
+        autoAdvanceTokens,
+        autoMergeSuggestion
+      }));
+
       await api.updateSettings({
         tokenExpiryWindowMins,
         autoSmsEnabled,
