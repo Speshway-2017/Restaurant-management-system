@@ -6,7 +6,6 @@ import {
 import { api } from '../../services/api';
 
 export default function ManagerProfilePage() {
-  const profileStorageKey = 'flavora_profile_manager';
   const fileInputRef = useRef(null);
 
   // Retrieve logged-in session user data if present
@@ -16,28 +15,57 @@ export default function ManagerProfilePage() {
     try { sessionUser = JSON.parse(loggedUserDataStr); } catch (e) {}
   }
 
+  const currentManagerKey = sessionUser?._id || sessionUser?.id || sessionUser?.email || 'manager';
+  const profileStorageKey = `flavora_profile_manager_${currentManagerKey}`;
+
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem(profileStorageKey);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.email && sessionUser?.email && parsed.email.toLowerCase() === sessionUser.email.toLowerCase()) {
+        if (parsed && parsed.name) {
           return parsed;
         }
       } catch (e) {}
     }
+    const resolvedEmpId = sessionUser?.empId || (sessionUser?._id ? `RMSM-${String(sessionUser._id).slice(-2).toUpperCase()}` : '');
     return {
       name: sessionUser?.name || 'Manager',
-      email: sessionUser?.email || 'manager@rms.com',
+      email: sessionUser?.email || '',
       phone: sessionUser?.phone || '',
-      role: 'Restaurant Manager',
+      role: sessionUser?.role || 'Restaurant Manager',
       branch: sessionUser?.branch || 'Jubilee Hills (Main Branch)',
-      empId: sessionUser?.empId || 'RMSM-01',
-      joinedDate: '10 Feb 2023',
-      department: 'Operations & Floor Management',
+      empId: resolvedEmpId,
+      joinedDate: sessionUser?.joinedDate || '10 Feb 2023',
+      department: sessionUser?.department || 'Operations & Floor Management',
       avatarUrl: sessionUser?.avatarUrl || ''
     };
   });
+
+  // Sync latest user profile from backend
+  React.useEffect(() => {
+    api.getMe()
+      .then((res) => {
+        const u = res.user || res;
+        if (u && u.name) {
+          const resolvedEmpId = u.empId || (u._id ? `RMSM-${String(u._id).slice(-2).toUpperCase()}` : '');
+          const remoteProfile = {
+            name: u.name,
+            email: u.email || '',
+            phone: u.phone || '',
+            role: u.role || 'Restaurant Manager',
+            branch: u.branch || 'Jubilee Hills (Main Branch)',
+            empId: resolvedEmpId,
+            joinedDate: u.joinedDate || '10 Feb 2023',
+            department: u.department || 'Operations & Floor Management',
+            avatarUrl: u.avatarUrl || ''
+          };
+          setProfile(remoteProfile);
+          localStorage.setItem(profileStorageKey, JSON.stringify(remoteProfile));
+        }
+      })
+      .catch(() => {});
+  }, [currentManagerKey]);
 
   const [passwords, setPasswords] = useState({
     current: '',
@@ -132,23 +160,13 @@ export default function ManagerProfilePage() {
       window.dispatchEvent(new Event('flavora_profile_updated'));
 
       try {
-        const staffList = await api.getStaff();
-        if (Array.isArray(staffList)) {
-          const match = staffList.find(s => 
-            (sessionUser?._id && String(s._id || s.id) === String(sessionUser._id)) ||
-            (s.email && s.email.toLowerCase() === profile.email.toLowerCase()) || 
-            (profile.empId && s.empId === profile.empId)
-          );
-          if (match && (match._id || match.id)) {
-            await api.updateStaff(match._id || match.id, {
-              name: profile.name,
-              email: profile.email,
-              phone: profile.phone,
-              branch: profile.branch,
-              avatarUrl: profile.avatarUrl
-            });
-          }
-        }
+        await api.updateMyProfile({
+          name: profile.name,
+          phone: profile.phone,
+          branch: profile.branch,
+          avatarUrl: profile.avatarUrl,
+          department: profile.department
+        });
       } catch (dbErr) {
         console.warn('Backend DB update note:', dbErr.message);
       }
@@ -162,7 +180,7 @@ export default function ManagerProfilePage() {
     }
   };
 
-  const handlePasswordUpdate = (e) => {
+  const handlePasswordUpdate = async (e) => {
     e.preventDefault();
     if (!passwords.current) {
       showToast('Please enter your current password.', 'error');
@@ -177,8 +195,13 @@ export default function ManagerProfilePage() {
       return;
     }
 
-    showToast('Account security password updated successfully!', 'success');
-    setPasswords({ current: '', newPass: '', confirmPass: '' });
+    try {
+      await api.updateMyProfile({ password: passwords.newPass });
+      showToast('Account security password updated successfully!', 'success');
+      setPasswords({ current: '', newPass: '', confirmPass: '' });
+    } catch (err) {
+      showToast(err.message || 'Failed to update password.', 'error');
+    }
   };
 
   const getInitials = (nameStr) => {
@@ -355,7 +378,7 @@ export default function ManagerProfilePage() {
                 <span style={{ opacity: 0.5 }}>•</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                   <Briefcase size={15} color="#F2C14E" />
-                  ID: <strong style={{ color: '#FFFFFF' }}>{profile.empId || 'RMSM-01'}</strong>
+                  ID: <strong style={{ color: '#FFFFFF' }}>{profile.empId || ''}</strong>
                 </span>
                 <span style={{ opacity: 0.5 }}>•</span>
                 <span style={{
@@ -540,7 +563,7 @@ export default function ManagerProfilePage() {
                 </label>
                 <input
                   type="text"
-                  value={profile.empId || 'RMSM-01'}
+                  value={profile.empId || ''}
                   disabled
                   style={{
                     width: '100%',

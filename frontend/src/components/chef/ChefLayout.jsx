@@ -27,14 +27,24 @@ export default function ChefLayout({ setActivePage }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
   const [kitchenStatus, setKitchenStatus] = useState('active'); // 'active', 'busy'
+  const currentSessionUser = getSessionUser();
+  const chefAccountKey = currentSessionUser?._id || currentSessionUser?.id || 'default';
   const [chefDutyStatus, setChefDutyStatus] = useState(() => {
-    return localStorage.getItem('flavora_chef_duty_status') || 'LOGGED_IN';
+    return localStorage.getItem(`flavora_chef_duty_status_${chefAccountKey}`) || localStorage.getItem('flavora_chef_duty_status') || 'LOGGED_IN';
   });
 
   useEffect(() => {
     const syncDutyStatus = () => {
-      const saved = localStorage.getItem('flavora_chef_duty_status') || 'LOGGED_IN';
+      const saved = localStorage.getItem(`flavora_chef_duty_status_${chefAccountKey}`) || localStorage.getItem('flavora_chef_duty_status') || 'LOGGED_IN';
       setChefDutyStatus(saved);
     };
     syncDutyStatus();
@@ -44,18 +54,18 @@ export default function ChefLayout({ setActivePage }) {
       window.removeEventListener('flavora_chef_duty_updated', syncDutyStatus);
       window.removeEventListener('storage', syncDutyStatus);
     };
-  }, []);
+  }, [chefAccountKey]);
 
   const handleToggleChefDuty = () => {
     const nextStatus = chefDutyStatus === 'LOGGED_IN' ? 'LOGGED_OUT' : 'LOGGED_IN';
     setChefDutyStatus(nextStatus);
-    localStorage.setItem('flavora_chef_duty_status', nextStatus);
+    localStorage.setItem(`flavora_chef_duty_status_${chefAccountKey}`, nextStatus);
     window.dispatchEvent(new Event('flavora_chef_duty_updated'));
     showToast(nextStatus === 'LOGGED_IN' ? '🟢 Chef Status: ON DUTY (Logged In)' : '🔴 Chef Status: OFF DUTY (Logged Out)');
   };
 
   // KDS Filters
-  const [statusFilter, setStatusFilter] = useState('active'); // 'active', 'placed', 'preparing', 'ready'
+  const [statusFilter, setStatusFilter] = useState('active'); // 'active', 'my', 'placed', 'preparing', 'ready'
   const [searchQuery, setSearchQuery] = useState('');
 
   // Real-Time Orders & Menu State
@@ -80,28 +90,20 @@ export default function ChefLayout({ setActivePage }) {
   const previousOrderCountRef = useRef(0);
   const optimisticStatusesRef = useRef({});
 
-  const getSessionUser = () => {
-    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
-    if (raw) {
-      try { return JSON.parse(raw); } catch (e) {}
-    }
-    return null;
-  };
-
   const [chefProfile, setChefProfile] = useState(() => {
     const current = getSessionUser();
     if (current && current.name) {
       return {
         name: current.name,
-        email: current.email || 'chef@rms.com',
-        role: current.role || 'Executive Chef',
-        empId: current.empId || 'RMSC-01'
+        email: current.email || '',
+        role: current.role || 'Chef',
+        empId: current.empId || `RMSC-${String(current._id || current.id || '01').slice(-4).toUpperCase()}`
       };
     }
     return {
       name: 'Chef',
-      email: 'chef@rms.com',
-      role: 'Executive Chef',
+      email: '',
+      role: 'Chef',
       empId: 'RMSC-01'
     };
   });
@@ -111,6 +113,20 @@ export default function ChefLayout({ setActivePage }) {
       try {
         const current = getSessionUser();
         if (!current) return;
+
+        try {
+          const me = await api.getMe();
+          if (me && me.name) {
+            setChefProfile(prev => ({
+              ...prev,
+              name: me.name,
+              email: me.email || prev.email,
+              role: me.role || prev.role,
+              empId: me.empId || prev.empId || `RMSC-${String(me._id || me.id).slice(-4).toUpperCase()}`
+            }));
+            return;
+          }
+        } catch (e) { }
 
         const staffList = await api.getStaff();
         if (Array.isArray(staffList) && staffList.length > 0) {
@@ -123,8 +139,8 @@ export default function ChefLayout({ setActivePage }) {
             setChefProfile({
               name: match.name,
               email: match.email || current.email,
-              role: match.role || current.role || 'Executive Chef',
-              empId: match.empId || current.empId || 'RMSC-01'
+              role: match.role || current.role || 'Chef',
+              empId: match.empId || current.empId || `RMSC-${String(match._id || match.id).slice(-4).toUpperCase()}`
             });
           }
         }
@@ -198,9 +214,15 @@ export default function ChefLayout({ setActivePage }) {
   // Real-time Staff Shift Listener across tabs & window events
   useEffect(() => {
     const handleShiftUpdate = () => {
+      const current = getSessionUser();
+      if (!current) return;
       api.getStaff().then(staffList => {
         if (Array.isArray(staffList)) {
-          const chefInDb = staffList.find(s => s.role === 'Chef' || s.role === 'Head Chef' || (s.empId && s.empId.startsWith('RMSC')));
+          const chefInDb = staffList.find(s => 
+            (current._id && String(s._id || s.id) === String(current._id)) ||
+            (current.id && String(s._id || s.id) === String(current.id)) ||
+            (current.email && s.email && s.email.toLowerCase() === current.email.toLowerCase())
+          );
           if (chefInDb) {
             setChefProfile(prev => ({
               ...prev,
@@ -349,7 +371,12 @@ export default function ChefLayout({ setActivePage }) {
           notes: cleanNote,
           time: createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           createdAt: createdDate,
-          total: o.totalAmount || o.total || 0
+          total: o.totalAmount || o.total || 0,
+          chefId: o.chefId,
+          chefName: o.chefName,
+          claimedAt: o.claimedAt,
+          waiterId: o.waiterId,
+          waiterName: o.waiterName
         };
       });
 
@@ -409,10 +436,48 @@ export default function ChefLayout({ setActivePage }) {
     };
   }, [soundEnabled]);
 
+  const handleClaimOrder = async (orderId) => {
+    const cleanOrderId = String(orderId).replace(/^#/i, '').trim();
+    const current = getSessionUser();
+    const currentChefId = current?._id || current?.id || '';
+    const currentChefName = chefProfile.name || current?.name || 'Chef';
+
+    const updated = ordersList.map(o => {
+      const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
+                      o.id === cleanOrderId || o.orderId === cleanOrderId;
+      if (matches) {
+        return {
+          ...o,
+          chefId: currentChefId,
+          chefName: currentChefName,
+          claimedAt: new Date().toISOString()
+        };
+      }
+      return o;
+    });
+    setOrdersList(updated);
+
+    try {
+      localStorage.setItem('flavora_manager_orders', JSON.stringify(updated));
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+    } catch (e) { }
+
+    try {
+      await api.claimOrder(cleanOrderId);
+      showToast(`👨‍🍳 Ticket ${orderId} claimed by you!`);
+    } catch (err) {
+      console.warn('Failed to claim order:', err);
+    }
+  };
+
   const handleUpdateStatus = async (orderId, newStatus) => {
     const cleanOrderId = String(orderId).replace(/^#/i, '');
     optimisticStatusesRef.current[cleanOrderId] = newStatus;
     optimisticStatusesRef.current[orderId] = newStatus;
+
+    const current = getSessionUser();
+    const currentChefId = current?._id || current?.id || '';
+    const currentChefName = chefProfile.name || current?.name || 'Chef';
 
     const targetOrder = ordersList.find(o => 
       o.id === orderId || o.orderId === orderId || o._id === orderId ||
@@ -470,7 +535,10 @@ export default function ChefLayout({ setActivePage }) {
         return {
           ...o,
           status: effectiveOrderStatus,
-          items: updatedItems
+          items: updatedItems,
+          chefId: o.chefId || (newStatus === 'Preparing' ? currentChefId : o.chefId),
+          chefName: o.chefName || (newStatus === 'Preparing' ? currentChefName : o.chefName),
+          claimedAt: o.claimedAt || (newStatus === 'Preparing' ? new Date().toISOString() : o.claimedAt)
         };
       }
       return o;
@@ -486,7 +554,12 @@ export default function ChefLayout({ setActivePage }) {
     try {
       const rawApiId = targetOrder ? (targetOrder.orderId || targetOrder.id || targetOrder._id || cleanOrderId) : cleanOrderId;
       const cleanApiId = String(rawApiId).replace(/^#/i, '').trim();
-      await api.updateOrderStatus(cleanApiId, effectiveOrderStatus, { items: updatedItems, status: effectiveOrderStatus });
+      await api.updateOrderStatus(cleanApiId, effectiveOrderStatus, {
+        items: updatedItems,
+        status: effectiveOrderStatus,
+        chefId: targetOrder?.chefId || (newStatus === 'Preparing' ? currentChefId : undefined),
+        chefName: targetOrder?.chefName || (newStatus === 'Preparing' ? currentChefName : undefined)
+      });
     } catch (e) { }
 
     if (newStatus === 'Preparing') {
@@ -495,7 +568,13 @@ export default function ChefLayout({ setActivePage }) {
       showToast(`✅ Order ${orderId} dish status updated!`);
     }
     if (selectedTicketModal && selectedTicketModal.id === orderId) {
-      setSelectedTicketModal({ ...selectedTicketModal, status: effectiveOrderStatus, items: updatedItems });
+      setSelectedTicketModal({
+        ...selectedTicketModal,
+        status: effectiveOrderStatus,
+        items: updatedItems,
+        chefId: targetOrder?.chefId || currentChefId,
+        chefName: targetOrder?.chefName || currentChefName
+      });
     }
   };
 
@@ -624,7 +703,7 @@ export default function ChefLayout({ setActivePage }) {
         const newNotif = {
           id: `NOTIF-${Date.now()}`,
           title: '🔴 Item Out of Stock Alert',
-          message: `Chef Ramu marked "${itemName}" as OUT OF STOCK / Sold Out.`,
+          message: `${chefProfile.name || 'Chef'} marked "${itemName}" as OUT OF STOCK / Sold Out.`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           read: false,
           timestamp: new Date().toISOString()
@@ -677,6 +756,12 @@ export default function ChefLayout({ setActivePage }) {
     // Completed/Ready orders move to Orders History and should NOT be displayed on Live KDS
     if (isKitchenDone || o.status === 'Cancelled') return false;
 
+    const current = getSessionUser();
+    const currentChefId = current?._id || current?.id || '';
+
+    if (statusFilter === 'my') {
+      return String(o.chefId || '') === String(currentChefId);
+    }
     if (statusFilter === 'placed') return o.status === 'Placed';
     if (statusFilter === 'preparing') return o.status === 'Preparing';
     return true; // 'active' -> shows all active placed & cooking tickets
@@ -728,6 +813,7 @@ export default function ChefLayout({ setActivePage }) {
                 <div style={{ display: 'flex', backgroundColor: '#FFFFFF', padding: '0.2rem', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
                   {[
                     { id: 'active', label: 'All Active' },
+                    { id: 'my', label: '👨‍🍳 My Claimed' },
                     { id: 'placed', label: '🆕 Placed' },
                     { id: 'preparing', label: '🔥 Cooking' }
                   ].map(st => (
@@ -780,6 +866,9 @@ export default function ChefLayout({ setActivePage }) {
               updatingDishItems={updatingDishItems}
               handleToggleItemCheck={handleToggleItemCheck}
               handleUpdateStatus={handleUpdateStatus}
+              handleClaimOrder={handleClaimOrder}
+              currentChefId={getSessionUser()?._id || getSessionUser()?.id}
+              currentChefName={chefProfile.name}
               setSelectedTicketModal={setSelectedTicketModal}
             />
           </div>

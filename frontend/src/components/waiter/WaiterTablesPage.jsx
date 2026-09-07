@@ -190,8 +190,44 @@ export default function WaiterTablesPage() {
     return 'Available';
   };
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
+  const sessionUser = getSessionUser();
+
+  const handleClaimTable = async (tableNum) => {
+    const current = getSessionUser();
+    const waiterId = current?._id || current?.id || '';
+    const waiterName = current?.name || 'Waiter';
+
+    setTables(prev => prev.map(t => {
+      const tNum = t.num || t.number || `T-${String(t.id || 1).padStart(2, '0')}`;
+      if (tNum === tableNum) {
+        return { ...t, assignedWaiterId: waiterId, assignedWaiterName: waiterName };
+      }
+      return t;
+    }));
+
+    try {
+      await api.assignTableWaiter(tableNum, { waiterId, waiterName });
+      showNotification(`✓ Table ${tableNum} assigned to you!`);
+    } catch (err) {
+      console.warn('Failed to claim table:', err);
+    }
+  };
+
+  const myTablesCount = tables.filter(tb => sessionUser?._id && String(tb.assignedWaiterId || '') === String(sessionUser._id)).length;
+
   const filteredTables = tables.filter(tb => {
     const realStatus = getTableRealStatus(tb);
+    if (activeFilter === 'MY_TABLES') {
+      return sessionUser?._id && String(tb.assignedWaiterId || '') === String(sessionUser._id);
+    }
     if (activeFilter === 'ALL') return true;
     if (activeFilter === 'OCCUPIED') return realStatus === 'Occupied' || realStatus === 'Ready' || realStatus === 'Bill Generated';
     if (activeFilter === 'AVAILABLE') return realStatus === 'Available';
@@ -736,6 +772,7 @@ export default function WaiterTablesPage() {
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
               {[
                 { id: 'ALL', label: `All Tables (${tables.length})` },
+                { id: 'MY_TABLES', label: `🧑‍🍳 My Assigned (${myTablesCount})` },
                 { id: 'OCCUPIED', label: `Occupied / Billing (${occupiedCount})` },
                 { id: 'READY', label: `Ready for Service (${readyCount})` },
                 { id: 'AVAILABLE', label: `Available (${availableCount})` },
@@ -830,9 +867,44 @@ export default function WaiterTablesPage() {
                         <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
                           {tb.num}
                         </h3>
-                        <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700 }}>
+                        <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700 }}>
                           📍 {tb.zone} • 👥 {tb.cap} Seats
-                        </span>
+                        </div>
+                        <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          {tb.assignedWaiterName ? (
+                            <span style={{
+                              fontSize: '0.68rem',
+                              backgroundColor: (sessionUser?._id && String(tb.assignedWaiterId) === String(sessionUser._id)) ? '#DCFCE7' : '#FEF3C7',
+                              color: (sessionUser?._id && String(tb.assignedWaiterId) === String(sessionUser._id)) ? '#166534' : '#92400E',
+                              border: (sessionUser?._id && String(tb.assignedWaiterId) === String(sessionUser._id)) ? '1px solid #86EFAC' : '1px solid #FCD34D',
+                              padding: '0.1rem 0.4rem',
+                              borderRadius: '4px',
+                              fontWeight: 800
+                            }}>
+                              {(sessionUser?._id && String(tb.assignedWaiterId) === String(sessionUser._id)) ? '🧑‍🍳 Assigned to You' : `🧑‍🍳 ${tb.assignedWaiterName}`}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleClaimTable(tb.num);
+                              }}
+                              style={{
+                                fontSize: '0.68rem',
+                                backgroundColor: '#F1F5F9',
+                                color: '#0F2A1D',
+                                border: '1px solid #CBD5E1',
+                                padding: '0.1rem 0.45rem',
+                                borderRadius: '4px',
+                                fontWeight: 800,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ⚡ Claim Table
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <span style={{

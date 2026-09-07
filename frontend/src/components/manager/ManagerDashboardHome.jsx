@@ -26,10 +26,21 @@ export default function ManagerDashboardHome({ setActiveTab }) {
 
 
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+  const managerAccountKey = sessionUser?._id || sessionUser?.id || sessionUser?.email || 'manager';
+
   // Manager Live Orders & Tables State
   const [activeOrders, setActiveOrders] = useState([]);
   const [tablesList, setTablesList] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
+  const [managerActivities, setManagerActivities] = useState([]);
   const [staffShiftLogs, setStaffShiftLogs] = useState([]);
 
   const allQuickActions = [
@@ -154,8 +165,29 @@ export default function ManagerDashboardHome({ setActiveTab }) {
 
 
 
-  const filteredActivities = recentActivities.filter(a => {
+  // Fetch isolated manager activities from backend
+  useEffect(() => {
+    api.getMyActivities()
+      .then((acts) => {
+        if (Array.isArray(acts)) {
+          setManagerActivities(acts.map(a => ({
+            ...a,
+            icon: ShieldCheck,
+            iconBg: '#EDE9FE',
+            iconColor: '#7C3AED',
+            badgeBg: '#EDE9FE',
+            badgeColor: '#6D28D9'
+          })));
+        }
+      })
+      .catch(() => {});
+  }, [managerAccountKey]);
+
+  const allMergedActivities = [...managerActivities, ...recentActivities];
+
+  const filteredActivities = allMergedActivities.filter(a => {
     if (activityFilter === 'All') return true;
+    if (activityFilter === 'My Actions') return a.actor === sessionUser?.name || a.type === 'action';
     if (activityFilter === 'Orders') return a.type === 'order_placed' || a.type === 'kitchen_prep' || a.type === 'order_ready';
     if (activityFilter === 'Tables') return a.type === 'table_clean' || a.type === 'bill_paid';
     if (activityFilter === 'Payments') return a.type === 'bill_paid' || a.type === 'coupon_applied';
@@ -352,7 +384,7 @@ export default function ManagerDashboardHome({ setActiveTab }) {
       window.removeEventListener('flavora_cart_updated', syncDashboardData);
       window.removeEventListener('storage', syncDashboardData);
     };
-  }, []);
+  }, [managerAccountKey]);
 
   // Staff Shift Logs (Fetched dynamically from database API)
   useEffect(() => {
@@ -378,7 +410,15 @@ export default function ManagerDashboardHome({ setActiveTab }) {
       }
     };
     fetchStaffLogs();
-  }, []);
+    window.addEventListener('flavora_staff_updated', fetchStaffLogs);
+    window.addEventListener('storage', fetchStaffLogs);
+    const interval = setInterval(fetchStaffLogs, 5000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('flavora_staff_updated', fetchStaffLogs);
+      window.removeEventListener('storage', fetchStaffLogs);
+    };
+  }, [managerAccountKey]);
 
   const filteredOrders = activeOrders.filter(o => {
     const isLive = o && o.status !== 'Completed' && o.status !== 'Cancelled';
@@ -401,7 +441,7 @@ export default function ManagerDashboardHome({ setActiveTab }) {
             Dashboard Overview
           </h1>
           <p className="admin-page-subtitle" style={{ margin: '0.2rem 0 0 0' }}>
-            Real-time platform performance and business insights.
+            Welcome back, <strong>{sessionUser?.name || 'Manager'}</strong>{sessionUser?.empId ? ` (${sessionUser.empId})` : ''} • Real-time platform performance and business insights.
           </p>
         </div>
       </div>

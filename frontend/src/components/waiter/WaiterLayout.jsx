@@ -126,15 +126,28 @@ export default function WaiterLayout({ setActivePage }) {
     };
   }, []);
 
-  const [waiterProfile, setWaiterProfile] = useState({
-    name: 'Waiter Ravi',
-    empId: 'WSM-01',
-    role: 'Waiter',
-    avatarUrl: ''
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
+  const sessionUser = getSessionUser();
+  const accountKey = sessionUser?._id || sessionUser?.id || 'default';
+
+  const [waiterProfile, setWaiterProfile] = useState(() => {
+    return {
+      name: sessionUser?.name || 'Waiter',
+      empId: sessionUser?.empId || `RMSW-${String(sessionUser?._id || sessionUser?.id || '01').slice(-4).toUpperCase()}`,
+      role: sessionUser?.role || 'Waiter',
+      avatarUrl: ''
+    };
   });
 
   const [waiterDutyStatus, setWaiterDutyStatus] = useState(() => {
-    return localStorage.getItem('flavora_waiter_duty_status') || 'LOGGED_IN';
+    return localStorage.getItem(`flavora_waiter_duty_status_${accountKey}`) || localStorage.getItem('flavora_waiter_duty_status') || 'LOGGED_IN';
   });
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -146,8 +159,10 @@ export default function WaiterLayout({ setActivePage }) {
 
   useEffect(() => {
     const syncProfile = () => {
-      const localAvatar = localStorage.getItem('flavora_waiter_avatar');
-      const savedProfile = localStorage.getItem('flavora_waiter_profile');
+      const current = getSessionUser();
+      const currentKey = current?._id || current?.id || accountKey;
+      const localAvatar = localStorage.getItem(`flavora_waiter_avatar_${currentKey}`) || localStorage.getItem('flavora_waiter_avatar');
+      const savedProfile = localStorage.getItem(`flavora_waiter_profile_${currentKey}`) || localStorage.getItem('flavora_waiter_profile');
       if (savedProfile) {
         try {
           const parsed = JSON.parse(savedProfile);
@@ -166,21 +181,43 @@ export default function WaiterLayout({ setActivePage }) {
     fetchWaiterProfile();
     window.addEventListener('flavora_waiter_profile_updated', syncProfile);
     return () => window.removeEventListener('flavora_waiter_profile_updated', syncProfile);
-  }, []);
+  }, [accountKey]);
 
   const fetchWaiterProfile = async () => {
     try {
-      const localAvatar = localStorage.getItem('flavora_waiter_avatar');
-      const staffList = await api.getStaff();
-      if (staffList && staffList.length > 0) {
-        const waiterUser = staffList.find(s => s.role === 'Waiter' || s.email === 'waiter@flavorakitchen.in' || s.empId === 'WSM-01' || s.empId === 'RMSW-01');
-        if (waiterUser) {
-          setWaiterProfile(prev => ({
-            name: waiterUser.name || prev.name,
-            empId: waiterUser.empId || prev.empId,
-            role: waiterUser.role || 'Waiter',
-            avatarUrl: localAvatar || waiterUser.avatarUrl || prev.avatarUrl
-          }));
+      const current = getSessionUser();
+      const currentKey = current?._id || current?.id || accountKey;
+      const localAvatar = localStorage.getItem(`flavora_waiter_avatar_${currentKey}`) || localStorage.getItem('flavora_waiter_avatar');
+
+      try {
+        const me = await api.getMe();
+        if (me && me.name) {
+          setWaiterProfile({
+            name: me.name,
+            empId: me.empId || `RMSW-${String(me._id || me.id).slice(-4).toUpperCase()}`,
+            role: me.role || 'Waiter',
+            avatarUrl: localAvatar || me.avatarUrl || ''
+          });
+          return;
+        }
+      } catch (e) {}
+
+      if (current) {
+        const staffList = await api.getStaff();
+        if (staffList && staffList.length > 0) {
+          const waiterUser = staffList.find(s => 
+            (current._id && String(s._id || s.id) === String(current._id)) ||
+            (current.id && String(s._id || s.id) === String(current.id)) ||
+            (current.email && s.email && s.email.toLowerCase() === current.email.toLowerCase())
+          );
+          if (waiterUser) {
+            setWaiterProfile(prev => ({
+              name: waiterUser.name || prev.name,
+              empId: waiterUser.empId || prev.empId,
+              role: waiterUser.role || 'Waiter',
+              avatarUrl: localAvatar || waiterUser.avatarUrl || prev.avatarUrl
+            }));
+          }
         }
       }
     } catch (e) {
@@ -190,7 +227,9 @@ export default function WaiterLayout({ setActivePage }) {
 
   useEffect(() => {
     const syncDutyStatus = () => {
-      const saved = localStorage.getItem('flavora_waiter_duty_status') || 'LOGGED_IN';
+      const current = getSessionUser();
+      const currentKey = current?._id || current?.id || accountKey;
+      const saved = localStorage.getItem(`flavora_waiter_duty_status_${currentKey}`) || localStorage.getItem('flavora_waiter_duty_status') || 'LOGGED_IN';
       setWaiterDutyStatus(saved);
     };
     syncDutyStatus();
@@ -200,12 +239,14 @@ export default function WaiterLayout({ setActivePage }) {
       window.removeEventListener('flavora_waiter_duty_updated', syncDutyStatus);
       window.removeEventListener('storage', syncDutyStatus);
     };
-  }, []);
+  }, [accountKey]);
 
   const handleToggleWaiterDuty = () => {
+    const current = getSessionUser();
+    const currentKey = current?._id || current?.id || accountKey;
     const nextStatus = waiterDutyStatus === 'LOGGED_IN' ? 'LOGGED_OUT' : 'LOGGED_IN';
     setWaiterDutyStatus(nextStatus);
-    localStorage.setItem('flavora_waiter_duty_status', nextStatus);
+    localStorage.setItem(`flavora_waiter_duty_status_${currentKey}`, nextStatus);
     window.dispatchEvent(new Event('flavora_waiter_duty_updated'));
   };
 

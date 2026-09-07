@@ -5,7 +5,21 @@ const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 const getOrders = async (req, res) => {
   try {
-    const orders = await orderService.getOrders();
+    let query = {};
+    if (req.user) {
+      const userRole = (req.user.role || '').toLowerCase();
+      if (userRole.includes('manager')) {
+        query.managerId = req.user._id.toString();
+      } else if (userRole.includes('waiter') || userRole.includes('chef') || userRole.includes('receptionist')) {
+        if (req.user.managerId) {
+          query.managerId = req.user.managerId.toString();
+        }
+      }
+    } else if (req.query.managerId) {
+      query.managerId = req.query.managerId;
+    }
+
+    const orders = await orderService.getOrders(query);
     return successResponse(res, orders, 'Orders retrieved successfully');
   } catch (error) {
     return errorResponse(res, error.message, 500);
@@ -14,7 +28,16 @@ const getOrders = async (req, res) => {
 
 const createOrder = async (req, res) => {
   try {
-    const newOrder = await orderService.createOrder(req.body);
+    const orderData = { ...req.body };
+    if (req.user) {
+      const userRole = (req.user.role || '').toLowerCase();
+      if (userRole.includes('manager')) {
+        orderData.managerId = req.user._id.toString();
+      } else if (req.user.managerId) {
+        orderData.managerId = req.user.managerId.toString();
+      }
+    }
+    const newOrder = await orderService.createOrder(orderData);
     return successResponse(res, newOrder, 'Order created successfully', 201);
   } catch (error) {
     return errorResponse(res, error.message, 400);
@@ -23,8 +46,49 @@ const createOrder = async (req, res) => {
 
 const updateOrderStatus = async (req, res) => {
   try {
-    const updated = await orderService.updateOrderStatus(req.params.id, req.body.status, req.body);
+    const updateData = { ...req.body };
+    if (req.user) {
+      const userRole = (req.user.role || '').toLowerCase();
+      if (userRole.includes('chef')) {
+        updateData.chefId = req.user._id.toString();
+        updateData.chefName = req.user.name;
+        updateData.claimedAt = new Date();
+      } else if (userRole.includes('waiter')) {
+        updateData.waiterId = req.user._id.toString();
+        updateData.waiterName = req.user.name;
+      }
+    }
+    const updated = await orderService.updateOrderStatus(req.params.id, req.body.status, updateData);
     return successResponse(res, updated, 'Order status updated');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+const claimOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const orderRepo = require('../repositories/orderRepository');
+    const doc = await orderRepo.findById(id);
+    if (!doc) {
+      return errorResponse(res, 'Order not found', 404);
+    }
+    if (req.user) {
+      const userRole = (req.user.role || '').toLowerCase();
+      if (userRole.includes('chef')) {
+        doc.chefId = req.user._id.toString();
+        doc.chefName = req.user.name;
+        doc.claimedAt = new Date();
+        if (doc.status === 'Placed') {
+          doc.status = 'Preparing';
+        }
+      } else if (userRole.includes('waiter')) {
+        doc.waiterId = req.user._id.toString();
+        doc.waiterName = req.user.name;
+      }
+    }
+    await doc.save();
+    return successResponse(res, doc, 'Order claimed successfully');
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -208,6 +272,7 @@ module.exports = {
   getOrders,
   createOrder,
   updateOrderStatus,
+  claimOrder,
   updateOrderItemStatus,
   clearAllOrders,
   callWaiter,

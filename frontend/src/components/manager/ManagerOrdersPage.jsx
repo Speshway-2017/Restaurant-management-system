@@ -10,6 +10,16 @@ export default function ManagerOrdersPage() {
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
   const [selectedOrderTicketModal, setSelectedOrderTicketModal] = useState(null);
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+  const managerAccountKey = sessionUser?._id || sessionUser?.id || sessionUser?.email || 'manager';
+
   const [ordersList, setOrdersList] = useState([]);
 
   const fetchBackendOrders = async () => {
@@ -48,7 +58,7 @@ export default function ManagerOrdersPage() {
     fetchBackendOrders();
     const interval = setInterval(fetchBackendOrders, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [managerAccountKey]);
 
   const handleUpdateStatus = async (ord, newStatus) => {
     try {
@@ -56,7 +66,7 @@ export default function ManagerOrdersPage() {
       const updatedOrders = ordersList.map(o => o.id === ord.id ? { ...o, status: newStatus } : o);
       setOrdersList(updatedOrders);
       try {
-        localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedOrders));
+        localStorage.setItem(`flavora_manager_orders_${managerAccountKey}`, JSON.stringify(updatedOrders));
       } catch (e) {}
 
       if (selectedOrder && selectedOrder.id === ord.id) {

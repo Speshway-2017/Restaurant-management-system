@@ -2,8 +2,8 @@ const orderRepository = require('../repositories/orderRepository');
 const Table = require('../models/Table');
 
 class OrderService {
-  async getOrders() {
-    return await orderRepository.findAll() || [];
+  async getOrders(query = {}) {
+    return await orderRepository.findAll(query) || [];
   }
 
   async createOrder(data) {
@@ -111,6 +111,10 @@ class OrderService {
         }
       }
 
+      if (data.managerId && !existingActiveOrder.managerId) {
+        existingActiveOrder.managerId = String(data.managerId);
+      }
+
       await existingActiveOrder.save();
 
       // Ensure table remains occupied with this currentOrder
@@ -144,6 +148,7 @@ class OrderService {
       sessionId: activeSession ? activeSession._id.toString() : '',
       sessionToken: activeSession ? activeSession.sessionToken : '',
       phone: (activeSession && activeSession.phone) || data.phone || '+91 Direct QR',
+      managerId: data.managerId ? String(data.managerId) : undefined,
       items: newIncomingItems,
       total: Number(data.total || data.totalAmount || 0),
       status: (data.status && ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Cancelled', 'PARTIALLY DELIVERED'].includes(data.status)) ? data.status : 'Placed',

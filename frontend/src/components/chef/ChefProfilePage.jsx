@@ -3,18 +3,28 @@ import { ChefHat, User, Mail, Phone, ShieldCheck, Award, Clock, MapPin, CheckCir
 import { api } from '../../services/api';
 
 export default function ChefProfilePage({ chefProfile, setChefProfile }) {
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+
   const [profile, setProfile] = useState(() => {
+    const u = chefProfile || sessionUser;
     return {
-      id: chefProfile?._id || chefProfile?.id || '',
-      name: chefProfile?.name || 'Chef Ramu',
-      role: chefProfile?.role || 'Chef',
-      empId: chefProfile?.empId || 'RMSC-01',
-      email: chefProfile?.email || 'chef@flavorakitchen.in',
-      phone: chefProfile?.phone || '+91 98765 43210',
-      station: chefProfile?.branch || 'Jubilee Hills Main Pass',
-      shift: chefProfile?.scheduledShift || chefProfile?.shift || '09:00 AM – 06:00 PM (Morning)',
-      specialization: chefProfile?.specialization || 'Royal Hyderabadi Biryani & Tandoori Master',
-      avatarUrl: chefProfile?.avatarUrl || ''
+      id: u?._id || u?.id || '',
+      name: u?.name || 'Chef',
+      role: u?.role || 'Chef',
+      empId: u?.empId || (u?._id ? `RMSC-${String(u._id).slice(-2)}` : 'RMSC-01'),
+      email: u?.email || '',
+      phone: u?.phone || '+91 98765 43210',
+      station: u?.branch || 'Jubilee Hills Main Pass',
+      shift: u?.scheduledShift || u?.shift || '11:00 AM – 10:00 PM',
+      specialization: u?.specialization || 'Chef De Partie',
+      avatarUrl: u?.avatarUrl || ''
     };
   });
 
@@ -22,41 +32,35 @@ export default function ChefProfilePage({ chefProfile, setChefProfile }) {
   const [isSaved, setIsSaved] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Sync profile from DB staff on load
+  // Sync profile from authenticated identity on load
   useEffect(() => {
     const fetchStaffFromDb = async () => {
       setLoading(true);
       try {
-        const staffList = await api.getStaff();
-        if (Array.isArray(staffList) && staffList.length > 0) {
-          const matchedChef = staffList.find(s => 
-            s.role === 'Chef' || 
-            s.role === 'Head Chef' || 
-            (s.empId && (s.empId.startsWith('RMSC') || s.empId.startsWith('CHEF'))) ||
-            (s.name && s.name.toLowerCase().includes('chef'))
-          ) || staffList[0];
+        const res = await api.getMe();
+        const me = res.user || res;
+        if (me && me.name) {
+          const realData = {
+            id: me._id || me.id || '',
+            name: me.name,
+            role: me.role || 'Chef',
+            empId: me.empId || (me._id ? `RMSC-${String(me._id).slice(-2)}` : 'RMSC-01'),
+            email: me.email || '',
+            phone: me.phone || '',
+            station: me.branch || 'Jubilee Hills Main Pass',
+            shift: me.scheduledShift || me.shift || '11:00 AM – 10:00 PM',
+            specialization: me.specialization || 'Chef De Cuisine',
+            avatarUrl: me.avatarUrl || ''
+          };
 
-          if (matchedChef) {
-            const realData = {
-              id: matchedChef._id || matchedChef.id || '',
-              name: matchedChef.name || 'Chef Ramu',
-              role: matchedChef.role || 'Chef',
-              empId: matchedChef.empId || 'RMSC-01',
-              email: matchedChef.email || 'chef@flavorakitchen.in',
-              phone: matchedChef.phone || '+91 98765 43210',
-              station: matchedChef.branch || 'Jubilee Hills Main Pass',
-              shift: matchedChef.scheduledShift || matchedChef.shift || '09:00 AM – 06:00 PM (Morning)',
-              specialization: matchedChef.specialization || 'Royal Hyderabadi Biryani & Tandoori Master',
-              avatarUrl: matchedChef.avatarUrl || profile.avatarUrl || ''
-            };
-
-            setProfile(realData);
-            if (setChefProfile) setChefProfile(realData);
-            localStorage.setItem('flavora_profile_chef', JSON.stringify(realData));
-          }
+          setProfile(realData);
+          if (setChefProfile) setChefProfile(realData);
+          try {
+            localStorage.setItem(`flavora_profile_chef_${realData.id}`, JSON.stringify(realData));
+          } catch (e) {}
         }
       } catch (err) {
-        console.warn("DB staff fetch warning:", err.message);
+        console.warn("Chef profile fetch warning:", err.message);
       } finally {
         setLoading(false);
       }
@@ -84,8 +88,11 @@ export default function ChefProfilePage({ chefProfile, setChefProfile }) {
       const updated = { ...profile, avatarUrl: newAvatarUrl };
       setProfile(updated);
       if (setChefProfile) setChefProfile(updated);
-      localStorage.setItem('flavora_profile_chef', JSON.stringify(updated));
+      try {
+        localStorage.setItem(`flavora_profile_chef_${profile.id || 'me'}`, JSON.stringify(updated));
+      } catch (e) {}
 
+      api.updateMyProfile({ avatarUrl: newAvatarUrl }).catch(() => {});
       if (profile.id) {
         api.updateStaff(profile.id, { avatarUrl: newAvatarUrl }).catch(() => {});
       }
@@ -98,6 +105,15 @@ export default function ChefProfilePage({ chefProfile, setChefProfile }) {
     setIsSaved(false);
 
     try {
+      await api.updateMyProfile({
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone,
+        role: profile.role,
+        scheduledShift: profile.shift,
+        specialization: profile.specialization,
+        avatarUrl: profile.avatarUrl
+      });
       if (profile.id) {
         await api.updateStaff(profile.id, {
           name: profile.name,
@@ -110,13 +126,15 @@ export default function ChefProfilePage({ chefProfile, setChefProfile }) {
         });
       }
     } catch (err) {
-      console.warn("MongoDB staff update warning:", err.message);
+      console.warn("Chef profile update notice:", err.message);
     }
 
     if (setChefProfile) {
       setChefProfile(profile);
     }
-    localStorage.setItem('flavora_profile_chef', JSON.stringify(profile));
+    try {
+      localStorage.setItem(`flavora_profile_chef_${profile.id || 'me'}`, JSON.stringify(profile));
+    } catch (e) {}
 
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);

@@ -4,21 +4,34 @@ import { api } from '../../services/api';
 
 export default function WaiterProfilePage() {
   const fileInputRef = useRef(null);
+
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
+  const sessionUser = getSessionUser();
+  const accountKey = sessionUser?._id || sessionUser?.id || 'default';
+
   const [profile, setProfile] = useState(() => {
     try {
-      const saved = localStorage.getItem('flavora_waiter_profile');
+      const saved = localStorage.getItem(`flavora_waiter_profile_${accountKey}`) || localStorage.getItem('flavora_waiter_profile');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') return parsed;
       }
     } catch (e) {}
     return {
-      name: 'Waiter Venky',
-      empId: 'RMSW-01',
-      role: 'Waiter',
-      email: 'waiter@flavorakitchen.in',
-      phone: '+91 98765 88990',
-      shift: '09:00 AM – 06:00 PM (Morning Shift)',
+      id: sessionUser?._id || sessionUser?.id || '',
+      name: sessionUser?.name || 'Waiter',
+      empId: sessionUser?.empId || `RMSW-${String(sessionUser?._id || sessionUser?.id || '01').slice(-4).toUpperCase()}`,
+      role: sessionUser?.role || 'Waiter',
+      email: sessionUser?.email || '',
+      phone: sessionUser?.phone || '',
+      shift: sessionUser?.shift || '09:00 AM – 06:00 PM (Morning Shift)',
       avatarUrl: ''
     };
   });
@@ -53,35 +66,61 @@ export default function WaiterProfilePage() {
       window.removeEventListener('storage', handleStorage);
       if (channel) channel.close();
     };
-  }, []);
+  }, [accountKey]);
 
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      // Check local storage avatar first
-      const localAvatar = localStorage.getItem('flavora_waiter_avatar');
+      const current = getSessionUser();
+      const currentAccountKey = current?._id || current?.id || accountKey;
+      const localAvatar = localStorage.getItem(`flavora_waiter_avatar_${currentAccountKey}`) || localStorage.getItem('flavora_waiter_avatar');
       if (localAvatar) {
         setProfile(prev => ({ ...prev, avatarUrl: localAvatar }));
       }
 
-      const staffList = await api.getStaff();
-      if (staffList && staffList.length > 0) {
-        const waiterUser = staffList.find(s => s.role === 'Waiter' || s.email === 'waiter@flavorakitchen.in' || s.empId === 'WSM-01' || s.empId === 'RMSW-01' || (s.empId && s.empId.startsWith('RMSW')));
-        if (waiterUser) {
-          setProfile(prev => {
+      // 1. Authoritative getMe()
+      try {
+        const me = await api.getMe();
+        if (me && me.name) {
+          const updated = {
+            id: me._id || me.id,
+            name: me.name,
+            email: me.email || '',
+            phone: me.phone || '',
+            empId: me.empId || `RMSW-${String(me._id || me.id).slice(-4).toUpperCase()}`,
+            role: me.role || 'Waiter',
+            shift: me.scheduledShift || me.shift || '09:00 AM – 06:00 PM (Morning Shift)',
+            avatarUrl: localAvatar || me.avatarUrl || ''
+          };
+          setProfile(updated);
+          localStorage.setItem(`flavora_waiter_profile_${currentAccountKey}`, JSON.stringify(updated));
+          return;
+        }
+      } catch (e) {}
+
+      // 2. Staff list matching current authenticated ID or email
+      if (current) {
+        const staffList = await api.getStaff();
+        if (Array.isArray(staffList) && staffList.length > 0) {
+          const waiterUser = staffList.find(s => 
+            (current._id && String(s._id || s.id) === String(current._id)) ||
+            (current.id && String(s._id || s.id) === String(current.id)) ||
+            (current.email && s.email && s.email.toLowerCase() === current.email.toLowerCase())
+          );
+          if (waiterUser) {
             const updated = {
-              ...prev,
               id: waiterUser._id || waiterUser.id,
-              name: waiterUser.name || prev.name,
-              email: waiterUser.email || prev.email,
-              phone: waiterUser.phone || prev.phone,
-              empId: waiterUser.empId || prev.empId,
-              shift: waiterUser.scheduledShift || waiterUser.shift || prev.shift,
-              avatarUrl: localAvatar || waiterUser.avatarUrl || prev.avatarUrl
+              name: waiterUser.name,
+              email: waiterUser.email || current.email || '',
+              phone: waiterUser.phone || '',
+              empId: waiterUser.empId || `RMSW-${String(waiterUser._id || waiterUser.id).slice(-4).toUpperCase()}`,
+              role: waiterUser.role || 'Waiter',
+              shift: waiterUser.scheduledShift || waiterUser.shift || '09:00 AM – 06:00 PM (Morning Shift)',
+              avatarUrl: localAvatar || waiterUser.avatarUrl || ''
             };
-            localStorage.setItem('flavora_waiter_profile', JSON.stringify(updated));
-            return updated;
-          });
+            setProfile(updated);
+            localStorage.setItem(`flavora_waiter_profile_${currentAccountKey}`, JSON.stringify(updated));
+          }
         }
       }
     } catch (e) {
@@ -104,8 +143,8 @@ export default function WaiterProfilePage() {
         const updatedProfile = { ...profile, avatarUrl: base64Image };
         setProfile(updatedProfile);
         try {
-          localStorage.setItem('flavora_waiter_avatar', base64Image);
-          localStorage.setItem('flavora_waiter_profile', JSON.stringify(updatedProfile));
+          localStorage.setItem(`flavora_waiter_avatar_${accountKey}`, base64Image);
+          localStorage.setItem(`flavora_waiter_profile_${accountKey}`, JSON.stringify(updatedProfile));
           window.dispatchEvent(new Event('flavora_waiter_profile_updated'));
         } catch (err) {}
         setSuccessMsg('Profile photo updated successfully!');
@@ -119,8 +158,8 @@ export default function WaiterProfilePage() {
     const updatedProfile = { ...profile, avatarUrl: '' };
     setProfile(updatedProfile);
     try {
-      localStorage.removeItem('flavora_waiter_avatar');
-      localStorage.setItem('flavora_waiter_profile', JSON.stringify(updatedProfile));
+      localStorage.removeItem(`flavora_waiter_avatar_${accountKey}`);
+      localStorage.setItem(`flavora_waiter_profile_${accountKey}`, JSON.stringify(updatedProfile));
       window.dispatchEvent(new Event('flavora_waiter_profile_updated'));
     } catch (err) {}
     setSuccessMsg('Profile photo removed.');
@@ -131,17 +170,25 @@ export default function WaiterProfilePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      localStorage.setItem('flavora_waiter_profile', JSON.stringify(profile));
+      localStorage.setItem(`flavora_waiter_profile_${accountKey}`, JSON.stringify(profile));
       if (profile.avatarUrl) {
-        localStorage.setItem('flavora_waiter_avatar', profile.avatarUrl);
+        localStorage.setItem(`flavora_waiter_avatar_${accountKey}`, profile.avatarUrl);
       }
-      if (profile.id) {
-        await api.updateStaff(profile.id, {
+      try {
+        await api.updateMyProfile({
           name: profile.name,
-          email: profile.email,
           phone: profile.phone,
           avatarUrl: profile.avatarUrl
-        }).catch(() => {});
+        });
+      } catch (e) {
+        if (profile.id) {
+          await api.updateStaff(profile.id, {
+            name: profile.name,
+            email: profile.email,
+            phone: profile.phone,
+            avatarUrl: profile.avatarUrl
+          }).catch(() => {});
+        }
       }
       window.dispatchEvent(new Event('flavora_waiter_profile_updated'));
       setSuccessMsg('Profile details updated successfully!');

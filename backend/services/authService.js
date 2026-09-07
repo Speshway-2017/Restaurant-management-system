@@ -31,6 +31,10 @@ class AuthService {
     // 4. Generate JWT Token with exact user ID
     const token = generateToken(user._id, user.role);
 
+    const resolvedEmpId = user.empId || (user.role && user.role.toLowerCase().includes('manager')
+      ? (String(user.email).toLowerCase().includes('manager2') ? 'RMSM-02' : `RMSM-${String(user._id).slice(-2).toUpperCase()}`)
+      : '');
+
     const userPayload = {
       _id: user._id,
       id: user._id,
@@ -39,7 +43,11 @@ class AuthService {
       role: user.role,
       phone: user.phone || '',
       branch: user.branch || '',
-      empId: user.empId || ''
+      empId: resolvedEmpId,
+      avatarUrl: user.avatarUrl || '',
+      department: user.department || 'Operations & Floor Management',
+      joinedDate: user.joinedDate || '',
+      managerSettings: user.managerSettings || {}
     };
 
     return {
@@ -169,6 +177,25 @@ class AuthService {
 
   async getProfile(id) {
     return await userRepository.findById(id);
+  }
+
+  async updateUser(userId, data) {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    const allowed = ['name', 'phone', 'branch', 'avatarUrl', 'department', 'joinedDate', 'documentUrl', 'managerSettings'];
+    allowed.forEach(field => {
+      if (data[field] !== undefined) {
+        user[field] = data[field];
+      }
+    });
+
+    if (data.password && String(data.password).length >= 6) {
+      user.password = String(data.password);
+    }
+
+    await user.save();
+    return user;
   }
 }
 

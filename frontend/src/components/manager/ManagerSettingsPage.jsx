@@ -10,29 +10,46 @@ export default function ManagerSettingsPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+  const managerAccountKey = sessionUser?._id || sessionUser?.id || sessionUser?.email || 'manager';
+  const managerSettingsStorageKey = `flavora_manager_settings_${managerAccountKey}`;
+
   const [settingsData, setSettingsData] = useState(() => {
+    let localPref = {};
+    try {
+      const saved = localStorage.getItem(managerSettingsStorageKey);
+      if (saved) localPref = JSON.parse(saved);
+    } catch (e) {}
+
     return {
       restaurantName: branding.restaurantName || branding.brandName || 'Flavora Kitchen',
       brandName: branding.brandName || branding.restaurantName || 'Flavora Kitchen',
       logoUrl: branding.logoUrl || branding.brandLogo || '/logo.png',
-      branchName: branding.branchName || 'Jubilee Hills (Main Branch)',
-      managerName: branding.managerName || 'Ram S. (On-Duty Manager)',
-      managerEmail: branding.managerEmail || 'manager@flavorakitchen.in',
-      managerPhone: branding.managerPhone || '+91 98765 43210',
+      branchName: sessionUser?.branch || branding.branchName || 'Jubilee Hills (Main Branch)',
+      managerName: sessionUser?.name || 'Manager',
+      managerEmail: sessionUser?.email || '',
+      managerPhone: sessionUser?.phone || '',
       address: branding.address || 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
       weekdayHours: branding.weekdayHours || '11:00 AM – 10:00 PM',
       weekendHours: branding.weekendHours || '10:00 AM – 12:00 AM',
       restaurantStatus: branding.restaurantStatus || 'open', // 'open', 'closed', 'force_open'
       closedMessage: branding.closedMessage || 'The restaurant is currently closed for orders. Please visit during our operating hours!',
-      cleaningDuration: branding.cleaningDuration || '10', // minutes
-      autoAcceptOrders: branding.autoAcceptOrders ?? true,
-      audioAlerts: branding.audioAlerts ?? true,
-      prepTimeWarning: branding.prepTimeWarning || '20 mins',
-      dispatchChime: branding.dispatchChime ?? true,
+      cleaningDuration: localPref.cleaningDuration || branding.cleaningDuration || '10', // minutes
+      autoAcceptOrders: localPref.autoAcceptOrders ?? branding.autoAcceptOrders ?? true,
+      audioAlerts: localPref.audioAlerts ?? branding.audioAlerts ?? true,
+      prepTimeWarning: localPref.prepTimeWarning || branding.prepTimeWarning || '20 mins',
+      dispatchChime: localPref.dispatchChime ?? branding.dispatchChime ?? true,
       qrOrderingEnabled: branding.qrOrderingEnabled ?? true,
-      autoPrintReceipt: branding.autoPrintReceipt ?? true,
-      autoCleaningExpire: branding.autoCleaningExpire ?? true,
-      maxDiningTime: branding.maxDiningTime || '60 mins'
+      autoPrintReceipt: localPref.autoPrintReceipt ?? branding.autoPrintReceipt ?? true,
+      autoCleaningExpire: localPref.autoCleaningExpire ?? branding.autoCleaningExpire ?? true,
+      maxDiningTime: localPref.maxDiningTime || branding.maxDiningTime || '60 mins'
     };
   });
 
@@ -40,29 +57,94 @@ export default function ManagerSettingsPage() {
     if (branding && typeof branding === 'object') {
       setSettingsData(prev => ({
         ...prev,
-        ...branding,
         restaurantName: branding.restaurantName || branding.brandName || prev.restaurantName,
-        logoUrl: branding.logoUrl || branding.brandLogo || prev.logoUrl
+        logoUrl: branding.logoUrl || branding.brandLogo || prev.logoUrl,
+        address: branding.address || prev.address,
+        weekdayHours: branding.weekdayHours || prev.weekdayHours,
+        weekendHours: branding.weekendHours || prev.weekendHours,
+        restaurantStatus: branding.restaurantStatus || prev.restaurantStatus,
+        closedMessage: branding.closedMessage || prev.closedMessage,
+        qrOrderingEnabled: branding.qrOrderingEnabled ?? prev.qrOrderingEnabled
       }));
     }
   }, [branding]);
 
+  // Sync isolated manager preferences from backend
+  useEffect(() => {
+    api.getMySettings()
+      .then((res) => {
+        if (res && typeof res === 'object' && Object.keys(res).length > 0) {
+          setSettingsData(prev => ({
+            ...prev,
+            ...res
+          }));
+          try {
+            localStorage.setItem(managerSettingsStorageKey, JSON.stringify(res));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }, [managerAccountKey]);
+
   const handleSave = async (e) => {
     e.preventDefault();
     try {
+      // 1. Isolate and save Manager-specific preferences
+      const managerPreferences = {
+        cleaningDuration: settingsData.cleaningDuration,
+        autoAcceptOrders: settingsData.autoAcceptOrders,
+        audioAlerts: settingsData.audioAlerts,
+        prepTimeWarning: settingsData.prepTimeWarning,
+        dispatchChime: settingsData.dispatchChime,
+        autoPrintReceipt: settingsData.autoPrintReceipt,
+        autoCleaningExpire: settingsData.autoCleaningExpire,
+        maxDiningTime: settingsData.maxDiningTime
+      };
+
+      try {
+        await api.updateMySettings(managerPreferences);
+        localStorage.setItem(managerSettingsStorageKey, JSON.stringify(managerPreferences));
+      } catch (prefErr) {
+        console.warn('Backend update manager settings note:', prefErr.message);
+      }
+
+      // 2. If Manager profile info updated in Tab 4, update current user's profile
+      if (sessionUser && (settingsData.managerName !== sessionUser.name || settingsData.managerPhone !== sessionUser.phone)) {
+        try {
+          await api.updateMyProfile({
+            name: settingsData.managerName,
+            phone: settingsData.managerPhone,
+            branch: settingsData.branchName
+          });
+          const updatedSession = { ...sessionUser, name: settingsData.managerName, phone: settingsData.managerPhone, branch: settingsData.branchName };
+          sessionStorage.setItem('flavora_user_data', JSON.stringify(updatedSession));
+          localStorage.setItem('flavora_user_data', JSON.stringify(updatedSession));
+          window.dispatchEvent(new Event('flavora_profile_updated'));
+        } catch (uErr) {
+          console.warn('User profile sync note:', uErr.message);
+        }
+      }
+
+      // 3. Update shared restaurant branding/settings
       const payload = {
-        ...settingsData,
         restaurantName: settingsData.restaurantName || settingsData.brandName,
         brandName: settingsData.restaurantName || settingsData.brandName,
         logoUrl: settingsData.logoUrl,
         logo: settingsData.logoUrl,
-        brandLogo: settingsData.logoUrl
+        brandLogo: settingsData.logoUrl,
+        branchName: settingsData.branchName,
+        address: settingsData.address,
+        weekdayHours: settingsData.weekdayHours,
+        weekendHours: settingsData.weekendHours,
+        restaurantStatus: settingsData.restaurantStatus,
+        closedMessage: settingsData.closedMessage,
+        qrOrderingEnabled: settingsData.qrOrderingEnabled
       };
 
       await updateBranding(payload);
 
       setSaveSuccess(true);
-      setToastMessage('✓ Branch settings & branding updated across all portals!');
+      setToastMessage('✓ Settings & preferences saved successfully!');
       setTimeout(() => {
         setSaveSuccess(false);
         setToastMessage(null);

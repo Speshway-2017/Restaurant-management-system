@@ -22,8 +22,29 @@ const userSchema = new mongoose.Schema({
   hoursLogged: { type: String, default: '8h 30m' },
   attendanceStatus: { type: String, default: 'Present' },
   resetPasswordToken: { type: String, default: null },
-  resetPasswordExpires: { type: Date, default: null }
-}, { timestamps: true });
+  resetPasswordExpires: { type: Date, default: null },
+  avatarUrl: { type: String, default: '' },
+  department: { type: String, default: 'Operations & Floor Management' },
+  joinedDate: { type: String, default: '' },
+  managerSettings: { type: Object, default: {} },
+  notifications: [{
+    id: String,
+    title: String,
+    message: String,
+    time: String,
+    read: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  activities: [{
+    id: String,
+    type: { type: String, default: 'action' },
+    title: String,
+    details: String,
+    time: String,
+    actor: String,
+    createdAt: { type: Date, default: Date.now }
+  }]
+}, { timestamps: true, strict: false });
 
 // Pre-save hook: Automatically hash password using bcrypt before saving to database
 userSchema.pre('save', async function(next) {

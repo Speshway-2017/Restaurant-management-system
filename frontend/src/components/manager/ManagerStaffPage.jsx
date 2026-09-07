@@ -47,6 +47,16 @@ export default function ManagerStaffPage() {
   const [toastMessage, setToastMessage] = useState(null);
   const [showStaffPassword, setShowStaffPassword] = useState(false);
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+  const managerAccountKey = sessionUser?._id || sessionUser?.id || sessionUser?.email || 'manager';
+
   const [staffList, setStaffList] = useState([]);
 
   const fetchBackendStaff = async () => {
@@ -72,7 +82,7 @@ export default function ManagerStaffPage() {
 
   useEffect(() => {
     fetchBackendStaff();
-  }, []);
+  }, [managerAccountKey]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -89,7 +99,7 @@ export default function ManagerStaffPage() {
   const saveStaffList = (newList) => {
     setStaffList(newList);
     try {
-      localStorage.setItem('flavora_staff_list', JSON.stringify(newList));
+      localStorage.setItem(`flavora_staff_list_${managerAccountKey}`, JSON.stringify(newList));
     } catch (e) {}
   };
 

@@ -2,7 +2,21 @@ const User = require('../models/User');
 
 const getStaff = async (req, res) => {
   try {
-    const staff = await User.find({}).select('-password').sort({ createdAt: 1 });
+    let query = {};
+    if (req.user) {
+      const userRole = (req.user.role || '').toLowerCase();
+      if (userRole.includes('manager')) {
+        query = {
+          role: { $ne: 'Admin' },
+          $or: [
+            { managerId: req.user._id },
+            { createdBy: req.user._id }
+          ]
+        };
+      }
+    }
+
+    const staff = await User.find(query).select('-password').sort({ createdAt: 1 });
 
     const roleCounters = {};
     const formattedStaff = staff.map((member) => {
@@ -71,6 +85,13 @@ const createStaff = async (req, res) => {
     }
 
     data.email = data.email.toLowerCase();
+    if (req.user) {
+      const userRole = (req.user.role || '').toLowerCase();
+      if (userRole.includes('manager')) {
+        data.managerId = req.user._id;
+        data.createdBy = req.user._id;
+      }
+    }
     const member = await User.create(data);
     res.status(201).json(member);
   } catch (error) {

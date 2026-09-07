@@ -8,19 +8,33 @@ import { api } from '../../services/api';
 export default function ReceptionistProfilePage() {
   const fileInputRef = useRef(null);
 
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+
+  const sessionUser = getSessionUser();
+  const accountKey = sessionUser?._id || sessionUser?.id || 'default';
+  const profileStorageKey = `flavora_profile_receptionist_${accountKey}`;
+  const avatarStorageKey = `flavora_receptionist_avatar_${accountKey}`;
+
   const [profile, setProfile] = useState(() => {
     try {
-      const saved = localStorage.getItem('flavora_profile_receptionist');
+      const saved = localStorage.getItem(profileStorageKey) || localStorage.getItem('flavora_profile_receptionist');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return {
-      name: 'Reception Desk',
-      empId: 'HST-01',
-      role: 'Host Desk',
-      email: 'reception@flavorakitchen.in',
-      phone: '+91 98765 43210',
-      shift: '09:00 AM – 06:00 PM (Front Desk)',
-      emergencyContact: '+91 91234 56789',
+      id: sessionUser?._id || sessionUser?.id || '',
+      name: sessionUser?.name || 'Receptionist',
+      empId: sessionUser?.empId || `RMSR-${String(sessionUser?._id || sessionUser?.id || '01').slice(-4).toUpperCase()}`,
+      role: sessionUser?.role || 'Receptionist',
+      email: sessionUser?.email || '',
+      phone: sessionUser?.phone || '',
+      shift: sessionUser?.shift || '09:00 AM – 06:00 PM (Front Desk)',
+      emergencyContact: '',
       avatarUrl: ''
     };
   });
@@ -33,33 +47,63 @@ export default function ReceptionistProfilePage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const fetchStaffFromDb = () => {
-    const savedAvatar = localStorage.getItem('flavora_receptionist_avatar');
+  const fetchStaffFromDb = async () => {
+    const current = getSessionUser();
+    const currentKey = current?._id || current?.id || accountKey;
+    const currentAvatarKey = `flavora_receptionist_avatar_${currentKey}`;
+    const currentProfKey = `flavora_profile_receptionist_${currentKey}`;
+    const savedAvatar = localStorage.getItem(currentAvatarKey) || localStorage.getItem('flavora_receptionist_avatar');
     if (savedAvatar) {
       setProfile(prev => ({ ...prev, avatarUrl: savedAvatar }));
     }
 
-    api.getStaff().then(staffList => {
-      if (Array.isArray(staffList) && staffList.length > 0) {
-        const recInDb = staffList.find(s => s.role === 'Receptionist' || s.role === 'Host' || (s.empId && (s.empId.startsWith('HST') || s.empId.startsWith('RMSR'))));
-        if (recInDb) {
-          setProfile(prev => {
-            const updated = {
-              ...prev,
-              id: recInDb._id || recInDb.id,
-              name: recInDb.name || prev.name,
-              email: recInDb.email || prev.email,
-              phone: recInDb.phone || prev.phone,
-              empId: recInDb.empId || prev.empId,
-              shift: recInDb.scheduledShift || recInDb.shift || prev.shift,
-              avatarUrl: savedAvatar || recInDb.avatarUrl || prev.avatarUrl
-            };
-            localStorage.setItem('flavora_profile_receptionist', JSON.stringify(updated));
-            return updated;
-          });
-        }
+    try {
+      const me = await api.getMe();
+      if (me && me.name) {
+        const updated = {
+          id: me._id || me.id,
+          name: me.name,
+          email: me.email || '',
+          phone: me.phone || '',
+          empId: me.empId || `RMSR-${String(me._id || me.id).slice(-4).toUpperCase()}`,
+          role: me.role || 'Receptionist',
+          shift: me.scheduledShift || me.shift || '09:00 AM – 06:00 PM (Front Desk)',
+          emergencyContact: me.emergencyContact || '',
+          avatarUrl: savedAvatar || me.avatarUrl || ''
+        };
+        setProfile(updated);
+        localStorage.setItem(currentProfKey, JSON.stringify(updated));
+        return;
       }
-    }).catch(() => {});
+    } catch (e) {}
+
+    if (current) {
+      api.getStaff().then(staffList => {
+        if (Array.isArray(staffList) && staffList.length > 0) {
+          const recInDb = staffList.find(s => 
+            (current._id && String(s._id || s.id) === String(current._id)) ||
+            (current.id && String(s._id || s.id) === String(current.id)) ||
+            (current.email && s.email && s.email.toLowerCase() === current.email.toLowerCase())
+          );
+          if (recInDb) {
+            setProfile(prev => {
+              const updated = {
+                ...prev,
+                id: recInDb._id || recInDb.id,
+                name: recInDb.name || prev.name,
+                email: recInDb.email || prev.email,
+                phone: recInDb.phone || prev.phone,
+                empId: recInDb.empId || prev.empId,
+                shift: recInDb.scheduledShift || recInDb.shift || prev.shift,
+                avatarUrl: savedAvatar || recInDb.avatarUrl || prev.avatarUrl
+              };
+              localStorage.setItem(currentProfKey, JSON.stringify(updated));
+              return updated;
+            });
+          }
+        }
+      }).catch(() => {});
+    }
   };
 
   useEffect(() => {
@@ -88,7 +132,7 @@ export default function ReceptionistProfilePage() {
       window.removeEventListener('storage', handleStorage);
       if (channel) channel.close();
     };
-  }, []);
+  }, [accountKey]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -103,8 +147,8 @@ export default function ReceptionistProfilePage() {
         const updatedProfile = { ...profile, avatarUrl: base64Image };
         setProfile(updatedProfile);
         try {
-          localStorage.setItem('flavora_receptionist_avatar', base64Image);
-          localStorage.setItem('flavora_profile_receptionist', JSON.stringify(updatedProfile));
+          localStorage.setItem(avatarStorageKey, base64Image);
+          localStorage.setItem(profileStorageKey, JSON.stringify(updatedProfile));
           window.dispatchEvent(new Event('flavora_profile_updated'));
         } catch (err) {}
         showToast('📷 Profile photo uploaded successfully!');
@@ -117,8 +161,8 @@ export default function ReceptionistProfilePage() {
     const updatedProfile = { ...profile, avatarUrl: '' };
     setProfile(updatedProfile);
     try {
-      localStorage.removeItem('flavora_receptionist_avatar');
-      localStorage.setItem('flavora_profile_receptionist', JSON.stringify(updatedProfile));
+      localStorage.removeItem(avatarStorageKey);
+      localStorage.setItem(profileStorageKey, JSON.stringify(updatedProfile));
       window.dispatchEvent(new Event('flavora_profile_updated'));
     } catch (err) {}
     showToast('Profile photo removed.');
@@ -128,19 +172,27 @@ export default function ReceptionistProfilePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      localStorage.setItem('flavora_profile_receptionist', JSON.stringify(profile));
+      localStorage.setItem(profileStorageKey, JSON.stringify(profile));
       if (profile.avatarUrl) {
-        localStorage.setItem('flavora_receptionist_avatar', profile.avatarUrl);
+        localStorage.setItem(avatarStorageKey, profile.avatarUrl);
       }
       window.dispatchEvent(new Event('flavora_profile_updated'));
 
-      if (profile.id) {
-        await api.updateStaff(profile.id, {
+      try {
+        await api.updateMyProfile({
           name: profile.name,
-          email: profile.email,
           phone: profile.phone,
           avatarUrl: profile.avatarUrl
-        }).catch(() => {});
+        });
+      } catch (err) {
+        if (profile.id) {
+          await api.updateStaff(profile.id, {
+            name: profile.name,
+            email: profile.email,
+            phone: profile.phone,
+            avatarUrl: profile.avatarUrl
+          }).catch(() => {});
+        }
       }
 
       showToast('✓ Profile details saved successfully!');
