@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Table2, Plus, QrCode, Eye, EyeOff, CheckCircle2, Users, Clock, RefreshCw, Search, X, Printer, Check, Sparkles, Link2, UploadCloud, Image as ImageIcon, Edit, Trash2, Clipboard, MoreVertical } from 'lucide-react';
 import { api } from '../../services/api';
+import { getTableMenuUrl } from '../../utils/qrUrlHelper';
 
 export default function AdminTablesPage() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
@@ -198,10 +199,9 @@ export default function AdminTablesPage() {
   };
 
   const getTableQrRedirectUrl = (tbl) => {
+    if (!tbl) return getTableMenuUrl('T-01');
     if (tbl.customQrUrl && tbl.customQrUrl.trim() !== '') return tbl.customQrUrl;
-    const numDigits = (tbl.num || '').replace(/[^0-9]/g, '');
-    const cleanNumStr = numDigits ? String(parseInt(numDigits, 10)) : '1';
-    return `${window.location.origin}/menu?table=${cleanNumStr}`;
+    return getTableMenuUrl(tbl.num || 'T-01');
   };
 
   const handleAddTableSubmit = (e) => {
@@ -836,12 +836,39 @@ export default function AdminTablesPage() {
             </div>
 
             <div style={{ padding: '1.5rem', textAlign: 'center' }}>
-              <div style={{ display: 'inline-flex', backgroundColor: '#FFFFFF', padding: '1.25rem', borderRadius: '16px', border: '2px solid #1E4636', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'inline-flex', backgroundColor: '#FFFFFF', padding: '1.25rem', borderRadius: '16px', border: '2px solid #1E4636', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', marginBottom: '1.25rem', position: 'relative' }}>
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(getTableQrRedirectUrl(selectedQrTable))}`}
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=H&data=${encodeURIComponent(getTableQrRedirectUrl(selectedQrTable))}`}
                   alt={`QR Code for ${selectedQrTable.num}`}
-                  style={{ width: '220px', height: '220px' }}
+                  style={{ width: '220px', height: '220px', display: 'block' }}
                 />
+                {/* Brand Logo in Middle of QR */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '52px',
+                    height: '52px',
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '50%',
+                    border: '2px solid #1E4636',
+                    boxShadow: '0 2px 8px rgba(30, 70, 54, 0.22)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '4px',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  <img
+                    src="/qr-logo.png"
+                    alt="Flavora Emblem"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    onError={(e) => { e.target.src = '/logo.png'; }}
+                  />
+                </div>
               </div>
 
               <p style={{ color: '#64748B', fontSize: '0.88rem', margin: '0 0 1.25rem 0' }}>

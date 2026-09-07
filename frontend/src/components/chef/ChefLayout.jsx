@@ -15,6 +15,7 @@ import ChefAnalyticsPage from './ChefAnalyticsPage';
 import ChefProfilePage from './ChefProfilePage';
 import ChefSettingsPage from './ChefSettingsPage';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
+import { onSocketEvent, joinSocketRooms } from '../../services/socket';
 
 export default function ChefLayout({ setActivePage }) {
   const { brandName, brandLogo } = useRestaurantBranding();
@@ -281,23 +282,24 @@ export default function ChefLayout({ setActivePage }) {
         return String(raw).replace(/^#/i, '').trim();
       };
 
-      // Merge backend and local orders using Map keyed by clean ID
+      // When backend is connected, DATABASE is the single source of truth.
       const orderMap = new Map();
-
-      if (Array.isArray(localOrders)) {
-        localOrders.forEach((lo, idx) => {
-          if (!lo) return;
-          const cleanId = getCleanId(lo, idx);
-          orderMap.set(cleanId, lo);
-        });
-      }
 
       if (Array.isArray(backendData)) {
         backendData.forEach((bo, idx) => {
           if (!bo) return;
           const cleanId = getCleanId(bo, idx);
-          // Backend is authoritative for items and order state
           orderMap.set(cleanId, bo);
+        });
+        try {
+          localStorage.setItem('flavora_manager_orders', JSON.stringify(backendData));
+        } catch (e) {}
+      } else if (Array.isArray(localOrders)) {
+        // Fallback only if backend is unreachable
+        localOrders.forEach((lo, idx) => {
+          if (!lo) return;
+          const cleanId = getCleanId(lo, idx);
+          orderMap.set(cleanId, lo);
         });
       }
 
@@ -359,6 +361,24 @@ export default function ChefLayout({ setActivePage }) {
 
         const cleanNote = getCleanChefNote(o.notes || o.chefNotes || o.instructions || '');
 
+        const effectiveRawStatus = overrideStatus || o.status || 'Placed';
+        const effectiveChefStatus = o.chefStatus || (o.chefId ? (effectiveRawStatus === 'Preparing' || effectiveRawStatus === 'Cooking' ? 'PREPARING' : (effectiveRawStatus === 'Ready' ? 'READY' : 'ACCEPTED')) : 'NEW');
+
+        let finalStatus = effectiveRawStatus;
+        if (activeItemsList.length === 0 || o.status === 'Cancelled') {
+          finalStatus = 'Cancelled';
+        } else if (hasPendingItems) {
+          if (effectiveRawStatus === 'Preparing' || effectiveRawStatus === 'Cooking') {
+            finalStatus = 'Preparing';
+          } else if (effectiveRawStatus === 'Accepted' || effectiveChefStatus === 'ACCEPTED') {
+            finalStatus = 'Accepted';
+          } else if (effectiveRawStatus === 'Ready') {
+            finalStatus = 'Ready';
+          } else {
+            finalStatus = 'Placed';
+          }
+        }
+
         return {
           id: idStr,
           _id: o._id,
@@ -366,7 +386,9 @@ export default function ChefLayout({ setActivePage }) {
           table: o.table || (o.tableNum ? `Table ${o.tableNum}` : 'Takeaway'),
           type: o.type || 'Dine-In',
           customer: o.customer || o.customerName || 'Guest',
-          status: activeItemsList.length === 0 || o.status === 'Cancelled' ? 'Cancelled' : (hasPendingItems ? (rawStatus === 'Preparing' || rawStatus === 'Cooking' ? 'Preparing' : 'Placed') : rawStatus),
+          status: finalStatus,
+          chefStatus: effectiveChefStatus,
+          waiterStatus: o.waiterStatus || 'PENDING',
           items: finalItems,
           notes: cleanNote,
           time: createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -429,10 +451,30 @@ export default function ChefLayout({ setActivePage }) {
     window.addEventListener('flavora_orders_updated', handleSync);
     window.addEventListener('storage', handleSync);
 
+    const session = getSessionUser();
+    joinSocketRooms(session);
+
+    const unsubCreated = onSocketEvent('order_created', (data) => {
+      fetchOrdersAndMenu();
+      if (soundEnabled) playNotificationTone();
+      showToast(`🔔 New Order #${data?.order?.orderId || ''} for ${data?.order?.table || 'Table'}`);
+    });
+    const unsubAccepted = onSocketEvent('chef_accepted', () => fetchOrdersAndMenu());
+    const unsubPreparing = onSocketEvent('chef_preparing', () => fetchOrdersAndMenu());
+    const unsubReady = onSocketEvent('chef_ready', () => fetchOrdersAndMenu());
+    const unsubWaiterAccepted = onSocketEvent('waiter_accepted', () => fetchOrdersAndMenu());
+    const unsubWaiterServed = onSocketEvent('waiter_served', () => fetchOrdersAndMenu());
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('flavora_orders_updated', handleSync);
       window.removeEventListener('storage', handleSync);
+      unsubCreated();
+      unsubAccepted();
+      unsubPreparing();
+      unsubReady();
+      unsubWaiterAccepted();
+      unsubWaiterServed();
     };
   }, [soundEnabled]);
 
@@ -442,31 +484,39 @@ export default function ChefLayout({ setActivePage }) {
     const currentChefId = current?._id || current?.id || '';
     const currentChefName = chefProfile.name || current?.name || 'Chef';
 
-    const updated = ordersList.map(o => {
-      const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
-                      o.id === cleanOrderId || o.orderId === cleanOrderId;
-      if (matches) {
-        return {
-          ...o,
-          chefId: currentChefId,
-          chefName: currentChefName,
-          claimedAt: new Date().toISOString()
-        };
-      }
-      return o;
-    });
-    setOrdersList(updated);
-
     try {
-      localStorage.setItem('flavora_manager_orders', JSON.stringify(updated));
-      window.dispatchEvent(new Event('flavora_orders_updated'));
-    } catch (e) { }
+      await api.chefAcceptOrder(cleanOrderId);
 
-    try {
-      await api.claimOrder(cleanOrderId);
-      showToast(`👨‍🍳 Ticket ${orderId} claimed by you!`);
+      const updated = ordersList.map(o => {
+        const matches = o.id === orderId || o.orderId === orderId || o._id === orderId ||
+                        o.id === cleanOrderId || o.orderId === cleanOrderId;
+        if (matches) {
+          return {
+            ...o,
+            chefId: currentChefId,
+            chefName: currentChefName,
+            chefStatus: 'ACCEPTED',
+            status: 'Accepted',
+            claimedAt: new Date().toISOString()
+          };
+        }
+        return o;
+      });
+      setOrdersList(updated);
+
+      try {
+        localStorage.setItem('flavora_manager_orders', JSON.stringify(updated));
+        window.dispatchEvent(new Event('flavora_orders_updated'));
+      } catch (e) { }
+
+      showToast(`👨‍🍳 Ticket #${orderId} accepted by you!`);
     } catch (err) {
-      console.warn('Failed to claim order:', err);
+      if (err.status === 409 || err.message?.includes('already been accepted')) {
+        showToast(`⚠️ ${err.message || 'Order already claimed by another chef!'}`);
+      } else {
+        showToast(`⚠️ ${err.message || 'Failed to claim order'}`);
+      }
+      fetchOrdersAndMenu();
     }
   };
 
@@ -535,6 +585,7 @@ export default function ChefLayout({ setActivePage }) {
         return {
           ...o,
           status: effectiveOrderStatus,
+          chefStatus: newStatus === 'Preparing' ? 'PREPARING' : (newStatus === 'Ready' ? 'READY' : o.chefStatus),
           items: updatedItems,
           chefId: o.chefId || (newStatus === 'Preparing' ? currentChefId : o.chefId),
           chefName: o.chefName || (newStatus === 'Preparing' ? currentChefName : o.chefName),
@@ -554,12 +605,32 @@ export default function ChefLayout({ setActivePage }) {
     try {
       const rawApiId = targetOrder ? (targetOrder.orderId || targetOrder.id || targetOrder._id || cleanOrderId) : cleanOrderId;
       const cleanApiId = String(rawApiId).replace(/^#/i, '').trim();
-      await api.updateOrderStatus(cleanApiId, effectiveOrderStatus, {
-        items: updatedItems,
-        status: effectiveOrderStatus,
-        chefId: targetOrder?.chefId || (newStatus === 'Preparing' ? currentChefId : undefined),
-        chefName: targetOrder?.chefName || (newStatus === 'Preparing' ? currentChefName : undefined)
-      });
+      if (newStatus === 'Preparing') {
+        await api.chefUpdateStatus(cleanApiId, 'PREPARING').catch(() => {
+          return api.updateOrderStatus(cleanApiId, effectiveOrderStatus, {
+            items: updatedItems,
+            status: effectiveOrderStatus,
+            chefId: targetOrder?.chefId || currentChefId,
+            chefName: targetOrder?.chefName || currentChefName
+          });
+        });
+      } else if (newStatus === 'Ready') {
+        await api.chefUpdateStatus(cleanApiId, 'READY').catch(() => {
+          return api.updateOrderStatus(cleanApiId, effectiveOrderStatus, {
+            items: updatedItems,
+            status: effectiveOrderStatus,
+            chefId: targetOrder?.chefId || currentChefId,
+            chefName: targetOrder?.chefName || currentChefName
+          });
+        });
+      } else {
+        await api.updateOrderStatus(cleanApiId, effectiveOrderStatus, {
+          items: updatedItems,
+          status: effectiveOrderStatus,
+          chefId: targetOrder?.chefId || (newStatus === 'Preparing' ? currentChefId : undefined),
+          chefName: targetOrder?.chefName || (newStatus === 'Preparing' ? currentChefName : undefined)
+        });
+      }
     } catch (e) { }
 
     if (newStatus === 'Preparing') {
@@ -758,13 +829,29 @@ export default function ChefLayout({ setActivePage }) {
 
     const current = getSessionUser();
     const currentChefId = current?._id || current?.id || '';
+    const currentChefName = chefProfile?.name || current?.name || '';
+
+    // Check if claimed by the currently logged-in chef
+    const isMine = Boolean(
+      (currentChefId && o.chefId && String(o.chefId) === String(currentChefId)) ||
+      (currentChefName && o.chefName && String(o.chefName).toLowerCase().trim() === String(currentChefName).toLowerCase().trim())
+    );
+
+    // Check if claimed by another chef
+    const hasChefAssigned = Boolean(o.chefId || o.chefName);
+    const isClaimedByOtherChef = hasChefAssigned && !isMine;
+
+    // Requirement: When one chef accepts the order, it must disappear from other chefs' KDS dashboards!
+    if (isClaimedByOtherChef) {
+      return false;
+    }
 
     if (statusFilter === 'my') {
-      return String(o.chefId || '') === String(currentChefId);
+      return isMine;
     }
-    if (statusFilter === 'placed') return o.status === 'Placed';
-    if (statusFilter === 'preparing') return o.status === 'Preparing';
-    return true; // 'active' -> shows all active placed & cooking tickets
+    if (statusFilter === 'placed') return o.status === 'Placed' && !hasChefAssigned;
+    if (statusFilter === 'preparing') return o.status === 'Preparing' || isMine;
+    return true; // 'active' -> shows unassigned tickets + this chef's accepted tickets
   }).filter(o => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
@@ -886,13 +973,19 @@ export default function ChefLayout({ setActivePage }) {
       case 'chef-history':
         return (
           <div className="admin-subpage-container" style={{ paddingBottom: '3rem' }}>
-            <ChefHistoryPage ordersList={ordersList} />
+            <ChefHistoryPage
+              ordersList={ordersList}
+              currentChefId={getSessionUser()?._id || getSessionUser()?.id || ''}
+              currentChefName={chefProfile?.name || getSessionUser()?.name || ''}
+            />
           </div>
         );
       case 'chef-analytics':
         return (
           <ChefAnalyticsPage
             ordersList={ordersList}
+            currentChefId={getSessionUser()?._id || getSessionUser()?.id || ''}
+            currentChefName={chefProfile?.name || getSessionUser()?.name || ''}
             getElapsedMins={getElapsedMins}
           />
         );

@@ -39,11 +39,29 @@ const orderSchema = new mongoose.Schema({
   time: { type: String, default: '' },
   notes: { type: String, default: '' },
   managerId: { type: String, index: true, default: '' },
+  tableId: { type: String, default: '' },
+  sessionId: { type: String, default: '' },
+  chefStatus: { 
+    type: String, 
+    enum: ['NEW', 'ACCEPTED', 'PREPARING', 'READY'], 
+    default: 'NEW' 
+  },
+  waiterStatus: { 
+    type: String, 
+    enum: ['PENDING', 'ACCEPTED', 'SERVING', 'SERVED'], 
+    default: 'PENDING' 
+  },
   chefId: { type: String, index: true, default: '' },
   chefName: { type: String, default: '' },
   claimedAt: { type: Date },
+  chefAcceptedAt: { type: Date },
+  chefPreparingAt: { type: Date },
+  chefReadyAt: { type: Date },
   waiterId: { type: String, index: true, default: '' },
-  waiterName: { type: String, default: '' }
+  waiterName: { type: String, default: '' },
+  waiterAcceptedAt: { type: Date },
+  waiterServingAt: { type: Date },
+  waiterServedAt: { type: Date }
 }, { timestamps: true, strict: false });
 
 orderSchema.pre('save', function(next) {

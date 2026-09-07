@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical, ShieldCheck, Mail, Phone, RefreshCw, Eye, EyeOff, Ban } from 'lucide-react';
+import { Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical, ShieldCheck, Mail, Phone, RefreshCw, Eye, EyeOff, Ban, AlertCircle } from 'lucide-react';
 import { api } from '../../services/api';
 
 const format24to12 = (time24) => {
@@ -46,6 +46,8 @@ export default function ManagerStaffPage() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [showStaffPassword, setShowStaffPassword] = useState(false);
+  const [phoneWarning, setPhoneWarning] = useState('');
+  const [isCheckingPhone, setIsCheckingPhone] = useState(false);
 
   const getSessionUser = () => {
     const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
@@ -111,6 +113,7 @@ export default function ManagerStaffPage() {
   const handleOpenAddModal = () => {
     setEditingStaff(null);
     setShowStaffPassword(false);
+    setPhoneWarning('');
     setFormData({
       name: '',
       role: 'Waiter',
@@ -128,7 +131,8 @@ export default function ManagerStaffPage() {
   const handleOpenEditModal = (stf) => {
     setEditingStaff(stf);
     setShowStaffPassword(false);
-    const parsedTimes = parseShiftTo24(stf.shift || '09:00 AM – 05:00 PM');
+    setPhoneWarning('');
+    const parsedTimes = parseShiftTo24(stf.shift || '11:00 AM – 10:00 PM');
     setFormData({
       name: stf.name || '',
       role: stf.role || 'Waiter',
@@ -144,6 +148,45 @@ export default function ManagerStaffPage() {
     setIsAddModalOpen(true);
   };
 
+  const handlePhoneChange = async (rawValue) => {
+    const cleanDigits = String(rawValue || '').replace(/[^0-9]/g, '').slice(0, 10);
+    setFormData(prev => ({ ...prev, phone: cleanDigits }));
+
+    if (cleanDigits.length < 10) {
+      setPhoneWarning('');
+      return;
+    }
+
+    // 1. Immediate check against loaded staff list
+    const currentId = editingStaff?.id || editingStaff?._id;
+    const localMatch = staffList.find(st => {
+      const stId = st.id || st._id;
+      if (currentId && String(stId) === String(currentId)) return false;
+      const stDigits = String(st.phone || '').replace(/[^0-9]/g, '');
+      return stDigits.slice(-10) === cleanDigits;
+    });
+
+    if (localMatch) {
+      setPhoneWarning(`⚠️ Mobile number already exists`);
+      return;
+    }
+
+    // 2. Query backend for system-wide database uniqueness check
+    setIsCheckingPhone(true);
+    try {
+      const res = await api.checkStaffPhone(cleanDigits, currentId || '');
+      if (res && res.exists) {
+        setPhoneWarning(`⚠️ Mobile number already exists`);
+      } else {
+        setPhoneWarning('');
+      }
+    } catch (err) {
+      console.warn("Phone check error:", err.message);
+    } finally {
+      setIsCheckingPhone(false);
+    }
+  };
+
   const handleSubmitStaff = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -155,11 +198,30 @@ export default function ManagerStaffPage() {
       return;
     }
     // Only validate phone when creating a new staff member and phone is entered
-    if (!editingStaff && formData.phone) {
+    if (formData.phone) {
       const digitsOnly = String(formData.phone).replace(/[^0-9]/g, '');
       if (digitsOnly.length > 0 && digitsOnly.length < 10) {
         alert('Mobile number must be at least 10 digits.');
         return;
+      }
+
+      if (phoneWarning) {
+        alert(phoneWarning.replace(/^[⚠️\s]+/, ''));
+        return;
+      }
+
+      // Pre-submission verification with backend
+      try {
+        const currentId = editingStaff?.id || editingStaff?._id;
+        const res = await api.checkStaffPhone(digitsOnly, currentId || '');
+        if (res && res.exists) {
+          const warnMsg = `Mobile number ${formData.phone} already exists in database${res.duplicateUser ? ` (registered to ${res.duplicateUser.name} - ${res.duplicateUser.role})` : ''}`;
+          setPhoneWarning(`⚠️ ${warnMsg}`);
+          alert(warnMsg);
+          return;
+        }
+      } catch (err) {
+        console.warn("Pre-submit phone check:", err.message);
       }
     }
 
@@ -194,7 +256,9 @@ export default function ManagerStaffPage() {
         const res = await api.updateStaff(editingStaff.id, payload);
         if (res) backendUpdatedMember = res;
       } catch (err) {
-        console.warn("Backend updateStaff warning:", err.message);
+        console.error("Backend updateStaff error:", err.message);
+        alert(err.message || 'Failed to update staff shift in database.');
+        return;
       }
       const updatedItem = {
         ...editingStaff,
@@ -212,7 +276,13 @@ export default function ManagerStaffPage() {
         const createdRes = await api.createStaff(payload);
         if (createdRes) createdItem = createdRes;
       } catch (err) {
-        console.warn("Backend createStaff warning:", err.message);
+        console.error("Backend createStaff error:", err.message);
+        const errMsg = err.message || 'Failed to save staff member to Database.';
+        if (errMsg.toLowerCase().includes('mobile') || errMsg.toLowerCase().includes('phone')) {
+          setPhoneWarning(`⚠️ ${errMsg}`);
+        }
+        alert(errMsg);
+        return;
       }
       const newStaffItem = {
         id: createdItem ? (createdItem._id || createdItem.id) : Date.now(),
@@ -718,19 +788,49 @@ export default function ManagerStaffPage() {
                     placeholder="e.g. 9876543210"
                     maxLength={10}
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^0-9]/g, '') })}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
                     autoComplete="off"
                     style={{
                       width: '100%',
                       padding: '0.6rem 0.85rem',
                       borderRadius: '10px',
-                      border: '1px solid #CBD5E1',
+                      border: phoneWarning ? '1.5px solid #DC2626' : '1px solid #CBD5E1',
                       fontSize: '0.85rem',
                       outline: 'none',
-                      backgroundColor: editingStaff ? '#F1F5F9' : '#F8FAFC',
+                      backgroundColor: editingStaff ? '#F1F5F9' : (phoneWarning ? '#FEF2F2' : '#F8FAFC'),
+                      color: phoneWarning ? '#991B1B' : '#0F2A1D',
                       cursor: editingStaff ? 'not-allowed' : 'text'
                     }}
                   />
+                  {phoneWarning ? (
+                    <div style={{
+                      marginTop: '0.35rem',
+                      padding: '0.35rem 0.55rem',
+                      backgroundColor: '#FEF2F2',
+                      border: '1px solid #FCA5A5',
+                      borderRadius: '8px',
+                      color: '#DC2626',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}>
+                      <AlertCircle size={14} color="#DC2626" style={{ flexShrink: 0 }} />
+                      <span>{phoneWarning}</span>
+                    </div>
+                  ) : formData.phone && formData.phone.length === 10 ? (
+                    <div style={{
+                      marginTop: '0.3rem',
+                      fontSize: '0.73rem',
+                      color: '#166534',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem'
+                    }}>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 

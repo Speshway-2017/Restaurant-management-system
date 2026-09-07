@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, ShieldCheck, Clock, CheckCircle2, Search, Trash2, X, UserCheck, Shield, Eye, EyeOff, MoreVertical, Ban, Utensils, ClipboardList, ChefHat } from 'lucide-react';
+import { Users, Plus, ShieldCheck, Clock, CheckCircle2, Search, Trash2, X, UserCheck, Shield, Eye, EyeOff, MoreVertical, Ban, Utensils, ClipboardList, ChefHat, AlertCircle } from 'lucide-react';
 import { api } from '../../services/api';
 
 export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
@@ -12,6 +12,7 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
   const [menuPosition, setMenuPosition] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [phoneWarning, setPhoneWarning] = useState('');
 
   useEffect(() => {
     const handleOutsideClick = () => {
@@ -120,6 +121,7 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
 
   const handleOpenAddModal = () => {
     setEditingStaff(null);
+    setPhoneWarning('');
     setFormData({
       name: '',
       email: '',
@@ -134,6 +136,7 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
 
   const handleOpenEditModal = (stf) => {
     setEditingStaff(stf);
+    setPhoneWarning('');
     setFormData({
       name: stf.name || '',
       email: stf.email || '',
@@ -146,6 +149,40 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
     setIsAddModalOpen(true);
   };
 
+  const handlePhoneChange = async (rawValue) => {
+    const cleanVal = String(rawValue || '').replace(/\D/g, '').slice(0, 10);
+    setFormData(prev => ({ ...prev, phone: cleanVal }));
+
+    if (cleanVal.length < 10) {
+      setPhoneWarning('');
+      return;
+    }
+
+    const currentId = editingStaff?.dbId || editingStaff?.id;
+    const localMatch = staffMembers.find(st => {
+      const stId = st.dbId || st.id;
+      if (currentId && String(stId) === String(currentId)) return false;
+      const stDigits = String(st.phone || '').replace(/\D/g, '');
+      return stDigits.slice(-10) === cleanVal;
+    });
+
+    if (localMatch) {
+      setPhoneWarning(`⚠️ Mobile number already exists in database (registered to ${localMatch.name} - ${localMatch.role})`);
+      return;
+    }
+
+    try {
+      const res = await api.checkStaffPhone(cleanVal, currentId || '');
+      if (res && res.exists) {
+        setPhoneWarning(`⚠️ Mobile number already exists in database${res.duplicateUser ? ` (registered to ${res.duplicateUser.name} - ${res.duplicateUser.role})` : ''}`);
+      } else {
+        setPhoneWarning('');
+      }
+    } catch (err) {
+      console.warn('Phone check error:', err.message);
+    }
+  };
+
   const handleCreateStaff = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.email) {
@@ -153,9 +190,28 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
       return;
     }
 
-    if (formData.phone && formData.phone.length !== 10) {
-      alert('Mobile Phone number must be exactly 10 digits.');
-      return;
+    if (formData.phone) {
+      const digitsOnly = String(formData.phone).replace(/\D/g, '');
+      if (digitsOnly.length > 0 && digitsOnly.length < 10) {
+        alert('Mobile Phone number must be exactly 10 digits.');
+        return;
+      }
+
+      if (phoneWarning) {
+        alert(phoneWarning.replace(/^[⚠️\s]+/, ''));
+        return;
+      }
+
+      try {
+        const currentId = editingStaff?.dbId || editingStaff?.id;
+        const res = await api.checkStaffPhone(digitsOnly, currentId || '');
+        if (res && res.exists) {
+          const warnMsg = `Mobile number ${formData.phone} already exists in database${res.duplicateUser ? ` (registered to ${res.duplicateUser.name} - ${res.duplicateUser.role})` : ''}`;
+          setPhoneWarning(`⚠️ ${warnMsg}`);
+          alert(warnMsg);
+          return;
+        }
+      } catch (err) {}
     }
 
     if (editingStaff) {
@@ -798,15 +854,35 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
                     placeholder="e.g. 9876543210"
                     maxLength={10}
                     value={formData.phone}
-                    onChange={(e) => {
-                      const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                      setFormData({ ...formData, phone: cleanVal });
-                    }}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
                     autoComplete="off"
+                    style={{
+                      border: phoneWarning ? '1.5px solid #DC2626' : undefined,
+                      backgroundColor: phoneWarning ? '#FEF2F2' : undefined
+                    }}
                   />
-                  <span style={{ fontSize: '0.75rem', color: formData.phone.length === 10 ? '#2E7D32' : '#718096', marginTop: '0.25rem', display: 'block', fontWeight: 600 }}>
-                    {formData.phone.length}/10 digits entered {formData.phone.length === 10 && '✓'}
-                  </span>
+                  {phoneWarning ? (
+                    <div style={{
+                      marginTop: '0.35rem',
+                      padding: '0.35rem 0.55rem',
+                      backgroundColor: '#FEF2F2',
+                      border: '1px solid #FCA5A5',
+                      borderRadius: '8px',
+                      color: '#DC2626',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}>
+                      <AlertCircle size={14} color="#DC2626" style={{ flexShrink: 0 }} />
+                      <span>{phoneWarning}</span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '0.75rem', color: formData.phone.length === 10 ? '#2E7D32' : '#718096', marginTop: '0.25rem', display: 'block', fontWeight: 600 }}>
+                      {formData.phone.length}/10 digits entered {formData.phone.length === 10 && '✓ Mobile number available'}
+                    </span>
+                  )}
                 </div>
               </div>
 

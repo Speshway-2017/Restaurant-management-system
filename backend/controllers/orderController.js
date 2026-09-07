@@ -2,6 +2,15 @@ const orderService = require('../services/orderService');
 const AssistanceRequest = require('../models/AssistanceRequest');
 const Order = require('../models/Order');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
+const {
+  notifyOrderCreated,
+  notifyChefAccepted,
+  notifyChefPreparing,
+  notifyChefReady,
+  notifyWaiterAccepted,
+  notifyWaiterServing,
+  notifyWaiterServed
+} = require('../socket');
 
 const getOrders = async (req, res) => {
   try {
@@ -9,14 +18,26 @@ const getOrders = async (req, res) => {
     if (req.user) {
       const userRole = (req.user.role || '').toLowerCase();
       if (userRole.includes('manager')) {
-        query.managerId = req.user._id.toString();
+        query.$or = [
+          { managerId: req.user._id.toString() },
+          { managerId: { $in: ['', null, undefined] } },
+          { managerId: { $exists: false } }
+        ];
       } else if (userRole.includes('waiter') || userRole.includes('chef') || userRole.includes('receptionist')) {
         if (req.user.managerId) {
-          query.managerId = req.user.managerId.toString();
+          query.$or = [
+            { managerId: req.user.managerId.toString() },
+            { managerId: { $in: ['', null, undefined] } },
+            { managerId: { $exists: false } }
+          ];
         }
       }
     } else if (req.query.managerId) {
-      query.managerId = req.query.managerId;
+      query.$or = [
+        { managerId: req.query.managerId },
+        { managerId: { $in: ['', null, undefined] } },
+        { managerId: { $exists: false } }
+      ];
     }
 
     const orders = await orderService.getOrders(query);
@@ -38,6 +59,11 @@ const createOrder = async (req, res) => {
       }
     }
     const newOrder = await orderService.createOrder(orderData);
+    try {
+      notifyOrderCreated(newOrder);
+    } catch (e) {
+      console.warn('Socket emit on order created error:', e.message);
+    }
     return successResponse(res, newOrder, 'Order created successfully', 201);
   } catch (error) {
     return errorResponse(res, error.message, 400);
@@ -173,6 +199,15 @@ const requestOrderCancellation = async (req, res) => {
       return errorResponse(res, 'Order not found', 404);
     }
 
+    // Waiter must accept order before performing cancellation or item operations
+    if (req.user && req.user.role === 'Waiter') {
+      const wStatus = String(order.waiterStatus || 'PENDING').toUpperCase();
+      const isAccepted = wStatus === 'ACCEPTED' || wStatus === 'SERVING' || wStatus === 'SERVED';
+      if (!isAccepted) {
+        return errorResponse(res, 'You must accept the order before requesting cancellation of items.', 400);
+      }
+    }
+
     const cancelReason = reason || 'Customer changed mind';
     const targetItemIds = Array.isArray(itemIds) && itemIds.length > 0
       ? itemIds.map(i => String(i))
@@ -268,11 +303,284 @@ const requestOrderCancellation = async (req, res) => {
   }
 };
 
+const chefAcceptOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.user) {
+      return errorResponse(res, 'Authentication required to accept order', 401);
+    }
+    const cleanId = String(id || '').replace(/^#/i, '').trim();
+    const queryOr = [
+      { orderId: id },
+      { orderId: `#${cleanId}` },
+      { orderId: cleanId }
+    ];
+    if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
+      queryOr.push({ _id: cleanId });
+    }
+
+    // Atomic claim with race-condition protection
+    const updated = await Order.findOneAndUpdate(
+      {
+        $and: [
+          { $or: queryOr },
+          {
+            $or: [
+              { chefStatus: 'NEW' },
+              { chefStatus: { $exists: false } },
+              { chefId: null },
+              { chefId: '' }
+            ]
+          }
+        ]
+      },
+      {
+        $set: {
+          chefId: req.user._id.toString(),
+          chefName: req.user.name,
+          chefStatus: 'ACCEPTED',
+          status: 'Accepted',
+          chefAcceptedAt: new Date(),
+          claimedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      // Check if order exists to distinguish 404 from 409 Conflict
+      const existing = await Order.findOne({ $or: queryOr });
+      if (!existing) {
+        return errorResponse(res, 'Order not found', 404);
+      }
+      return res.status(409).json({
+        success: false,
+        message: `Order #${existing.orderId || id} has already been accepted by Chef ${existing.chefName || 'another chef'}.`,
+        order: existing
+      });
+    }
+
+    try {
+      notifyChefAccepted(updated);
+    } catch (e) {
+      console.warn('Socket emit error on chef accept:', e.message);
+    }
+    return successResponse(res, updated, 'Order accepted by chef');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+const chefUpdateStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!req.user) {
+      return errorResponse(res, 'Authentication required', 401);
+    }
+
+    const cleanId = String(id || '').replace(/^#/i, '').trim();
+    const queryOr = [
+      { orderId: id },
+      { orderId: `#${cleanId}` },
+      { orderId: cleanId }
+    ];
+    if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
+      queryOr.push({ _id: cleanId });
+    }
+
+    const order = await Order.findOne({ $or: queryOr });
+    if (!order) {
+      return errorResponse(res, 'Order not found', 404);
+    }
+
+    const targetStatus = String(status || '').toUpperCase();
+    if (!['PREPARING', 'READY'].includes(targetStatus)) {
+      return errorResponse(res, 'Invalid chef status. Allowed values: PREPARING, READY', 400);
+    }
+
+    // Ownership check: If order has a chefId and user is chef, ensure they match
+    const userRole = (req.user.role || '').toLowerCase();
+    if (userRole.includes('chef') && order.chefId && order.chefId !== req.user._id.toString()) {
+      return errorResponse(res, `This order is claimed by Chef ${order.chefName || 'another chef'}.`, 403);
+    }
+
+    if (!order.chefId) {
+      order.chefId = req.user._id.toString();
+      order.chefName = req.user.name;
+    }
+
+    if (targetStatus === 'PREPARING') {
+      order.chefStatus = 'PREPARING';
+      order.status = 'Preparing';
+      order.chefPreparingAt = new Date();
+      if (Array.isArray(order.items)) {
+        order.items = order.items.map(it => {
+          if (it.status === 'CANCELLED' || it.isDelivered || it.status === 'SERVED' || it.status === 'DELIVERED') return it;
+          return { ...it, status: 'PREPARING' };
+        });
+      }
+      await order.save();
+      try {
+        notifyChefPreparing(order);
+      } catch (e) {
+        console.warn('Socket emit error on chef preparing:', e.message);
+      }
+    } else if (targetStatus === 'READY') {
+      order.chefStatus = 'READY';
+      order.status = 'Ready';
+      order.chefReadyAt = new Date();
+      if (Array.isArray(order.items)) {
+        order.items = order.items.map(it => {
+          if (it.status === 'CANCELLED' || it.isDelivered || it.status === 'SERVED' || it.status === 'DELIVERED') return it;
+          return { ...it, status: 'READY', isReady: true };
+        });
+      }
+      await order.save();
+      try {
+        notifyChefReady(order);
+      } catch (e) {
+        console.warn('Socket emit error on chef ready:', e.message);
+      }
+    }
+
+    return successResponse(res, order, `Chef status updated to ${targetStatus}`);
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+const waiterAcceptOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.user) {
+      return errorResponse(res, 'Authentication required to accept order', 401);
+    }
+
+    const cleanId = String(id || '').replace(/^#/i, '').trim();
+    const queryOr = [
+      { orderId: id },
+      { orderId: `#${cleanId}` },
+      { orderId: cleanId }
+    ];
+    if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
+      queryOr.push({ _id: cleanId });
+    }
+
+    const order = await Order.findOne({ $or: queryOr });
+    if (!order) {
+      return errorResponse(res, 'Order not found', 404);
+    }
+
+    const hasReadyItems = Array.isArray(order.items) && order.items.some(it => 
+      it && (it.status === 'READY' || it.status === 'READY_FOR_PASS' || it.isReady === true)
+    );
+    const isPreparing = order.chefStatus === 'PREPARING' || order.status === 'Preparing' || order.status === 'Cooking';
+    const isReady = order.chefStatus === 'READY' || order.status === 'Ready' || hasReadyItems;
+
+    if (!isReady && !isPreparing && !hasReadyItems) {
+      return errorResponse(res, 'Cannot accept order before food is preparing or ready in Kitchen.', 400);
+    }
+
+    if (order.waiterStatus === 'SERVED') {
+      return errorResponse(res, 'Order has already been served.', 400);
+    }
+
+    order.waiterId = req.user._id.toString();
+    order.waiterName = req.user.name;
+    order.waiterStatus = 'ACCEPTED';
+    order.waiterAcceptedAt = new Date();
+    await order.save();
+
+    try {
+      notifyWaiterAccepted(order);
+    } catch (e) {
+      console.warn('Socket emit error on waiter accept:', e.message);
+    }
+    return successResponse(res, order, 'Order accepted for service by Waiter');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+const waiterUpdateStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!req.user) {
+      return errorResponse(res, 'Authentication required', 401);
+    }
+
+    const cleanId = String(id || '').replace(/^#/i, '').trim();
+    const queryOr = [
+      { orderId: id },
+      { orderId: `#${cleanId}` },
+      { orderId: cleanId }
+    ];
+    if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
+      queryOr.push({ _id: cleanId });
+    }
+
+    const order = await Order.findOne({ $or: queryOr });
+    if (!order) {
+      return errorResponse(res, 'Order not found', 404);
+    }
+
+    const targetStatus = String(status || '').toUpperCase();
+    if (!['SERVING', 'SERVED'].includes(targetStatus)) {
+      return errorResponse(res, 'Invalid waiter status. Allowed values: SERVING, SERVED', 400);
+    }
+
+    if (targetStatus === 'SERVING') {
+      order.waiterStatus = 'SERVING';
+      order.waiterServingAt = new Date();
+      if (!order.waiterId) {
+        order.waiterId = req.user._id.toString();
+        order.waiterName = req.user.name;
+      }
+      await order.save();
+      try {
+        notifyWaiterServing(order);
+      } catch (e) {
+        console.warn('Socket emit error on waiter serving:', e.message);
+      }
+    } else if (targetStatus === 'SERVED') {
+      order.waiterStatus = 'SERVED';
+      order.status = 'Served';
+      order.waiterServedAt = new Date();
+      if (!order.waiterId) {
+        order.waiterId = req.user._id.toString();
+        order.waiterName = req.user.name;
+      }
+      if (Array.isArray(order.items)) {
+        order.items = order.items.map(it => {
+          if (it.status === 'CANCELLED') return it;
+          return { ...it, status: 'SERVED', isDelivered: true, isReady: true };
+        });
+      }
+      await order.save();
+      try {
+        notifyWaiterServed(order);
+      } catch (e) {
+        console.warn('Socket emit error on waiter served:', e.message);
+      }
+    }
+
+    return successResponse(res, order, `Waiter service status updated to ${targetStatus}`);
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
 module.exports = {
   getOrders,
   createOrder,
   updateOrderStatus,
   claimOrder,
+  chefAcceptOrder,
+  chefUpdateStatus,
+  waiterAcceptOrder,
+  waiterUpdateStatus,
   updateOrderItemStatus,
   clearAllOrders,
   callWaiter,

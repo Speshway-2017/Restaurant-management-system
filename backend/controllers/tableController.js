@@ -175,8 +175,21 @@ const updateTableByNumber = async (req, res) => {
 const generateTableQr = async (req, res) => {
   try {
     const tableNum = req.body?.tableNum || req.params?.tableNum || 'T-01';
-    const defaultHost = (req.hostname === 'localhost' || req.hostname === '127.0.0.1') ? '192.168.1.4' : req.hostname;
-    const targetUrl = req.body?.targetUrl || `http://${defaultHost}:5173/menu?table=${tableNum}`;
+
+    // Resolve customer frontend base URL dynamically with priority to environment variables
+    let frontendBase = process.env.FRONTEND_URL || process.env.CLIENT_URL || process.env.APP_URL;
+    if (!frontendBase || frontendBase.trim() === '') {
+      const isLocalhost = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+      if (isLocalhost) {
+        frontendBase = 'http://192.168.1.4:5173';
+      } else {
+        const protocol = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+        frontendBase = `${protocol}://${req.hostname}`;
+      }
+    }
+    frontendBase = frontendBase.trim().replace(/\/+$/, '');
+
+    const targetUrl = req.body?.targetUrl || `${frontendBase}/menu?table=${encodeURIComponent(tableNum)}`;
     
     // Generate base64 Data URL for table QR code
     const qrDataUrl = await QRCode.toDataURL(targetUrl, {

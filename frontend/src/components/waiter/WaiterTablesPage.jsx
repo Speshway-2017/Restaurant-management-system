@@ -200,26 +200,7 @@ export default function WaiterTablesPage() {
 
   const sessionUser = getSessionUser();
 
-  const handleClaimTable = async (tableNum) => {
-    const current = getSessionUser();
-    const waiterId = current?._id || current?.id || '';
-    const waiterName = current?.name || 'Waiter';
 
-    setTables(prev => prev.map(t => {
-      const tNum = t.num || t.number || `T-${String(t.id || 1).padStart(2, '0')}`;
-      if (tNum === tableNum) {
-        return { ...t, assignedWaiterId: waiterId, assignedWaiterName: waiterName };
-      }
-      return t;
-    }));
-
-    try {
-      await api.assignTableWaiter(tableNum, { waiterId, waiterName });
-      showNotification(`✓ Table ${tableNum} assigned to you!`);
-    } catch (err) {
-      console.warn('Failed to claim table:', err);
-    }
-  };
 
   const myTablesCount = tables.filter(tb => sessionUser?._id && String(tb.assignedWaiterId || '') === String(sessionUser._id)).length;
 
@@ -883,27 +864,7 @@ export default function WaiterTablesPage() {
                             }}>
                               {(sessionUser?._id && String(tb.assignedWaiterId) === String(sessionUser._id)) ? '🧑‍🍳 Assigned to You' : `🧑‍🍳 ${tb.assignedWaiterName}`}
                             </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleClaimTable(tb.num);
-                              }}
-                              style={{
-                                fontSize: '0.68rem',
-                                backgroundColor: '#F1F5F9',
-                                color: '#0F2A1D',
-                                border: '1px solid #CBD5E1',
-                                padding: '0.1rem 0.45rem',
-                                borderRadius: '4px',
-                                fontWeight: 800,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              ⚡ Claim Table
-                            </button>
-                          )}
+                          ) : null}
                         </div>
                       </div>
 

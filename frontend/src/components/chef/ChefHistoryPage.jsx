@@ -13,9 +13,14 @@ import {
 } from 'lucide-react';
 import { formatTableNumber } from '../../utils/orderUtils';
 
-export default function ChefHistoryPage({ ordersList = [] }) {
+export default function ChefHistoryPage({
+  ordersList = [],
+  currentChefId = '',
+  currentChefName = ''
+}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [scopeFilter, setScopeFilter] = useState('MY_ORDERS'); // 'MY_ORDERS' | 'ALL_KITCHEN'
 
   // Pagination state (10 orders per page, starting on page 1 showing latest 10 orders)
   const [currentPage, setCurrentPage] = useState(1);
@@ -23,17 +28,63 @@ export default function ChefHistoryPage({ ordersList = [] }) {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, typeFilter]);
+  }, [searchQuery, typeFilter, scopeFilter]);
+
+  // Resolve current chef identity
+  const sessionUser = React.useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  }, []);
+
+  const activeChefId = currentChefId || sessionUser?._id || sessionUser?.id || '';
+  const activeChefName = currentChefName || sessionUser?.name || '';
+
+  // Determine whether an order belongs to the currently logged in chef
+  const isOrderMine = React.useCallback((ord) => {
+    if (!ord) return false;
+    const ordChefId = String(ord.chefId || '').trim();
+    const ordChefName = String(ord.chefName || '').trim().toLowerCase();
+
+    const myId = String(activeChefId || '').trim();
+    const myName = String(activeChefName || '').trim().toLowerCase();
+
+    // 1. Direct ID match
+    if (myId && ordChefId && (ordChefId === myId || String(ordChefId) === String(myId))) {
+      return true;
+    }
+
+    // 2. Name match (case-insensitive, ignoring "Chef " prefix if needed)
+    if (myName && ordChefName) {
+      if (ordChefName === myName) return true;
+      const cleanOrd = ordChefName.replace(/^chef\s+/i, '').trim();
+      const cleanMy = myName.replace(/^chef\s+/i, '').trim();
+      if (cleanOrd && cleanMy && cleanOrd === cleanMy) return true;
+    }
+
+    return false;
+  }, [activeChefId, activeChefName]);
 
   // Filter completed kitchen tickets
-  const historyOrders = ordersList.filter(o => {
+  const isOrderKitchenDone = (o) => {
     if (o.status === 'Ready' || o.status === 'Served' || o.status === 'Completed' || o.status === 'Paid') {
       return true;
     }
     const items = Array.isArray(o.items) ? o.items : [];
     if (items.length === 0) return false;
     return items.every(i => i && (i.isReady || i.status === 'READY' || i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED'));
-  });
+  };
+
+  // All completed orders in the kitchen
+  const allKitchenHistoryOrders = ordersList.filter(isOrderKitchenDone);
+
+  // Completed orders prepared by THIS chef
+  const myHistoryOrders = allKitchenHistoryOrders.filter(isOrderMine);
+
+  // Active history orders based on scope selection
+  const historyOrders = scopeFilter === 'MY_ORDERS' ? myHistoryOrders : allKitchenHistoryOrders;
 
   // Sort history orders newest first (most recent timestamp at the top)
   const sortedHistoryOrders = [...historyOrders].sort((a, b) => {
@@ -56,8 +107,9 @@ export default function ChefHistoryPage({ ordersList = [] }) {
     const tableStr = formatTableNumber(ord.table || ord.tableNumber).toLowerCase();
     const customerStr = String(ord.customer || ord.guestName || '').toLowerCase();
     const itemsStr = Array.isArray(ord.items) ? ord.items.map(i => (i.name || i.dishId || '').toLowerCase()).join(' ') : '';
+    const chefStr = String(ord.chefName || '').toLowerCase();
 
-    return ordId.includes(q) || tableStr.includes(q) || customerStr.includes(q) || itemsStr.includes(q);
+    return ordId.includes(q) || tableStr.includes(q) || customerStr.includes(q) || itemsStr.includes(q) || chefStr.includes(q);
   });
 
   const totalOrders = filteredOrders.length;
@@ -89,16 +141,58 @@ export default function ChefHistoryPage({ ordersList = [] }) {
             Orders History
           </h1>
           <p className="admin-page-subtitle" style={{ margin: '0.25rem 0 0 0', fontSize: '0.88rem', color: '#64748B', fontWeight: 600 }}>
-            Archive of orders prepared by the kitchen and dispatched to pass.
+            {scopeFilter === 'MY_ORDERS' 
+              ? `Orders accepted and dispatched by ${activeChefName || 'you'}.`
+              : 'Archive of all completed kitchen orders across all stations.'}
           </p>
         </div>
 
         {/* Search & Filter Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {/* Chef Isolation Scope filter tabs */}
+          <div style={{ display: 'flex', backgroundColor: '#FFFFFF', padding: '0.2rem', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+            <button
+              type="button"
+              onClick={() => setScopeFilter('MY_ORDERS')}
+              style={{
+                backgroundColor: scopeFilter === 'MY_ORDERS' ? '#0F2A1D' : 'transparent',
+                color: scopeFilter === 'MY_ORDERS' ? '#FFFFFF' : '#475569',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.45rem 0.85rem',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              👨‍🍳 My Dispatched ({myHistoryOrders.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setScopeFilter('ALL_KITCHEN')}
+              style={{
+                backgroundColor: scopeFilter === 'ALL_KITCHEN' ? '#0F2A1D' : 'transparent',
+                color: scopeFilter === 'ALL_KITCHEN' ? '#FFFFFF' : '#475569',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.45rem 0.85rem',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              🏢 All Kitchen ({allKitchenHistoryOrders.length})
+            </button>
+          </div>
+
           {/* Type filter tabs */}
           <div style={{ display: 'flex', backgroundColor: '#FFFFFF', padding: '0.2rem', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
             {[
-              { id: 'ALL', label: 'All Orders' },
+              { id: 'ALL', label: 'All Types' },
               { id: 'DINE-IN', label: 'Dine-In' }
             ].map(tf => (
               <button
@@ -106,11 +200,11 @@ export default function ChefHistoryPage({ ordersList = [] }) {
                 type="button"
                 onClick={() => setTypeFilter(tf.id)}
                 style={{
-                  backgroundColor: typeFilter === tf.id ? '#0F2A1D' : 'transparent',
+                  backgroundColor: typeFilter === tf.id ? '#E07A3C' : 'transparent',
                   color: typeFilter === tf.id ? '#FFFFFF' : '#475569',
                   border: 'none',
                   borderRadius: '8px',
-                  padding: '0.45rem 0.85rem',
+                  padding: '0.45rem 0.75rem',
                   fontSize: '0.78rem',
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -193,20 +287,32 @@ export default function ChefHistoryPage({ ordersList = [] }) {
         boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
         overflow: 'hidden'
       }}>
-        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#FAFAFA', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D' }}>
-            Shift Dispatched History Log ({filteredOrders.length})
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#FAFAFA', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span>
+              {scopeFilter === 'MY_ORDERS' 
+                ? (activeChefName ? `${activeChefName}'s Dispatched Tickets (${filteredOrders.length})` : `My Dispatched Tickets (${filteredOrders.length})`)
+                : `All Kitchen Dispatched Log (${filteredOrders.length})`
+              }
+            </span>
           </div>
-          <span style={{ fontSize: '0.75rem', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 800, padding: '0.25rem 0.65rem', borderRadius: '6px', border: '1px solid #86EFAC' }}>
-            🟢 Live Kitchen Pass Active
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {scopeFilter === 'MY_ORDERS' && (
+              <span style={{ fontSize: '0.75rem', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 800, padding: '0.25rem 0.65rem', borderRadius: '6px', border: '1px solid #86EFAC' }}>
+                👨‍🍳 Logged as {activeChefName || 'Chef'}
+              </span>
+            )}
+            <span style={{ fontSize: '0.75rem', backgroundColor: '#EFF6FF', color: '#2563EB', fontWeight: 800, padding: '0.25rem 0.65rem', borderRadius: '6px', border: '1px solid #BFDBFE' }}>
+              🟢 Live Kitchen Pass Active
+            </span>
+          </div>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0', fontSize: '0.72rem', fontWeight: 900, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', width: '120px' }}>TICKET ID</th>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', width: '130px' }}>TICKET ID</th>
                 <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', width: '90px' }}>TABLE</th>
                 <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', width: '130px' }}>CUSTOMER</th>
                 <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', width: '95px' }}>TIME</th>
@@ -217,12 +323,39 @@ export default function ChefHistoryPage({ ordersList = [] }) {
             <tbody>
               {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ padding: '3rem 1.5rem', textAlign: 'center', color: '#94A3B8' }}>
-                    <ChefHat size={40} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
-                    <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.95rem' }}>No History Tickets Found</div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '0.2rem' }}>
-                      {searchQuery ? 'No matching tickets for your search.' : 'Dispatched tickets from the live kitchen will appear here automatically.'}
+                  <td colSpan="6" style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#94A3B8' }}>
+                    <ChefHat size={44} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
+                    <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '1rem' }}>
+                      {scopeFilter === 'MY_ORDERS' ? 'No Dispatched Tickets For You Yet' : 'No History Tickets Found'}
                     </div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '0.25rem', maxWidth: '420px', margin: '0.25rem auto 0 auto' }}>
+                      {searchQuery 
+                        ? 'No matching tickets found for your search.' 
+                        : scopeFilter === 'MY_ORDERS' 
+                          ? `Tickets claimed, cooked, and completed by ${activeChefName || 'you'} in the Live Kitchen Orders will appear here.`
+                          : 'Completed tickets dispatched from the kitchen will appear here automatically.'}
+                    </div>
+                    {scopeFilter === 'MY_ORDERS' && allKitchenHistoryOrders.length > 0 && (
+                      <div style={{ marginTop: '1rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => setScopeFilter('ALL_KITCHEN')}
+                          style={{
+                            backgroundColor: '#0F2A1D',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(15, 42, 29, 0.2)'
+                          }}
+                        >
+                          View All Kitchen Tickets ({allKitchenHistoryOrders.length})
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -231,6 +364,7 @@ export default function ChefHistoryPage({ ordersList = [] }) {
                   const ordId = `#${String(rawId).replace(/^#/, '')}`;
                   const tableDisplay = formatTableNumber(ord.table || ord.tableNumber);
                   const itemsList = Array.isArray(ord.items) ? ord.items : [];
+                  const isMine = isOrderMine(ord);
 
                   return (
                     <tr
@@ -243,9 +377,25 @@ export default function ChefHistoryPage({ ordersList = [] }) {
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
                     >
-                      {/* TICKET ID */}
+                      {/* TICKET ID & CHEF TAG */}
                       <td style={{ padding: '0.55rem 0.85rem', fontWeight: 900, color: '#0F2A1D', fontFamily: 'monospace', whiteSpace: 'nowrap', verticalAlign: 'middle', fontSize: '0.82rem' }}>
-                        {ordId}
+                        <div>{ordId}</div>
+                        <div style={{ marginTop: '0.2rem' }}>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            padding: '0.1rem 0.4rem',
+                            borderRadius: '4px',
+                            backgroundColor: isMine ? '#DCFCE7' : '#F1F5F9',
+                            color: isMine ? '#166534' : '#64748B',
+                            border: isMine ? '1px solid #86EFAC' : '1px solid #E2E8F0',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.2rem'
+                          }}>
+                            👨‍🍳 {isMine ? 'You' : (ord.chefName || 'Unassigned')}
+                          </span>
+                        </div>
                       </td>
 
                       {/* TABLE NUMBER */}

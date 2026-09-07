@@ -88,12 +88,21 @@ class OrderRepository {
       } else if (fullOrderData.total !== undefined) {
         doc.total = Number(fullOrderData.total);
       }
-
+      if (fullOrderData.chefStatus !== undefined) doc.chefStatus = String(fullOrderData.chefStatus);
+      if (fullOrderData.waiterStatus !== undefined) doc.waiterStatus = String(fullOrderData.waiterStatus);
       if (fullOrderData.chefId !== undefined) doc.chefId = String(fullOrderData.chefId);
       if (fullOrderData.chefName !== undefined) doc.chefName = String(fullOrderData.chefName);
-      if (fullOrderData.claimedAt !== undefined) doc.claimedAt = fullOrderData.claimedAt;
       if (fullOrderData.waiterId !== undefined) doc.waiterId = String(fullOrderData.waiterId);
       if (fullOrderData.waiterName !== undefined) doc.waiterName = String(fullOrderData.waiterName);
+      if (fullOrderData.tableId !== undefined) doc.tableId = String(fullOrderData.tableId);
+      if (fullOrderData.sessionId !== undefined) doc.sessionId = String(fullOrderData.sessionId);
+      if (fullOrderData.claimedAt !== undefined) doc.claimedAt = fullOrderData.claimedAt;
+      if (fullOrderData.chefAcceptedAt !== undefined) doc.chefAcceptedAt = fullOrderData.chefAcceptedAt;
+      if (fullOrderData.chefPreparingAt !== undefined) doc.chefPreparingAt = fullOrderData.chefPreparingAt;
+      if (fullOrderData.chefReadyAt !== undefined) doc.chefReadyAt = fullOrderData.chefReadyAt;
+      if (fullOrderData.waiterAcceptedAt !== undefined) doc.waiterAcceptedAt = fullOrderData.waiterAcceptedAt;
+      if (fullOrderData.waiterServingAt !== undefined) doc.waiterServingAt = fullOrderData.waiterServingAt;
+      if (fullOrderData.waiterServedAt !== undefined) doc.waiterServedAt = fullOrderData.waiterServedAt;
 
       if (fullOrderData.items && Array.isArray(fullOrderData.items)) {
         doc.items = fullOrderData.items.map((it, idx) => {

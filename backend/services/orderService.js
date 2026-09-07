@@ -57,12 +57,33 @@ class OrderService {
       payment: { $ne: 'Paid' }
     });
 
+    // Resolve Table model for tableId and assigned waiter
+    let targetTableDoc = null;
+    try {
+      targetTableDoc = await Table.findOne({
+        $or: [
+          { number: formattedTable },
+          { number: cleanNum },
+          { number: `T-${cleanNum}` },
+          { name: exactRegex },
+          { number: exactRegex }
+        ]
+      });
+    } catch (e) { }
+
     if (existingActiveOrder) {
       // Active session guestName is single source of truth! Client cannot override!
       existingActiveOrder.customer = verifiedCustomerName;
       if (activeSession) {
         existingActiveOrder.sessionId = activeSession._id.toString();
         existingActiveOrder.sessionToken = activeSession.sessionToken;
+      }
+      if (targetTableDoc) {
+        if (!existingActiveOrder.tableId) existingActiveOrder.tableId = targetTableDoc._id.toString();
+        if (!existingActiveOrder.waiterId && targetTableDoc.assignedWaiterId) {
+          existingActiveOrder.waiterId = targetTableDoc.assignedWaiterId;
+          existingActiveOrder.waiterName = targetTableDoc.assignedWaiterName || '';
+        }
       }
 
       // Append new chef notes if provided
@@ -102,6 +123,9 @@ class OrderService {
       const unservedCount = existingItems.filter(i => !i.isDelivered && !i.isReady && i.status !== 'SERVED' && i.status !== 'DELIVERED' && i.status !== 'READY').length;
       if (unservedCount > 0) {
         existingActiveOrder.status = 'Placed';
+        if (newIncomingItems.length > 0) {
+          existingActiveOrder.chefStatus = 'NEW';
+        }
       } else {
         const servedCount = existingItems.filter(i => i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED').length;
         if (servedCount > 0 && servedCount < existingItems.length) {
@@ -139,19 +163,29 @@ class OrderService {
 
     // 2. If NO active order exists, generate a new orderId and create a brand new order document
     const orderId = data.orderId || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+    const assignedWaiterId = (targetTableDoc && targetTableDoc.assignedWaiterId) || data.waiterId || '';
+    const assignedWaiterName = (targetTableDoc && targetTableDoc.assignedWaiterName) || data.waiterName || '';
+    const resolvedTableId = targetTableDoc ? targetTableDoc._id.toString() : (data.tableId || '');
 
     const orderData = {
       orderId: orderId,
       table: formattedTable,
+      tableId: resolvedTableId,
       type: (data.type === 'Takeaway' || data.type === 'Delivery') ? data.type : 'Dine-In',
       customer: verifiedCustomerName,
-      sessionId: activeSession ? activeSession._id.toString() : '',
+      sessionId: activeSession ? activeSession._id.toString() : (data.sessionId || ''),
       sessionToken: activeSession ? activeSession.sessionToken : '',
       phone: (activeSession && activeSession.phone) || data.phone || '+91 Direct QR',
       managerId: data.managerId ? String(data.managerId) : undefined,
+      chefStatus: 'NEW',
+      waiterStatus: 'PENDING',
+      chefId: '',
+      chefName: '',
+      waiterId: assignedWaiterId,
+      waiterName: assignedWaiterName,
       items: newIncomingItems,
       total: Number(data.total || data.totalAmount || 0),
-      status: (data.status && ['Placed', 'Accepted', 'Preparing', 'Ready', 'Served', 'Cancelled', 'PARTIALLY DELIVERED'].includes(data.status)) ? data.status : 'Placed',
+      status: 'Placed',
       payment: data.payment || 'Pending',
       paymentStatus: data.paymentStatus || data.payment || 'Pending',
       notes: (data.notes || data.chefNotes || data.instructions || '').trim(),
@@ -188,7 +222,9 @@ class OrderService {
             seats: 4,
             section: 'Main Dining',
             status: 'Occupied',
-            currentOrder: newOrder.orderId || newOrder._id
+            currentOrder: newOrder.orderId || newOrder._id,
+            assignedWaiterId: assignedWaiterId,
+            assignedWaiterName: assignedWaiterName
           });
         }
       } catch (tableErr) {
@@ -446,10 +482,19 @@ class OrderService {
       derivedOrderStatus = (order.status === 'Placed' || order.status === 'NEW') ? 'Placed' : 'Preparing';
     }
 
-    const updatedOrder = await orderRepository.updateStatus(order.orderId || order._id || id, derivedOrderStatus, {
+    const extraUpdates = {
       items: updatedItems,
       status: derivedOrderStatus
-    });
+    };
+    if (totalCount > 0 && deliveredCount === totalCount) {
+      extraUpdates.waiterStatus = 'SERVED';
+      extraUpdates.waiterServedAt = new Date();
+    } else if (deliveredCount > 0) {
+      extraUpdates.waiterStatus = 'SERVING';
+      extraUpdates.waiterServingAt = new Date();
+    }
+
+    const updatedOrder = await orderRepository.updateStatus(order.orderId || order._id || id, derivedOrderStatus, extraUpdates);
 
     return updatedOrder;
   }

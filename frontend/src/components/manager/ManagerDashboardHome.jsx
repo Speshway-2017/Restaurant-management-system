@@ -314,12 +314,18 @@ export default function ManagerDashboardHome({ setActiveTab }) {
         const baseTables = (dbTables || []).map(dbT => {
           const cleanT = extractDigits(dbT.number || dbT.name);
           const activeOrd = activeOrdersOnly.find(o => {
+            if (!o) return false;
+            if (dbT.currentOrder) {
+              const cleanCurrent = String(dbT.currentOrder).replace(/^#/i, '').trim();
+              const cleanOrdId = String(o.id || o.orderId || '').replace(/^#/i, '').trim();
+              if (cleanCurrent && cleanOrdId && cleanCurrent === cleanOrdId) return true;
+            }
             const oTableClean = extractDigits(o.table || o.tableNumber);
-            return oTableClean && cleanT && oTableClean === cleanT;
+            return Boolean(oTableClean && cleanT && oTableClean === cleanT);
           });
 
           if (activeOrd) {
-            const guestNameVal = activeOrd.customer || activeOrd.guestName || 'Guest Diner';
+            const guestNameVal = String(activeOrd.customer || activeOrd.guestName || activeOrd.customerName || 'Guest Diner').trim();
             const amtVal = (activeOrd.total !== undefined && activeOrd.total !== null) ? `₹${activeOrd.total}` : (activeOrd.totalAmount ? `₹${activeOrd.totalAmount}` : '₹0');
             return {
               num: dbT.number || dbT.name || `T-${cleanT}`,
