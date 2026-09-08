@@ -7,6 +7,7 @@ import {
   MessageSquare, Flame, CheckSquare, CornerDownRight
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { onSocketEvent } from '../../services/socket';
 
 export default function WaiterDashboardHome({ onNavigateTab }) {
   const [selectedOrderModal, setSelectedOrderModal] = useState(null);
@@ -53,16 +54,27 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
 
   useEffect(() => {
     fetchWaiterData();
-    const interval = setInterval(fetchWaiterData, 4000);
+    const interval = setInterval(fetchWaiterData, 3000);
     window.addEventListener('flavora_orders_updated', fetchWaiterData);
     window.addEventListener('flavora_tables_updated', fetchWaiterData);
     window.addEventListener('storage', fetchWaiterData);
+
+    const unsubWaiterAccepted = onSocketEvent('waiter_accepted', fetchWaiterData);
+    const unsubWaiterServing = onSocketEvent('waiter_serving', fetchWaiterData);
+    const unsubWaiterServed = onSocketEvent('waiter_served', fetchWaiterData);
+    const unsubOrderCreated = onSocketEvent('order_created', fetchWaiterData);
+    const unsubOrderUpdated = onSocketEvent('order_updated', fetchWaiterData);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('flavora_orders_updated', fetchWaiterData);
       window.removeEventListener('flavora_tables_updated', fetchWaiterData);
       window.removeEventListener('storage', fetchWaiterData);
+      unsubWaiterAccepted();
+      unsubWaiterServing();
+      unsubWaiterServed();
+      unsubOrderCreated();
+      unsubOrderUpdated();
     };
   }, []);
 
@@ -124,9 +136,36 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
     }
   };
 
+  // Waiter Isolation: Hide orders accepted by another waiter
+  const getSessionUser = () => {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  };
+  const sessionUser = getSessionUser();
+  const currentWaiterId = sessionUser?._id || sessionUser?.id || sessionUser?.userId || '';
+  const isManagerOrAdmin = Boolean(
+    sessionUser?.role &&
+    (sessionUser.role.toLowerCase().includes('admin') || sessionUser.role.toLowerCase().includes('manager'))
+  );
+
+  const isAcceptedByOtherWaiter = (o) => {
+    if (isManagerOrAdmin) return false;
+    if (!currentWaiterId) return false;
+    const orderWaiterId = o.waiterId ? String(o.waiterId).trim() : '';
+    if (!orderWaiterId) return false;
+    if (orderWaiterId === String(currentWaiterId).trim()) return false;
+    const isAccepted = o.waiterStatus === 'ACCEPTED' || o.waiterStatus === 'SERVING' || o.waiterStatus === 'SERVED' || Boolean(o.waiterAcceptedAt);
+    return isAccepted || Boolean(orderWaiterId && o.waiterName);
+  };
+
+  const visibleActiveOrders = activeOrders.filter(o => !isAcceptedByOtherWaiter(o));
+
   // Calculations for Waiter KPIs
-  const liveOrders = activeOrders.filter(o => o.status !== 'Completed' && o.status !== 'Cancelled');
-  const pendingOrders = activeOrders.filter(o => o.status === 'Placed' || o.status === 'Preparing');
+  const liveOrders = visibleActiveOrders.filter(o => o.status !== 'Completed' && o.status !== 'Cancelled');
+  const pendingOrders = visibleActiveOrders.filter(o => o.status === 'Placed' || o.status === 'Preparing');
   const occupiedTablesCount = tablesList.filter(t => t.status === 'Occupied' || t.isOccupied).length;
   const totalAssignedCount = tablesList.length;
 
@@ -136,8 +175,8 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
     {
       id: 'total_orders',
       label: "TOTAL ORDERS",
-      value: `${activeOrders.length} Orders`,
-      change: activeOrders.length > 0 ? "↗ Today's Orders" : "0 Orders",
+      value: `${visibleActiveOrders.length} Orders`,
+      change: visibleActiveOrders.length > 0 ? "↗ Today's Orders" : "0 Orders",
       isPositive: true,
       isHighlighted: true,
       badgeColor: "#1E4636",

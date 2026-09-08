@@ -312,6 +312,7 @@ export const api = {
   mergeTables: (primaryTableNum, secondaryTableNums) => request('/receptionist/tables/merge', { method: 'POST', body: JSON.stringify({ primaryTableNum, secondaryTableNums }) }),
   splitTables: (tableNum) => request('/receptionist/tables/split', { method: 'POST', body: JSON.stringify({ tableNum }) }),
   transferTable: (fromTableNum, toTableNum) => request('/receptionist/tables/transfer', { method: 'POST', body: JSON.stringify({ fromTableNum, toTableNum }) }),
+  vacateTable: (tableNum) => request('/receptionist/tables/vacate', { method: 'POST', body: JSON.stringify({ tableNum }) }),
   getWaitlist: () => request('/receptionist/waitlist'),
   createWaitlistToken: (data) => request('/receptionist/waitlist', { method: 'POST', body: JSON.stringify(data) }),
   callWaitlistToken: (id) => request(`/receptionist/waitlist/${id}/call`, { method: 'POST' }),
@@ -348,6 +349,15 @@ export const api = {
     body: JSON.stringify(feedbackData)
   }),
   getFeedback: () => request('/feedback'),
+  getFeedbacks: () => request('/feedback'),
+  getPublicReviews: () => request('/feedback/public'),
+  toggleFeedbackLanding: (id, showOnLanding) => request(`/feedback/${encodeURIComponent(id)}/toggle-landing`, {
+    method: 'PATCH',
+    body: JSON.stringify({ showOnLanding })
+  }),
+  deleteFeedback: (id) => request(`/feedback/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  }),
   getGuestLoyalty: (phone) => request(`/receptionist/guests?search=${encodeURIComponent(phone || '')}`),
   redeemLoyaltyPoints: (phone, points) => Promise.resolve({ success: true, redeemed: points, discount: Math.round(points * 0.5) }),
 

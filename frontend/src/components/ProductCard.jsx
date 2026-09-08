@@ -19,6 +19,8 @@ export default function ProductCard({
   category,
   quantity = 0,
   requiresQrScan = false,
+  isAddDisabled = false,
+  disabledReason = '',
   onAddToCart,
   onDecreaseQty,
   onDeleteItem
@@ -127,6 +129,24 @@ export default function ProductCard({
             >
               Scan QR to Order
             </span>
+          ) : isAddDisabled ? (
+            <button
+              type="button"
+              disabled
+              title={disabledReason || 'Table is currently unavailable for ordering.'}
+              style={{
+                fontSize: '0.74rem',
+                color: '#94A3B8',
+                fontWeight: 800,
+                backgroundColor: '#F1F5F9',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '8px',
+                border: '1.5px solid #CBD5E1',
+                cursor: 'not-allowed'
+              }}
+            >
+              {disabledReason ? disabledReason.toUpperCase() : 'UNAVAILABLE'}
+            </button>
           ) : quantity > 0 ? (
             <div className="smooth-qty-counter">
               <button
@@ -140,9 +160,11 @@ export default function ProductCard({
               <span className="smooth-qty-num">{quantity}</span>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onAddToCart && onAddToCart(id); }}
+                disabled={isAddDisabled}
+                onClick={(e) => { e.stopPropagation(); !isAddDisabled && onAddToCart && onAddToCart(id); }}
                 className="smooth-qty-btn"
-                title="Add one more"
+                title={isAddDisabled ? (disabledReason || 'Ordering locked') : "Add one more"}
+                style={{ opacity: isAddDisabled ? 0.4 : 1, cursor: isAddDisabled ? 'not-allowed' : 'pointer' }}
               >
                 <Plus size={13} color="#1E4636" />
               </button>

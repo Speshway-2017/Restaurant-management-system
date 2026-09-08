@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Table2, Plus, QrCode, Eye, EyeOff, CheckCircle2, Users, Clock, RefreshCw, Search, X, Printer, Check, Sparkles, Link2, UploadCloud, Image as ImageIcon, Edit, Trash2, Clipboard, MoreVertical } from 'lucide-react';
 import { api } from '../../services/api';
 import { getTableMenuUrl } from '../../utils/qrUrlHelper';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 export default function AdminTablesPage() {
+  const { brandName } = useRestaurantBranding ? useRestaurantBranding() : { brandName: 'Flavora Kitchen' };
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
   const [selectedZoneFilter, setSelectedZoneFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -204,6 +206,354 @@ export default function AdminTablesPage() {
     return getTableMenuUrl(tbl.num || 'T-01');
   };
 
+  // Print Single Table Standee
+  const handlePrintSingleQr = (tbl) => {
+    const targetTable = tbl || selectedQrTable;
+    if (!targetTable) return;
+    const targetLink = getTableMenuUrl(targetTable.num);
+    const qrSrc = targetTable.customQrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=H&data=${encodeURIComponent(targetLink)}`;
+
+    const restName = brandName || 'Flavora Kitchen';
+    const printWindow = window.open('', '_blank', 'width=750,height=900');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print Standee - Table ${targetTable.num}</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 12mm;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              background-color: #f8fafc;
+              padding: 30px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 90vh;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .standee-card {
+              width: 360px;
+              background: #ffffff;
+              border: 3.5px solid #0F2A1D;
+              border-radius: 28px;
+              padding: 32px 24px;
+              text-align: center;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            }
+            .brand-title {
+              font-size: 22px;
+              font-weight: 900;
+              color: #0F2A1D;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              margin-bottom: 2px;
+            }
+            .brand-subtitle {
+              font-size: 11px;
+              font-weight: 700;
+              color: #166534;
+              text-transform: uppercase;
+              letter-spacing: 0.12em;
+              margin-bottom: 14px;
+            }
+            .table-badge {
+              display: inline-block;
+              background: #0F2A1D;
+              color: #ffffff;
+              font-size: 26px;
+              font-weight: 900;
+              padding: 6px 24px;
+              border-radius: 9999px;
+              letter-spacing: 1px;
+            }
+            .zone-label {
+              font-size: 12px;
+              color: #64748B;
+              font-weight: 700;
+              margin-top: 6px;
+              margin-bottom: 16px;
+            }
+            .qr-box {
+              width: 220px;
+              height: 220px;
+              margin: 0 auto 16px;
+              border: 2px dashed #0F2A1D;
+              border-radius: 20px;
+              padding: 10px;
+              background: #ffffff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .qr-code-img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .action-heading {
+              font-size: 16px;
+              font-weight: 900;
+              color: #0F2A1D;
+              letter-spacing: 0.05em;
+              margin-bottom: 6px;
+            }
+            .action-sub {
+              font-size: 12px;
+              color: #475569;
+              line-height: 1.45;
+              margin-bottom: 16px;
+              padding: 0 10px;
+            }
+            .standee-footer {
+              border-top: 1.5px dashed #CBD5E1;
+              padding-top: 12px;
+              font-size: 11px;
+              font-weight: 700;
+              color: #166534;
+              display: flex;
+              justify-content: center;
+              gap: 8px;
+            }
+            @media print {
+              body {
+                background: none;
+                padding: 0;
+              }
+              .standee-card {
+                box-shadow: none;
+                border: 3px solid #0F2A1D;
+                margin: 0 auto;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="standee-card">
+            <div class="brand-title">${restName}</div>
+            <div class="brand-subtitle">Smart Contactless Dining</div>
+            
+            <div class="table-badge">${targetTable.num}</div>
+            <div class="zone-label">${targetTable.zone || 'Main Dining'} Zone</div>
+
+            <div class="qr-box">
+              <img class="qr-code-img" src="${qrSrc}" alt="QR Code ${targetTable.num}" />
+            </div>
+
+            <div class="action-heading">SCAN TO ORDER &amp; PAY</div>
+            <div class="action-sub">Open phone camera or Google Pay / PhonePe / Paytm to view digital menu &amp; place orders</div>
+
+            <div class="standee-footer">
+              <span>⚡ Fast Kitchen Dispatch</span>
+              <span>•</span>
+              <span>🔒 100% Secure Checkout</span>
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // Print All Table Standees
+  const handlePrintAllQrs = () => {
+    if (!Array.isArray(tablesList) || tablesList.length === 0) return;
+    const restName = brandName || 'Flavora Kitchen';
+    const printWindow = window.open('', '_blank', 'width=850,height=950');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const cardsHtml = tablesList.map(tbl => {
+      const targetLink = getTableMenuUrl(tbl.num);
+      const qrSrc = tbl.customQrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=360x360&ecc=H&data=${encodeURIComponent(targetLink)}`;
+      return `
+        <div class="standee-wrapper">
+          <div class="standee-card">
+            <div class="brand-title">${restName}</div>
+            <div class="brand-subtitle">Smart Contactless Dining</div>
+            
+            <div class="table-badge">${tbl.num}</div>
+            <div class="zone-label">${tbl.zone || 'Main Dining'} Zone</div>
+
+            <div class="qr-box">
+              <img class="qr-code-img" src="${qrSrc}" alt="QR Code ${tbl.num}" />
+            </div>
+
+            <div class="action-heading">SCAN TO ORDER &amp; PAY</div>
+            <div class="action-sub">Scan with camera or UPI app to order &amp; pay</div>
+
+            <div class="standee-footer">
+              <span>⚡ Fast Dispatch</span>
+              <span>•</span>
+              <span>🔒 Contactless</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('\n');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print All Table QR Standees</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              background-color: #f8fafc;
+              padding: 15px;
+              display: flex;
+              flex-wrap: wrap;
+              gap: 20px;
+              justify-content: center;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .standee-wrapper {
+              page-break-inside: avoid;
+            }
+            .standee-card {
+              width: 320px;
+              background: #ffffff;
+              border: 3px solid #0F2A1D;
+              border-radius: 24px;
+              padding: 24px 18px;
+              text-align: center;
+              box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            }
+            .brand-title {
+              font-size: 19px;
+              font-weight: 900;
+              color: #0F2A1D;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+            }
+            .brand-subtitle {
+              font-size: 11px;
+              font-weight: 700;
+              color: #166534;
+              text-transform: uppercase;
+              letter-spacing: 0.1em;
+              margin-bottom: 10px;
+            }
+            .table-badge {
+              display: inline-block;
+              background: #0F2A1D;
+              color: #ffffff;
+              font-size: 24px;
+              font-weight: 900;
+              padding: 5px 18px;
+              border-radius: 9999px;
+              letter-spacing: 1px;
+            }
+            .zone-label {
+              font-size: 11px;
+              color: #64748B;
+              font-weight: 700;
+              margin-top: 4px;
+              margin-bottom: 12px;
+            }
+            .qr-box {
+              width: 190px;
+              height: 190px;
+              margin: 0 auto 12px;
+              border: 2px dashed #0F2A1D;
+              border-radius: 16px;
+              padding: 6px;
+              background: #ffffff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .qr-code-img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .action-heading {
+              font-size: 14px;
+              font-weight: 900;
+              color: #0F2A1D;
+              letter-spacing: 0.05em;
+              margin-bottom: 4px;
+            }
+            .action-sub {
+              font-size: 11px;
+              color: #475569;
+              line-height: 1.35;
+              margin-bottom: 12px;
+              padding: 0 6px;
+            }
+            .standee-footer {
+              border-top: 1.5px dashed #CBD5E1;
+              padding-top: 8px;
+              font-size: 10px;
+              font-weight: 700;
+              color: #166534;
+              display: flex;
+              justify-content: center;
+              gap: 8px;
+            }
+            @media print {
+              body {
+                background: none;
+                padding: 0;
+              }
+              .standee-card {
+                box-shadow: none;
+                border: 2.5px solid #0F2A1D;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          ${cardsHtml}
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handleAddTableSubmit = (e) => {
     e.preventDefault();
     const finalZone = isCustomZone ? customZoneName.trim() : (newZone ? newZone.trim() : '');
@@ -318,6 +668,16 @@ export default function AdminTablesPage() {
           <p className="admin-page-subtitle">Configure table seating, floor layout zones, and active customer order QR codes.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={handlePrintAllQrs}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', borderColor: '#CBD5E1', color: '#0F2A1D', fontWeight: 700 }}
+            title="Print standees for all tables at once"
+          >
+            <Printer size={16} />
+            <span>Print All QRs</span>
+          </button>
           <button
             type="button"
             className="btn btn-primary"
@@ -596,14 +956,24 @@ export default function AdminTablesPage() {
                       </button>
                     )}
 
-                    <button
-                      type="button"
-                      className="table-card-dropdown-item"
-                      onClick={() => handleOpenEditModal(tbl)}
-                    >
-                      <Edit size={14} color="#1E4636" />
-                      <span>Edit Table</span>
-                    </button>
+                      <button
+                        type="button"
+                        className="table-card-dropdown-item"
+                        onClick={() => handlePrintSingleQr(tbl)}
+                        style={{ color: '#166534', fontWeight: 700 }}
+                      >
+                        <Printer size={14} color="#166534" />
+                        <span>Print QR Standee</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="table-card-dropdown-item"
+                        onClick={() => handleOpenEditModal(tbl)}
+                      >
+                        <Edit size={14} color="#1E4636" />
+                        <span>Edit Table</span>
+                      </button>
 
                     <div style={{ height: '1px', backgroundColor: '#F1F5F9', margin: '0.25rem 0' }} />
 
@@ -878,23 +1248,20 @@ export default function AdminTablesPage() {
               <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
                 <button
                   type="button"
-                  className="btn btn-outline"
-                  onClick={() => {
-                    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getTableQrRedirectUrl(selectedQrTable))}`;
-                    window.open(qrUrl, '_blank');
-                  }}
+                  className="btn btn-primary"
+                  onClick={() => handlePrintSingleQr(selectedQrTable)}
+                  style={{ backgroundColor: '#166534', borderColor: '#166534', display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800 }}
                 >
                   <Printer size={16} />
                   <span>Print Standee</span>
                 </button>
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn btn-outline"
                   onClick={() => {
                     navigator.clipboard.writeText(getTableQrRedirectUrl(selectedQrTable));
                     showToast(`✓ Table ${selectedQrTable.num} order link copied!`);
                   }}
-                  style={{ backgroundColor: '#1E4636', borderColor: '#1E4636' }}
                 >
                   <Clipboard size={16} />
                   <span>Copy Ordering Link</span>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Table2, Users, Clock, Plus, ArrowRightLeft, GitMerge, Split, CheckCircle2,
-  X, AlertTriangle, Sparkles, Search, ChevronDown, Check, ShieldCheck
+  X, AlertTriangle, Sparkles, Search, ChevronDown, Check, ShieldCheck, UserMinus
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { groupTablesForFloorPlan } from '../../utils/floorPlanUtils';
@@ -108,6 +108,21 @@ export default function ReceptionistFloorPlanPage() {
         }
       } catch (err) {
         alert(`Split failed: ${err.message}`);
+      }
+    }
+  };
+
+  const handleVacateSubmit = async (tableNum) => {
+    if (window.confirm(`Are you sure you want to vacate table ${tableNum} and end its active dining session?`)) {
+      try {
+        const res = await api.vacateTable(tableNum);
+        if (res.success) {
+          showToast(`🧹 Table ${tableNum} vacated successfully!`);
+          setSelectedTable(null);
+          fetchFloorPlan();
+        }
+      } catch (err) {
+        alert(`Vacate failed: ${err.message}`);
       }
     }
   };
@@ -392,6 +407,17 @@ export default function ReceptionistFloorPlanPage() {
                     >
                       <Split size={16} />
                       <span>Unmerge / Split Tables</span>
+                    </button>
+                  )}
+
+                  {/* Vacate Table Button */}
+                  {(selectedTable.status === 'Occupied' || selectedTable.activeSession) && (
+                    <button
+                      onClick={() => handleVacateSubmit(selectedTable.primaryTableNumber || selectedTable.number)}
+                      style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid #FECACA', backgroundColor: '#FFF1F2', color: '#BE123C', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                    >
+                      <UserMinus size={16} />
+                      <span>Vacate / Free Table</span>
                     </button>
                   )}
                 </div>

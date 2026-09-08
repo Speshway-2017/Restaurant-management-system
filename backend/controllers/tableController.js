@@ -143,9 +143,12 @@ const updateTableByNumber = async (req, res) => {
     if (req.body?.assignedWaiterName !== undefined) updateData.assignedWaiterName = req.body.assignedWaiterName;
     if (status === 'Cleaning') {
       updateData.cleaningUntil = new Date(Date.now() + 10 * 60 * 1000);
+      updateData.activeSessionId = null;
+      updateData.currentOrder = '';
     } else if (status === 'Available') {
       updateData.cleaningUntil = null;
       updateData.currentOrder = '';
+      updateData.activeSessionId = null;
     }
 
     let updated = await Table.findOneAndUpdate(
@@ -163,6 +166,22 @@ const updateTableByNumber = async (req, res) => {
         status: status,
         currentOrder: status === 'Available' ? '' : currentOrder
       });
+    }
+
+    if (updated && (status === 'Available' || status === 'Cleaning')) {
+      const TableSession = require('../models/TableSession');
+      const allNums = [cleanNum, `T-${cleanNum.padStart(2, '0')}`, rawNum, updated.number, ...(updated.mergedWith || [])];
+      await TableSession.updateMany(
+        {
+          $or: [
+            { tableNum: { $in: allNums } },
+            { tableNum: exactRegex },
+            { mergedTableNums: { $in: allNums } }
+          ],
+          status: 'ACTIVE'
+        },
+        { status: 'CLOSED', closedAt: new Date() }
+      );
     }
 
     res.json(updated);

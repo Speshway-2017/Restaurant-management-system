@@ -33,7 +33,14 @@ export default function CustomerMobileMenuView({
   outOfStockItems = [],
   placedTableOrders = [],
   isClosedNow = false,
-  statusDetails = {}
+  statusDetails = {},
+  isTableBillGenerated = false,
+  currentTableStatus = 'Available',
+  tableCleaningInfo = null,
+  isAddDisabled = false,
+  disabledReason = '',
+  confirmedDinerName = '',
+  setIsOrderTrackingOpen = null
 }) {
   return (
     <div className="customer-mobile-menu-page" style={{ position: 'relative', backgroundColor: '#F8FAFC', color: '#0F172A', paddingBottom: '5rem', minHeight: '100vh' }}>
@@ -56,14 +63,39 @@ export default function CustomerMobileMenuView({
             boxShadow: '0 4px 14px rgba(15, 42, 29, 0.22)'
           }}
         >
-          {/* Left: Table badge & active guest session label */}
+          {/* Left: Table badge & active real-time status */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, overflow: 'hidden' }}>
             <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
               {activeTableSession && Array.isArray(activeTableSession.mergedTableNums) && activeTableSession.mergedTableNums.length > 0
                 ? `Table ${tableNum} + ${activeTableSession.mergedTableNums.join(', ')}`
                 : `Table ${tableNum}`}
             </span>
-            
+
+            {confirmedDinerName && (
+              <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #86EFAC', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}>
+                <span>👤</span>
+                <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{confirmedDinerName}</span>
+              </span>
+            )}
+
+            {/* Real-Time Table Status Pill */}
+            {currentTableStatus === 'Cleaning' || tableCleaningInfo?.isCleaning ? (
+              <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #FCD34D' }}>
+                🧹 Cleaning
+              </span>
+            ) : currentTableStatus === 'Order in Progress' ? (
+              <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #BFDBFE' }}>
+                ⏳ In Progress
+              </span>
+            ) : (currentTableStatus === 'Bill Generated' || isTableBillGenerated) ? (
+              <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #FDE68A' }}>
+                🧾 Billing
+              </span>
+            ) : (
+              <span style={{ backgroundColor: '#DCFCE7', color: '#166534', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #86EFAC' }}>
+                🟢 Available
+              </span>
+            )}
           </div>
 
           {/* Right: Orders & Cart button */}
@@ -71,7 +103,7 @@ export default function CustomerMobileMenuView({
             {placedTableOrders.length > 0 && (
               <button
                 type="button"
-                onClick={() => setIsCustomerOrdersModalOpen(true)}
+                onClick={() => (setIsOrderTrackingOpen ? setIsOrderTrackingOpen(true) : setIsCustomerOrdersModalOpen(true))}
                 style={{
                   backgroundColor: '#F2C14E',
                   color: '#0F2A1D',
@@ -126,7 +158,47 @@ export default function CustomerMobileMenuView({
         </div>
       )}
 
-     
+      {/* 2a. Table Cleaning Notice Banner */}
+      {tableNum && (currentTableStatus === 'Cleaning' || tableCleaningInfo?.isCleaning) && (
+        <div style={{ backgroundColor: '#FEF3C7', border: '1.5px solid #F59E0B', padding: '0.75rem 1rem', margin: '0.6rem 0.85rem 0 0.85rem', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '0.65rem', boxShadow: '0 2px 8px rgba(217, 119, 6, 0.12)' }}>
+          <span style={{ fontSize: '1.4rem' }}>🧹</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.84rem', color: '#92400E', fontWeight: 900 }}>
+              Table {tableNum} is Currently Unavailable — Cleaning & Sanitization
+            </div>
+            <div style={{ fontSize: '0.74rem', color: '#B45309', marginTop: '0.2rem', fontWeight: 600 }}>
+              {tableCleaningInfo?.remainingSec > 0
+                ? `⏱️ Est. remaining: ${Math.floor(tableCleaningInfo.remainingSec / 60)}m ${tableCleaningInfo.remainingSec % 60}s • Adding dishes will unlock once cleaning is complete.`
+                : 'Sanitization in progress. Adding dishes is disabled until the table is marked Available.'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2b. Table Order in Progress Banner */}
+      {tableNum && currentTableStatus === 'Order in Progress' && (
+        <div style={{ backgroundColor: '#EFF6FF', border: '1.5px solid #60A5FA', padding: '0.75rem 1rem', margin: '0.6rem 0.85rem 0 0.85rem', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '0.65rem', boxShadow: '0 2px 8px rgba(37, 99, 235, 0.1)' }}>
+          <span style={{ fontSize: '1.4rem' }}>⏳</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.84rem', color: '#1E40AF', fontWeight: 900 }}>
+              Table {tableNum} — Order in Progress
+            </div>
+            <div style={{ fontSize: '0.74rem', color: '#2563EB', marginTop: '0.2rem', fontWeight: 600 }}>
+              Dishes are being prepared or served. You can continue adding dishes to your order until your bill is generated.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2c. Bill Generated Banner */}
+      {tableNum && (currentTableStatus === 'Bill Generated' || isTableBillGenerated) && (
+        <div style={{ backgroundColor: '#FEF3C7', border: '1.5px solid #FCD34D', padding: '0.65rem 0.9rem', margin: '0.6rem 0.85rem 0 0.85rem', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+          <Clock size={18} color="#D97706" />
+          <div style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: 800 }}>
+            Bill has been generated for Table {tableNum}. Additional items cannot be placed.
+          </div>
+        </div>
+      )}
 
       {/* 4. Search & Filter Bar */}
       <section style={{ backgroundColor: '#FFFFFF', padding: '0.85rem', borderBottom: '1px solid #E2E8F0', sticky: 'top', top: tableNum ? '46px' : 0, zIndex: 980 }}>
@@ -384,6 +456,37 @@ export default function CustomerMobileMenuView({
                           <span style={{ fontSize: '0.68rem', color: '#94A3B8', fontWeight: 700, backgroundColor: '#F1F5F9', padding: '0.25rem 0.5rem', borderRadius: '6px' }}>
                             Scan QR
                           </span>
+                        ) : isAddDisabled ? (
+                          <button
+                            type="button"
+                            disabled
+                            title={
+                              disabledReason || (
+                                (currentTableStatus === 'Cleaning' || tableCleaningInfo?.isCleaning)
+                                  ? `Table ${tableNum} is currently unavailable due to cleaning & sanitization.`
+                                  : isTableBillGenerated || currentTableStatus === 'Bill Generated'
+                                  ? `Bill has already been generated for Table ${tableNum}. Additional items cannot be added.`
+                                  : 'Table is currently unavailable.'
+                              )
+                            }
+                            style={{
+                              backgroundColor: '#F1F5F9',
+                              color: '#94A3B8',
+                              border: '1.5px solid #CBD5E1',
+                              borderRadius: '8px',
+                              padding: '0.35rem 0.65rem',
+                              fontWeight: 800,
+                              fontSize: '0.72rem',
+                              cursor: 'not-allowed',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {currentTableStatus === 'Cleaning' || tableCleaningInfo?.isCleaning
+                              ? 'CLEANING'
+                              : isTableBillGenerated || currentTableStatus === 'Bill Generated'
+                              ? 'BILL GEN'
+                              : 'LOCKED'}
+                          </button>
                         ) : qty > 0 ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.2rem 0.45rem', borderRadius: '8px' }}>
                             <button
@@ -396,8 +499,9 @@ export default function CustomerMobileMenuView({
                             <span style={{ fontWeight: 800, fontSize: '0.82rem', minWidth: '16px', textAlign: 'center' }}>{qty}</span>
                             <button
                               type="button"
-                              onClick={() => handleAddToCart(item.id)}
-                              style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '1px' }}
+                              disabled={isAddDisabled}
+                              onClick={() => !isAddDisabled && handleAddToCart(item.id)}
+                              style={{ background: 'none', border: 'none', color: isAddDisabled ? '#94A3B8' : '#FFFFFF', cursor: isAddDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', padding: '1px' }}
                             >
                               <Plus size={13} />
                             </button>

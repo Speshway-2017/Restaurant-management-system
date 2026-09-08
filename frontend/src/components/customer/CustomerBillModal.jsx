@@ -11,6 +11,7 @@ export default function CustomerBillModal({
   tableNum,
   onClose,
   onPaymentSuccess,
+  onOpenRating,
   appliedCoupon,
   setAppliedCoupon,
   brandSettings = {}
@@ -361,7 +362,7 @@ export default function CustomerBillModal({
               </div>
               <div>
                 <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#86EFAC', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Live Running Bill • Table {tableNum || activeOrder?.table || 'T-01'}
+                  Live Running Bill • Table {tableNum || activeOrder?.table || 'T-01'}{activeOrder?.customer && activeOrder.customer !== 'Guest Diner' && activeOrder.customer !== 'Guest' ? ` • 👤 ${activeOrder.customer}` : ''}
                 </div>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#FFFFFF', margin: 0, lineHeight: 1.2 }}>
                   Billing & Settlement
@@ -518,6 +519,38 @@ export default function CustomerBillModal({
                   <Share2 size={16} /> Share Tax Invoice
                 </button>
               </div>
+
+              {/* Rate Experience CTA Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenRating) {
+                    onOpenRating();
+                  } else {
+                    window.dispatchEvent(new CustomEvent('flavora_open_rating_modal', { detail: { orderId: activeOrder?.orderId || activeOrder?._id } }));
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  marginTop: '0.85rem',
+                  padding: '0.9rem',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  fontWeight: 900,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 8px 18px -3px rgba(217, 119, 6, 0.35)',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                ⭐ Rate Your Dining Experience
+              </button>
             </div>
           ) : (
             <div>

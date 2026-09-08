@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   ChevronLeft, ChevronRight, Utensils, Heart,
   CheckCircle2, Sparkles, Tag, Flame, Clock, QrCode, Calendar, LogIn, Image, Zap, ShieldCheck,
-  Award, ArrowRight, Play, Compass, ChefHat, Eye
+  Award, ArrowRight, Play, Compass, ChefHat, Eye, Star
 } from 'lucide-react';
 import { api } from '../services/api';
 import ProductCard from '../components/ProductCard';
@@ -19,6 +19,27 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
   const [activeCategory, setActiveCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, isHovered: false });
+  const [publicReviews, setPublicReviews] = useState([]);
+
+  useEffect(() => {
+    const fetchLandingReviews = async () => {
+      try {
+        const data = await api.getPublicReviews();
+        if (Array.isArray(data)) {
+          setPublicReviews(data);
+        }
+      } catch (e) {
+        console.warn('Could not fetch public reviews:', e);
+      }
+    };
+    fetchLandingReviews();
+    window.addEventListener('flavora_landing_reviews_updated', fetchLandingReviews);
+    window.addEventListener('storage', fetchLandingReviews);
+    return () => {
+      window.removeEventListener('flavora_landing_reviews_updated', fetchLandingReviews);
+      window.removeEventListener('storage', fetchLandingReviews);
+    };
+  }, []);
 
   const [settings, setSettings] = useState(() => {
     try {
@@ -1007,39 +1028,123 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
           </div>
 
           {/* SmoothUI Infinite Marquee Carousel Banner */}
-          <InfiniteSlider gap={24} speed={35} speedOnHover={0}>
-            <div className="card" style={{ width: '380px', padding: '1.75rem', borderRadius: '16px', background: '#FFFFFF', border: '1px solid rgba(15, 42, 29, 0.08)', margin: 0, boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)' }}>
-              <p className="text-body" style={{ color: '#4A5568', fontStyle: 'italic', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.25rem' }}>
-                "The instant QR menu transformed our Friday night table turnaround. Guests love ordering appetizers directly without waiting for waiters."
-              </p>
-              <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.95rem' }}>Chef Ranveer Brar</div>
-              <div style={{ fontSize: '0.8rem', color: '#718096' }}>Culinary Director, Mumbai</div>
-            </div>
+          {(() => {
+            const STATIC_REVIEWS = [
+              {
+                id: 'static-1',
+                name: 'Chef Ranveer Brar',
+                role: 'Culinary Director, Mumbai',
+                quote: 'The instant QR menu transformed our Friday night table turnaround. Guests love ordering appetizers directly without waiting for waiters.',
+                rating: 5,
+                isVerified: false
+              },
+              {
+                id: 'static-2',
+                name: 'Ananya Sen',
+                role: 'Operations Manager, Bengaluru',
+                quote: 'KDS dark mode display in the kitchen eliminated all ticket lost issues. Food reaches guests in less than 12 minutes!',
+                rating: 5,
+                isVerified: false
+              },
+              {
+                id: 'static-3',
+                name: 'Vikram Malhotra',
+                role: 'Restaurant Owner, Delhi NCR',
+                quote: 'Automated CGST/SGST 5% billing and Razorpay UPI settlements save our accounting team 15 hours every week.',
+                rating: 5,
+                isVerified: false
+              },
+              {
+                id: 'static-4',
+                name: 'Priya Verma',
+                role: 'General Manager, Hyderabad',
+                quote: 'Hyderabadi Dum Biryani and clay tandoor starters bring 400+ guests every single weekend to our flagship branch.',
+                rating: 5,
+                isVerified: false
+              }
+            ];
 
-            <div className="card" style={{ width: '380px', padding: '1.75rem', borderRadius: '16px', background: '#FFFFFF', border: '1px solid rgba(15, 42, 29, 0.08)', margin: 0, boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)' }}>
-              <p className="text-body" style={{ color: '#4A5568', fontStyle: 'italic', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.25rem' }}>
-                "KDS dark mode display in the kitchen eliminated all ticket lost issues. Food reaches guests in less than 12 minutes!"
-              </p>
-              <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.95rem' }}>Ananya Sen</div>
-              <div style={{ fontSize: '0.8rem', color: '#718096' }}>Operations Manager, Bengaluru</div>
-            </div>
+            const customerReviews = (publicReviews || []).map(r => ({
+              id: r._id,
+              name: r.customerName || 'Verified Guest',
+              role: r.table ? `Dine-In • Table ${r.table}` : 'Verified Diner',
+              quote: r.comments || 'Exceptional taste and prompt hospitality! Highly recommend dining here.',
+              rating: Number(r.overallRating) || 5,
+              isVerified: true,
+              date: r.createdAt
+            }));
 
-            <div className="card" style={{ width: '380px', padding: '1.75rem', borderRadius: '16px', background: '#FFFFFF', border: '1px solid rgba(15, 42, 29, 0.08)', margin: 0, boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)' }}>
-              <p className="text-body" style={{ color: '#4A5568', fontStyle: 'italic', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.25rem' }}>
-                "Automated CGST/SGST 5% billing and Razorpay UPI settlements save our accounting team 15 hours every week."
-              </p>
-              <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.95rem' }}>Vikram Malhotra</div>
-              <div style={{ fontSize: '0.8rem', color: '#718096' }}>Restaurant Owner, Delhi NCR</div>
-            </div>
+            const allTestimonials = customerReviews.length > 0
+              ? [...customerReviews, ...STATIC_REVIEWS]
+              : STATIC_REVIEWS;
 
-            <div className="card" style={{ width: '380px', padding: '1.75rem', borderRadius: '16px', background: '#FFFFFF', border: '1px solid rgba(15, 42, 29, 0.08)', margin: 0, boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)' }}>
-              <p className="text-body" style={{ color: '#4A5568', fontStyle: 'italic', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.25rem' }}>
-                "Hyderabadi Dum Biryani and clay tandoor starters bring 400+ guests every single weekend to our flagship branch."
-              </p>
-              <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.95rem' }}>Priya Verma</div>
-              <div style={{ fontSize: '0.8rem', color: '#718096' }}>General Manager, Hyderabad</div>
-            </div>
-          </InfiniteSlider>
+            return (
+              <InfiniteSlider gap={24} speed={35} speedOnHover={0}>
+                {allTestimonials.map((t, idx) => (
+                  <div
+                    key={t.id || idx}
+                    className="card"
+                    style={{
+                      width: '380px',
+                      padding: '1.75rem',
+                      borderRadius: '20px',
+                      background: '#FFFFFF',
+                      border: t.isVerified ? '1.5px solid #86EFAC' : '1px solid rgba(15, 42, 29, 0.08)',
+                      margin: 0,
+                      boxShadow: t.isVerified ? '0 8px 24px rgba(22, 101, 52, 0.08)' : '0 4px 16px rgba(0, 0, 0, 0.04)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                        <div style={{ display: 'flex', gap: '3px' }}>
+                          {[...Array(t.rating || 5)].map((_, i) => (
+                            <Star key={i} size={15} color="#F59E0B" fill="#F59E0B" />
+                          ))}
+                        </div>
+                        {t.isVerified && (
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            backgroundColor: '#DCFCE7',
+                            color: '#15803D',
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '9999px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}>
+                            <CheckCircle2 size={12} /> Verified Diner
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-body" style={{ color: '#334155', fontStyle: 'italic', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '1.25rem' }}>
+                        "{t.quote}"
+                      </p>
+                    </div>
+
+                    <div>
+                      <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.95rem' }}>
+                        {t.name}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', gap: '0.35rem', marginTop: '0.15rem' }}>
+                        <span>{t.role}</span>
+                        {t.date && (
+                          <>
+                            <span>•</span>
+                            <span>{new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </InfiniteSlider>
+            );
+          })()}
         </div>
       </section>
 

@@ -3,7 +3,8 @@ import { UtensilsCrossed, Clock, Receipt, Sparkles } from 'lucide-react';
 
 export default function CustomerBottomNav({
   activeTab,
-  onSelectTab
+  onSelectTab,
+  activeOrderCount = 0
 }) {
   return (
     <div className="customer-bottom-nav">
@@ -29,7 +30,31 @@ export default function CustomerBottomNav({
           color: activeTab === 'orders' ? '#166534' : '#64748B'
         }}
       >
-        <Clock size={20} color={activeTab === 'orders' ? '#166534' : '#64748B'} />
+        <div style={{ position: 'relative', display: 'inline-flex' }}>
+          <Clock size={20} color={activeTab === 'orders' ? '#166534' : '#64748B'} />
+          {activeOrderCount > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: '-5px',
+              right: '-9px',
+              backgroundColor: '#166534',
+              color: '#FFFFFF',
+              fontSize: '0.62rem',
+              fontWeight: 900,
+              minWidth: '16px',
+              height: '16px',
+              borderRadius: '9999px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0 3px',
+              border: '1.5px solid #FFFFFF',
+              boxShadow: '0 2px 5px rgba(22, 101, 52, 0.25)'
+            }}>
+              {activeOrderCount}
+            </span>
+          )}
+        </div>
         <span className="customer-bottom-nav-label" style={{ fontWeight: activeTab === 'orders' ? 800 : 600 }}>
           Live Order
         </span>

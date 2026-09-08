@@ -13,6 +13,7 @@ export default function CustomerEngagementModal({
   const [selectedTab, setSelectedTab] = useState(activeTab);
 
   // 1. Rating State
+  const [customerName, setCustomerName] = useState(activeOrder?.customer || '');
   const [foodRating, setFoodRating] = useState(5);
   const [serviceRating, setServiceRating] = useState(5);
   const [ambienceRating, setAmbienceRating] = useState(5);
@@ -39,10 +40,11 @@ export default function CustomerEngagementModal({
     e.preventDefault();
     setSubmittingFeedback(true);
     try {
+      const orderKey = activeOrder?.orderId || activeOrder?._id || '';
       await api.submitFeedback({
-        orderId: activeOrder?.orderId || activeOrder?._id || '',
+        orderId: orderKey,
         table: tableNum || activeOrder?.table || 'Dine-In',
-        customerName: activeOrder?.customer || 'Guest Diner',
+        customerName: customerName.trim() || activeOrder?.customer || 'Guest Diner',
         phone: activeOrder?.phone || '',
         foodRating,
         serviceRating,
@@ -50,7 +52,13 @@ export default function CustomerEngagementModal({
         overallRating,
         comments
       });
+      if (orderKey) {
+        sessionStorage.setItem(`flavora_rated_${orderKey}`, 'true');
+      }
       setFeedbackSubmitted(true);
+      window.dispatchEvent(new CustomEvent('flavora_feedback_submitted', {
+        detail: { orderId: orderKey }
+      }));
     } catch (err) {
       setFeedbackSubmitted(true); // Fallback so guest gets confirmation
     } finally {
@@ -259,6 +267,20 @@ export default function CustomerEngagementModal({
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F2A1D', marginBottom: '1rem' }}>
                   Rate Your Dining Experience
                 </h3>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Your Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Priya Sharma"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    style={{ width: '100%', padding: '0.65rem 0.75rem', borderRadius: '12px', border: '1.5px solid #CBD5E1', fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+
                 {renderStarSelector(foodRating, setFoodRating, 'Food Quality & Taste')}
                 {renderStarSelector(serviceRating, setServiceRating, 'Waiter & Service Speed')}
                 {renderStarSelector(ambienceRating, setAmbienceRating, 'Atmosphere & Cleanliness')}

@@ -4,7 +4,7 @@ import {
   Users, Clock, Boxes, Ticket, BarChart3, Receipt, Settings, ShieldCheck,
   Building2, FileText, Search, Bell, ChevronDown, LogOut, Menu, X, ArrowLeft,
   CheckCircle2, Plus, Sparkles, Filter, RefreshCw, User, ChevronRight, Camera,
-  Globe
+  Globe, Star
 } from 'lucide-react';
 import PowerOffSlide from '../PowerOffSlide';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
@@ -24,6 +24,7 @@ import AdminProfilePage from './AdminProfilePage';
 import AdminBlogsPage from './AdminBlogsPage';
 import AdminGalleryPage from './AdminGalleryPage';
 import AdminPublicPagesPage from './AdminPublicPagesPage';
+import AdminReviewsPage from './AdminReviewsPage';
 
 const PATH_TO_TAB_MAP = {
   '/admin': 'dashboard',
@@ -44,6 +45,8 @@ const PATH_TO_TAB_MAP = {
   '/admin/public-pages': 'public-pages',
   '/admin/public': 'public-pages',
   '/admin/pages': 'public-pages',
+  '/admin/reviews': 'reviews',
+  '/admin/feedback': 'reviews',
   '/admin/settings': 'settings',
   '/admin/tables': 'tables',
   '/admin/reservations': 'reservations',
@@ -60,6 +63,7 @@ const TAB_TO_PATH_MAP = {
   'coupons': '/admin/coupons',
   'analytics': '/admin/analytics',
   'payments': '/admin/payments',
+  'reviews': '/admin/reviews',
   'public-pages': '/admin/public-pages',
   'settings': '/admin/settings',
   'tables': '/admin/tables',
@@ -262,6 +266,7 @@ export default function AdminLayout({ setActivePage }) {
     { id: 'coupons', label: 'Loyalty & Coupons', icon: Ticket },
     { id: 'analytics', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'payments', label: 'Payments & Settlements', icon: Receipt },
+    { id: 'reviews', label: 'Customer Reviews', icon: Star },
     { id: 'public-pages', label: 'Public Pages', icon: Globe },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -280,6 +285,7 @@ export default function AdminLayout({ setActivePage }) {
       case 'coupons': return 'Loyalty & Coupons';
       case 'analytics': return 'Reports & Analytics';
       case 'payments': return 'Payments & Settlements';
+      case 'reviews': return 'Customer Reviews & Feedback';
       case 'profile': return 'My Profile';
       case 'settings':
       case 'settings-profile':
@@ -317,6 +323,8 @@ export default function AdminLayout({ setActivePage }) {
         return <AdminAnalyticsPage setActiveTab={setActiveTab} />;
       case 'payments':
         return <AdminPaymentsPage />;
+      case 'reviews':
+        return <AdminReviewsPage />;
       case 'profile':
         return <AdminProfilePage setActivePage={setActivePage} />;
       case 'settings':

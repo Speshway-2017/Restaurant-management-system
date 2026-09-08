@@ -9,7 +9,8 @@ const feedbackSchema = new mongoose.Schema({
   serviceRating: { type: Number, min: 1, max: 5, default: 5 },
   ambienceRating: { type: Number, min: 1, max: 5, default: 5 },
   overallRating: { type: Number, min: 1, max: 5, default: 5 },
-  comments: { type: String, default: '' }
+  comments: { type: String, default: '' },
+  showOnLanding: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Feedback', feedbackSchema);
