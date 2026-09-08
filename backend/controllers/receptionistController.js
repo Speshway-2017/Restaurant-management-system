@@ -149,17 +149,20 @@ const seatWalkIn = async (req, res) => {
     const sessionToken = `SESS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const mergeGroupId = allTableNums.length > 1 ? `MG-${Date.now()}` : '';
 
+    const isReceptionistAssigned = Boolean(guestName && String(guestName).trim() !== 'Guest Diner' && String(guestName).trim() !== 'Guest');
     const newSession = await TableSession.create({
       tableNum: primaryNum,
       mergedTableNums: secondaryNums,
       mergeGroupId,
       sessionToken,
-      guestName: guestName || 'Guest Diner',
+      guestName: isReceptionistAssigned ? String(guestName).trim() : '',
       phone: phone || '',
       partySize: Number(partySize) || 2,
       specialOccasion: specialOccasion || 'None',
       notes: notes || '',
       status: 'ACTIVE',
+      isWalkIn: false,
+      isReceptionistAssigned,
       seatedAt: new Date()
     });
 
@@ -181,6 +184,20 @@ const seatWalkIn = async (req, res) => {
     if (phone) {
       await createOrUpdateGuestProfile({ name: guestName || 'Guest Diner', phone, specialOccasion, notes });
     }
+
+    // Real-time socket broadcast so customer QR views sync immediately
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.emit('table_session_updated', {
+          tableNum: primaryNum,
+          allTableNums,
+          session: newSession
+        });
+        io.emit('table_updated', { tableNum: primaryNum, status: 'Occupied' });
+      }
+    } catch (sockErr) {}
 
     res.status(201).json({ 
       success: true, 
@@ -454,17 +471,20 @@ const seatWaitlistToken = async (req, res) => {
       const tables = await Table.find({ number: { $in: allTableNums } });
       const mergeGroupId = allTableNums.length > 1 ? `MG-${Date.now()}` : '';
 
+      const isReceptionistAssigned = Boolean(token.guestName && String(token.guestName).trim() !== 'Guest Diner' && String(token.guestName).trim() !== 'Guest');
       const newSession = await TableSession.create({
         tableNum: primaryNum,
         mergedTableNums: secondaryNums,
         mergeGroupId,
         sessionToken: `SESS-${Date.now()}`,
-        guestName: token.guestName,
-        phone: token.phone,
-        partySize: token.partySize,
-        specialOccasion: token.specialOccasion,
-        notes: token.notes,
+        guestName: isReceptionistAssigned ? String(token.guestName).trim() : '',
+        phone: token.phone || '',
+        partySize: token.partySize || 2,
+        specialOccasion: token.specialOccasion || 'None',
+        notes: token.notes || '',
         status: 'ACTIVE',
+        isWalkIn: false,
+        isReceptionistAssigned,
         seatedAt: new Date()
       });
 
@@ -480,6 +500,20 @@ const seatWaitlistToken = async (req, res) => {
         }
         await tbl.save();
       }
+
+      // Real-time socket broadcast
+      try {
+        const { getIO } = require('../socket');
+        const io = getIO();
+        if (io) {
+          io.emit('table_session_updated', {
+            tableNum: primaryNum,
+            allTableNums,
+            session: newSession
+          });
+          io.emit('table_updated', { tableNum: primaryNum, status: 'Occupied' });
+        }
+      } catch (sockErr) {}
     }
 
     res.json({ success: true, message: `Token ${token.tokenNum} marked as SEATED!`, data: token });
@@ -657,8 +691,29 @@ const getActiveTableSession = async (req, res) => {
 
     const uniqueNums = Array.from(new Set(searchNums));
 
-    // Match ACTIVE session ONLY
-    const activeSession = await TableSession.findOne({
+    // 1. If table is Cleaning in DB, ordering is locked and previous data is cleared
+    if (table && table.status === 'Cleaning') {
+      await TableSession.updateMany(
+        {
+          $or: [
+            { tableNum: { $in: uniqueNums } },
+            { mergedTableNums: { $in: uniqueNums } }
+          ],
+          status: 'ACTIVE'
+        },
+        { status: 'CLOSED', closedAt: new Date() }
+      );
+      return res.json({
+        success: true,
+        data: null,
+        tableStatus: 'Cleaning',
+        isOccupied: false,
+        message: 'Table Unavailable — Cleaning'
+      });
+    }
+
+    // 2. QUERY EXISTING ACTIVE SESSION FIRST (Single Source of Truth)
+    let activeSession = await TableSession.findOne({
       $or: [
         { tableNum: { $in: uniqueNums } },
         { mergedTableNums: { $in: uniqueNums } }
@@ -666,26 +721,114 @@ const getActiveTableSession = async (req, res) => {
       status: 'ACTIVE'
     });
 
-    if (!activeSession) {
-      return res.json({ success: true, data: null, isOccupied: false });
+    // 3. IF AN ACTIVE SESSION ALREADY EXISTS: REUSE IT (Do NOT close or recreate!)
+    if (activeSession) {
+      const isReceptionistAssigned = Boolean(
+        activeSession.isReceptionistAssigned ||
+        (table && table.status === 'Occupied' && activeSession.guestName && activeSession.guestName !== 'Guest Diner' && activeSession.guestName !== 'Guest')
+      );
+
+      const resolvedGuestName = activeSession.guestName || '';
+
+      return res.json({
+        success: true,
+        data: {
+          _id: activeSession._id,
+          tableNum: activeSession.tableNum,
+          mergedTableNums: activeSession.mergedTableNums || [],
+          sessionToken: activeSession.sessionToken,
+          guestName: resolvedGuestName,
+          phone: activeSession.phone || '',
+          partySize: activeSession.partySize || 2,
+          specialOccasion: activeSession.specialOccasion || 'None',
+          notes: activeSession.notes || '',
+          seatedAt: activeSession.seatedAt,
+          isReceptionistAssigned,
+          isWalkIn: Boolean(activeSession.isWalkIn)
+        },
+        tableStatus: table ? table.status : (activeSession.guestName ? 'Occupied' : 'Available'),
+        isOccupied: table ? (table.status === 'Occupied') : Boolean(activeSession.guestName)
+      });
     }
 
-    res.json({
+    // 4. IF NO ACTIVE SESSION EXISTS AT ALL (Fresh QR scan after previous session was closed):
+    // Start a new walk-in session with empty guest name
+    const sessionToken = `SESS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const freshWalkInSession = await TableSession.create({
+      tableNum: formattedNum,
+      sessionToken,
+      guestName: '',
+      phone: '',
+      partySize: 2,
+      specialOccasion: 'None',
+      notes: '',
+      status: 'ACTIVE',
+      isWalkIn: true,
+      isReceptionistAssigned: false,
+      seatedAt: new Date()
+    });
+
+    return res.json({
       success: true,
       data: {
-        _id: activeSession._id,
-        tableNum: activeSession.tableNum,
-        mergedTableNums: activeSession.mergedTableNums || [],
-        sessionToken: activeSession.sessionToken,
-        guestName: activeSession.guestName,
-        phone: activeSession.phone || '',
-        partySize: activeSession.partySize || 2,
-        specialOccasion: activeSession.specialOccasion || 'None',
-        notes: activeSession.notes || '',
-        seatedAt: activeSession.seatedAt
+        _id: freshWalkInSession._id,
+        tableNum: freshWalkInSession.tableNum,
+        mergedTableNums: [],
+        sessionToken: freshWalkInSession.sessionToken,
+        guestName: '',
+        phone: '',
+        partySize: 2,
+        specialOccasion: 'None',
+        notes: '',
+        seatedAt: freshWalkInSession.seatedAt,
+        isReceptionistAssigned: false,
+        isWalkIn: true
       },
-      isOccupied: true
+      tableStatus: table ? table.status : 'Available',
+      isOccupied: false
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 12. Vacate / Free Table
+const vacateTable = async (req, res) => {
+  try {
+    const { tableNum } = req.body;
+    if (!tableNum) return res.status(400).json({ success: false, message: 'Table number is required.' });
+
+    const cleanDigits = String(tableNum).replace(/[^0-9]/g, '');
+    const formattedNum = cleanDigits ? `T-${cleanDigits.padStart(2, '0')}` : tableNum;
+    const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanDigits}$`, 'i');
+
+    const table = await Table.findOne({
+      $or: [{ number: formattedNum }, { number: tableNum }, { name: exactRegex }, { number: exactRegex }]
+    });
+
+    if (!table) return res.status(404).json({ success: false, message: 'Table not found.' });
+
+    const allTableNums = [table.number, ...(table.mergedWith || [])];
+
+    // Close all active sessions
+    await TableSession.updateMany(
+      {
+        $or: [
+          { tableNum: { $in: allTableNums } },
+          { mergedTableNums: { $in: allTableNums } }
+        ],
+        status: 'ACTIVE'
+      },
+      { status: 'CLOSED', closedAt: new Date() }
+    );
+
+    // Free table and merged tables
+    await Table.updateMany(
+      { number: { $in: allTableNums } },
+      { status: 'Available', activeSessionId: null, currentOrder: '', mergedWith: [], mergeGroupId: '' }
+    );
+
+    res.json({ success: true, message: `Table ${table.number} vacated and set to Available!` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -695,6 +838,7 @@ module.exports = {
   getReceptionistKPIs,
   getFloorPlan,
   getActiveTableSession,
+  vacateTable,
   seatWalkIn,
   mergeTables,
   splitTables,

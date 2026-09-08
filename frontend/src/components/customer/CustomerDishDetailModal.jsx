@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Flame, ShieldAlert, Plus, Minus, Check, Clock, Sparkles } from 'lucide-react';
 
-export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, language = 'en' }) {
+export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, language = 'en', isBillGenerated = false, isAddDisabled = false, disabledReason = '' }) {
   if (!dish) return null;
 
   const [quantity, setQuantity] = useState(1);
@@ -30,6 +30,7 @@ export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, la
   const totalPrice = unitPrice * quantity;
 
   const handleAdd = () => {
+    if (isBillGenerated || isAddDisabled) return;
     onAddToCart(dish, quantity, {
       spiceLevel: selectedSpice,
       customizations: selectedCustomizations,
@@ -319,24 +320,25 @@ export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, la
             {/* Add to Cart Button */}
             <button
               type="button"
+              disabled={isBillGenerated || isAddDisabled}
               onClick={handleAdd}
               style={{
                 flex: 1,
                 padding: '0.9rem',
                 borderRadius: '14px',
-                backgroundColor: '#166534',
-                color: '#FFFFFF',
-                border: 'none',
+                backgroundColor: (isBillGenerated || isAddDisabled) ? '#F1F5F9' : '#166534',
+                color: (isBillGenerated || isAddDisabled) ? '#94A3B8' : '#FFFFFF',
+                border: (isBillGenerated || isAddDisabled) ? '1.5px solid #CBD5E1' : 'none',
                 fontWeight: 800,
                 fontSize: '0.95rem',
-                cursor: 'pointer',
+                cursor: (isBillGenerated || isAddDisabled) ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                boxShadow: '0 10px 15px -3px rgba(22, 101, 52, 0.3)'
+                boxShadow: (isBillGenerated || isAddDisabled) ? 'none' : '0 10px 15px -3px rgba(22, 101, 52, 0.3)'
               }}
             >
-              <span>Add item to Cart</span>
+              <span>{isAddDisabled ? (disabledReason || 'Table Unavailable • Ordering Locked') : isBillGenerated ? 'Bill Generated • Ordering Closed' : 'Add item to Cart'}</span>
               <span>₹{totalPrice}</span>
             </button>
           </div>

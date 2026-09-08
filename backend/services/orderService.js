@@ -27,10 +27,23 @@ class OrderService {
     const OrderModel = require('../models/Order');
     const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i');
 
-    // 0. Resolve current ACTIVE receptionist session as single source of truth for customer name
+    // BACKEND ENFORCEMENT: Reject order creation if table is Cleaning or Billing
+    const tableDoc = await Table.findOne({
+      $or: [{ number: formattedTable }, { number: cleanNum }, { name: exactRegex }, { number: exactRegex }]
+    });
+
+    if (tableDoc && tableDoc.status === 'Cleaning') {
+      throw new Error(`Table ${formattedTable} is currently unavailable due to cleaning & sanitization.`);
+    }
+
+    if (tableDoc && tableDoc.status === 'Billing') {
+      throw new Error(`The bill has already been generated for Table ${formattedTable}. Additional items cannot be placed.`);
+    }
+
+    // 0. Resolve current ACTIVE session as single source of truth for customer name
     const TableSession = require('../models/TableSession');
     const searchNums = [formattedTable, cleanNum, `T-${cleanNum.padStart(2, '0')}`];
-    const activeSession = await TableSession.findOne({
+    let activeSession = await TableSession.findOne({
       $or: [
         { tableNum: { $in: searchNums } },
         { mergedTableNums: { $in: searchNums } }
@@ -38,11 +51,43 @@ class OrderService {
       status: 'ACTIVE'
     });
 
+    if (!activeSession) {
+      const sessionToken = `SESS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      activeSession = await TableSession.create({
+        tableNum: formattedTable,
+        sessionToken,
+        guestName: (data.customer && data.customer !== 'Guest Diner' && data.customer !== 'Guest') ? String(data.customer).trim() : '',
+        phone: data.phone || '',
+        partySize: 2,
+        specialOccasion: 'None',
+        notes: '',
+        status: 'ACTIVE',
+        isWalkIn: true,
+        isReceptionistAssigned: false,
+        seatedAt: new Date()
+      });
+    }
+
     let verifiedCustomerName = 'Guest Diner';
-    if (activeSession && activeSession.guestName && activeSession.guestName !== 'Guest Diner') {
+    // STRICT IMMUTABILITY: Once a diner name is established for this session, it is locked and cannot be changed until order/session completes
+    if (activeSession.guestName && activeSession.guestName !== 'Guest Diner' && activeSession.guestName !== 'Guest' && String(activeSession.guestName).trim()) {
       verifiedCustomerName = String(activeSession.guestName).trim();
-    } else if (data.customer || data.guestName) {
-      verifiedCustomerName = String(data.customer || data.guestName).trim();
+    } else if (data.customer && data.customer !== 'Guest Diner' && data.customer !== 'Guest' && String(data.customer).trim()) {
+      verifiedCustomerName = String(data.customer).trim();
+      activeSession.guestName = verifiedCustomerName;
+      await activeSession.save();
+      try {
+        const { getIO } = require('../socket');
+        const io = getIO();
+        if (io) {
+          io.emit('table_session_updated', {
+            tableNum: formattedTable,
+            guestName: verifiedCustomerName,
+            sessionToken: activeSession.sessionToken,
+            status: 'ACTIVE'
+          });
+        }
+      } catch (e) { }
     }
 
     // 1. Check if an ACTIVE (open/unpaid) order already exists for this table
@@ -86,6 +131,19 @@ class OrderService {
         }
       }
 
+      // Block adding items if bill has already been generated
+      const isAlreadyBillGenerated = Boolean(
+        existingActiveOrder.isBillGenerated ||
+        existingActiveOrder.billGenerated ||
+        existingActiveOrder.status === 'Bill Generated' ||
+        existingActiveOrder.status === 'Billing' ||
+        existingActiveOrder.payment === 'Awaiting Payment' ||
+        existingActiveOrder.paymentStatus === 'Awaiting Payment'
+      );
+      if (isAlreadyBillGenerated) {
+        throw new Error(`The bill has already been generated for Table ${existingActiveOrder.table || 'this table'}. Additional items cannot be added.`);
+      }
+
       // Append new chef notes if provided
       const newNotes = (data.notes || data.chefNotes || data.instructions || '').trim();
       if (newNotes && !existingActiveOrder.notes?.includes(newNotes)) {
@@ -120,23 +178,37 @@ class OrderService {
       existingActiveOrder.total = newCalculatedTotal;
 
       // Reopen/continue order status if new unserved items are added
-      const unservedCount = existingItems.filter(i => !i.isDelivered && !i.isReady && i.status !== 'SERVED' && i.status !== 'DELIVERED' && i.status !== 'READY').length;
-      if (unservedCount > 0) {
-        existingActiveOrder.status = 'Placed';
+      const hasDeliveredItems = existingItems.some(i => i.isDelivered || i.status === 'DELIVERED' || i.status === 'SERVED');
+      const hasUnservedItems = existingItems.some(i => !i.isDelivered && i.status !== 'DELIVERED' && i.status !== 'SERVED');
+
+      if (hasUnservedItems) {
+        existingActiveOrder.status = hasDeliveredItems ? 'PARTIALLY DELIVERED' : 'Placed';
         if (newIncomingItems.length > 0) {
           existingActiveOrder.chefStatus = 'NEW';
         }
-      } else {
-        const servedCount = existingItems.filter(i => i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED').length;
-        if (servedCount > 0 && servedCount < existingItems.length) {
-          existingActiveOrder.status = 'PARTIALLY DELIVERED';
-        } else {
-          existingActiveOrder.status = 'Placed';
+        // If the order had previously been completed/served by waiter, reopen it for service
+        if (existingActiveOrder.waiterStatus === 'SERVED') {
+          existingActiveOrder.waiterStatus = 'ACCEPTED';
         }
+        // Disappear generated bill since customer placed more items!
+        if (existingActiveOrder.payment === 'Awaiting Payment' || existingActiveOrder.payment === 'Bill Generated') {
+          existingActiveOrder.payment = 'Pending';
+        }
+        if (existingActiveOrder.paymentStatus === 'Awaiting Payment' || existingActiveOrder.paymentStatus === 'Bill Generated') {
+          existingActiveOrder.paymentStatus = 'Pending';
+        }
+        existingActiveOrder.isBillGenerated = false;
+        existingActiveOrder.billGenerated = false;
+      } else {
+        existingActiveOrder.status = hasDeliveredItems ? 'Served' : 'Placed';
       }
 
       if (data.managerId && !existingActiveOrder.managerId) {
         existingActiveOrder.managerId = String(data.managerId);
+      }
+
+      if (verifiedCustomerName && verifiedCustomerName !== 'Guest Diner' && (!existingActiveOrder.customer || existingActiveOrder.customer === 'Guest Diner')) {
+        existingActiveOrder.customer = verifiedCustomerName;
       }
 
       await existingActiveOrder.save();
@@ -195,6 +267,11 @@ class OrderService {
     // Create and persist new order in MongoDB database
     const newOrder = await orderRepository.create(orderData);
 
+    if (activeSession) {
+      activeSession.orderId = newOrder.orderId || newOrder._id.toString();
+      await activeSession.save();
+    }
+
     // Only after successful order persistence, update table status to Occupied
     if (formattedTable) {
       try {
@@ -210,7 +287,8 @@ class OrderService {
           },
           {
             status: 'Occupied',
-            currentOrder: newOrder.orderId || newOrder._id
+            currentOrder: newOrder.orderId || newOrder._id,
+            activeSessionId: activeSession ? activeSession._id.toString() : null
           },
           { new: true }
         );
@@ -223,6 +301,7 @@ class OrderService {
             section: 'Main Dining',
             status: 'Occupied',
             currentOrder: newOrder.orderId || newOrder._id,
+            activeSessionId: activeSession ? activeSession._id.toString() : null,
             assignedWaiterId: assignedWaiterId,
             assignedWaiterName: assignedWaiterName
           });
@@ -245,11 +324,17 @@ class OrderService {
       const OrderModel = require('../models/Order');
       const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i');
 
+      const TableSession = require('../models/TableSession');
+
       if (forceStatus === 'Cleaning') {
         const cleaningTime = new Date(Date.now() + 10 * 60 * 1000);
         await Table.findOneAndUpdate(
           { $or: [{ number: exactRegex }, { name: exactRegex }] },
-          { status: 'Cleaning', currentOrder: '', cleaningUntil: cleaningTime }
+          { status: 'Cleaning', currentOrder: '', activeSessionId: null, cleaningUntil: cleaningTime }
+        );
+        await TableSession.updateMany(
+          { $or: [{ tableNum: exactRegex }, { mergedTableNums: exactRegex }], status: 'ACTIVE' },
+          { status: 'CLOSED', closedAt: new Date() }
         );
         return;
       }
@@ -257,7 +342,11 @@ class OrderService {
       if (forceStatus === 'Available') {
         await Table.findOneAndUpdate(
           { $or: [{ number: exactRegex }, { name: exactRegex }] },
-          { status: 'Available', currentOrder: '' }
+          { status: 'Available', currentOrder: '', activeSessionId: null }
+        );
+        await TableSession.updateMany(
+          { $or: [{ tableNum: exactRegex }, { mergedTableNums: exactRegex }], status: 'ACTIVE' },
+          { status: 'CLOSED', closedAt: new Date() }
         );
         return;
       }
@@ -291,8 +380,13 @@ class OrderService {
             { $or: [{ number: exactRegex }, { name: exactRegex }] },
             {
               status: 'Cleaning',
-              currentOrder: ''
+              currentOrder: '',
+              activeSessionId: null
             }
+          );
+          await TableSession.updateMany(
+            { $or: [{ tableNum: exactRegex }, { mergedTableNums: exactRegex }], status: 'ACTIVE' },
+            { status: 'CLOSED', closedAt: new Date() }
           );
         }
       }

@@ -8367,13 +8367,14 @@ div[style*="position:fixed"] > div,
 /* 5. Mobile Modals Responsive Container */
 @media (max-width: 640px) {
   .customer-modal-overlay {
-    padding: 0.5rem !important;
+    padding: 0 !important;
     align-items: flex-end !important;
   }
   .customer-modal-card {
     border-radius: 24px 24px 0 0 !important;
-    max-height: 88vh !important;
+    max-height: 92vh !important;
     width: 100% !important;
     max-width: 100% !important;
+    margin: 0 !important;
   }
 }

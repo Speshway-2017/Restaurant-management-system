@@ -4,6 +4,7 @@ const {
   getReceptionistKPIs,
   getFloorPlan,
   getActiveTableSession,
+  vacateTable,
   seatWalkIn,
   mergeTables,
   splitTables,
@@ -32,6 +33,7 @@ router.post('/walk-ins/seat', seatWalkIn);
 router.post('/tables/merge', mergeTables);
 router.post('/tables/split', splitTables);
 router.post('/tables/transfer', transferTable);
+router.post('/tables/vacate', vacateTable);
 
 // Waitlist Queue
 router.get('/waitlist', getWaitlist);

@@ -5,7 +5,7 @@ import { getTableMenuUrl, compositeQrWithLogo } from '../../utils/qrUrlHelper';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 
 export default function ManagerTablesPage() {
-  const { brandLogo } = useRestaurantBranding ? useRestaurantBranding() : { brandLogo: '/logo.png' };
+  const { brandLogo, brandName } = useRestaurantBranding ? useRestaurantBranding() : { brandLogo: '/logo.png', brandName: 'Flavora Kitchen' };
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
   const [selectedZoneFilter, setSelectedZoneFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -353,6 +353,356 @@ export default function ManagerTablesPage() {
     handleToggleBlockQr(tblId);
   };
 
+  // Print Single Table QR Standee
+  const handlePrintSingleQr = (tbl) => {
+    const targetTable = tbl || selectedQrTable;
+    if (!targetTable) return;
+    const targetLink = getTableMenuUrl(targetTable.num);
+    const qrSrc = (targetTable.id === selectedQrTable?.id && backendQrDataUrl)
+      ? backendQrDataUrl
+      : (targetTable.customQrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=H&data=${encodeURIComponent(targetLink)}`);
+
+    const restName = brandName || 'Flavora Kitchen';
+    const printWindow = window.open('', '_blank', 'width=750,height=900');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print Standee - Table ${targetTable.num}</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 12mm;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              background-color: #f8fafc;
+              padding: 30px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 90vh;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .standee-card {
+              width: 360px;
+              background: #ffffff;
+              border: 3.5px solid #0F2A1D;
+              border-radius: 28px;
+              padding: 32px 24px;
+              text-align: center;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            }
+            .brand-title {
+              font-size: 22px;
+              font-weight: 900;
+              color: #0F2A1D;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              margin-bottom: 2px;
+            }
+            .brand-subtitle {
+              font-size: 11px;
+              font-weight: 700;
+              color: #166534;
+              text-transform: uppercase;
+              letter-spacing: 0.12em;
+              margin-bottom: 14px;
+            }
+            .table-badge {
+              display: inline-block;
+              background: #0F2A1D;
+              color: #ffffff;
+              font-size: 26px;
+              font-weight: 900;
+              padding: 6px 24px;
+              border-radius: 9999px;
+              letter-spacing: 1px;
+            }
+            .zone-label {
+              font-size: 12px;
+              color: #64748B;
+              font-weight: 700;
+              margin-top: 6px;
+              margin-bottom: 16px;
+            }
+            .qr-box {
+              width: 220px;
+              height: 220px;
+              margin: 0 auto 16px;
+              border: 2px dashed #0F2A1D;
+              border-radius: 20px;
+              padding: 10px;
+              background: #ffffff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .qr-code-img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .action-heading {
+              font-size: 16px;
+              font-weight: 900;
+              color: #0F2A1D;
+              letter-spacing: 0.05em;
+              margin-bottom: 6px;
+            }
+            .action-sub {
+              font-size: 12px;
+              color: #475569;
+              line-height: 1.45;
+              margin-bottom: 16px;
+              padding: 0 10px;
+            }
+            .standee-footer {
+              border-top: 1.5px dashed #CBD5E1;
+              padding-top: 12px;
+              font-size: 11px;
+              font-weight: 700;
+              color: #166534;
+              display: flex;
+              justify-content: center;
+              gap: 8px;
+            }
+            @media print {
+              body {
+                background: none;
+                padding: 0;
+              }
+              .standee-card {
+                box-shadow: none;
+                border: 3px solid #0F2A1D;
+                margin: 0 auto;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="standee-card">
+            <div class="brand-title">${restName}</div>
+            <div class="brand-subtitle">Smart Contactless Dining</div>
+            
+            <div class="table-badge">${targetTable.num}</div>
+            <div class="zone-label">${targetTable.zone || 'Main Dining'} Zone</div>
+
+            <div class="qr-box">
+              <img class="qr-code-img" src="${qrSrc}" alt="QR Code ${targetTable.num}" />
+            </div>
+
+            <div class="action-heading">SCAN TO ORDER &amp; PAY</div>
+            <div class="action-sub">Open phone camera or Google Pay / PhonePe / Paytm to view digital menu &amp; place orders</div>
+
+            <div class="standee-footer">
+              <span>⚡ Fast Kitchen Dispatch</span>
+              <span>•</span>
+              <span>🔒 100% Secure Checkout</span>
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // Print All Tables QR Standees in Batch
+  const handlePrintAllQrs = () => {
+    if (!Array.isArray(tables) || tables.length === 0) return;
+    const restName = brandName || 'Flavora Kitchen';
+    const printWindow = window.open('', '_blank', 'width=850,height=950');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const cardsHtml = tables.map(tbl => {
+      const targetLink = getTableMenuUrl(tbl.num);
+      const qrSrc = tbl.customQrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=360x360&ecc=H&data=${encodeURIComponent(targetLink)}`;
+      return `
+        <div class="standee-wrapper">
+          <div class="standee-card">
+            <div class="brand-title">${restName}</div>
+            <div class="brand-subtitle">Smart Contactless Dining</div>
+            
+            <div class="table-badge">${tbl.num}</div>
+            <div class="zone-label">${tbl.zone || 'Main Dining'} Zone</div>
+
+            <div class="qr-box">
+              <img class="qr-code-img" src="${qrSrc}" alt="QR Code ${tbl.num}" />
+            </div>
+
+            <div class="action-heading">SCAN TO ORDER &amp; PAY</div>
+            <div class="action-sub">Scan with camera or UPI app to order &amp; pay</div>
+
+            <div class="standee-footer">
+              <span>⚡ Fast Dispatch</span>
+              <span>•</span>
+              <span>🔒 Contactless</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('\n');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print All Table QR Standees</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              background-color: #f8fafc;
+              padding: 15px;
+              display: flex;
+              flex-wrap: wrap;
+              gap: 20px;
+              justify-content: center;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .standee-wrapper {
+              page-break-inside: avoid;
+            }
+            .standee-card {
+              width: 320px;
+              background: #ffffff;
+              border: 3px solid #0F2A1D;
+              border-radius: 24px;
+              padding: 24px 18px;
+              text-align: center;
+              box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            }
+            .brand-title {
+              font-size: 19px;
+              font-weight: 900;
+              color: #0F2A1D;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+            }
+            .brand-subtitle {
+              font-size: 11px;
+              font-weight: 700;
+              color: #166534;
+              text-transform: uppercase;
+              letter-spacing: 0.1em;
+              margin-bottom: 10px;
+            }
+            .table-badge {
+              display: inline-block;
+              background: #0F2A1D;
+              color: #ffffff;
+              font-size: 24px;
+              font-weight: 900;
+              padding: 5px 18px;
+              border-radius: 9999px;
+              letter-spacing: 1px;
+            }
+            .zone-label {
+              font-size: 11px;
+              color: #64748B;
+              font-weight: 700;
+              margin-top: 4px;
+              margin-bottom: 12px;
+            }
+            .qr-box {
+              width: 190px;
+              height: 190px;
+              margin: 0 auto 12px;
+              border: 2px dashed #0F2A1D;
+              border-radius: 16px;
+              padding: 6px;
+              background: #ffffff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .qr-code-img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .action-heading {
+              font-size: 14px;
+              font-weight: 900;
+              color: #0F2A1D;
+              letter-spacing: 0.05em;
+              margin-bottom: 4px;
+            }
+            .action-sub {
+              font-size: 11px;
+              color: #475569;
+              line-height: 1.35;
+              margin-bottom: 12px;
+              padding: 0 6px;
+            }
+            .standee-footer {
+              border-top: 1.5px dashed #CBD5E1;
+              padding-top: 8px;
+              font-size: 10px;
+              font-weight: 700;
+              color: #166534;
+              display: flex;
+              justify-content: center;
+              gap: 8px;
+            }
+            @media print {
+              body {
+                background: none;
+                padding: 0;
+              }
+              .standee-card {
+                box-shadow: none;
+                border: 2.5px solid #0F2A1D;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          ${cardsHtml}
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // Toggle Table Status
   const handleToggleTableStatus = (tblId, nextStatus) => {
     const updated = tables.map(t => t.id === tblId ? { ...t, status: nextStatus } : t);
@@ -373,11 +723,26 @@ export default function ManagerTablesPage() {
     setEditCustomZoneName('');
   };
 
-  const handleSaveEditedTable = (e) => {
+  const handleSaveEditedTable = async (e) => {
     e.preventDefault();
     if (!editingTable.num) return;
     const finalZone = isEditCustomZone ? editCustomZoneName.trim() : (editingTable.zone ? editingTable.zone.trim() : '');
     const updatedTbl = { ...editingTable, zone: finalZone };
+    
+    // Sync cleaning start timestamp if status is changed to Cleaning
+    const localKey = `flavora_cleaning_start_${editingTable.num}`;
+    if (updatedTbl.status === 'Cleaning') {
+      if (!localStorage.getItem(localKey)) {
+        localStorage.setItem(localKey, Date.now().toString());
+      }
+    } else {
+      localStorage.removeItem(localKey);
+    }
+
+    if (editingTable.id) {
+      await api.updateTableStatus(editingTable.id, updatedTbl.status).catch(() => { });
+    }
+
     const updated = tables.map(t => t.id === editingTable.id ? updatedTbl : t);
     updateAndSaveTables(updated);
     showToast(`${editingTable.num} updated successfully!`);
@@ -508,7 +873,16 @@ export default function ManagerTablesPage() {
           <h1 className="admin-page-title">Table Management</h1>
           <p className="admin-page-subtitle">View, edit, paste, delete & manage dining table QR code standees for digital self-service ordering.</p>
         </div>
-        <div className="admin-header-actions">
+        <div className="admin-header-actions" style={{ display: 'flex', gap: '0.65rem' }}>
+          <button
+            className="btn btn-outline"
+            onClick={handlePrintAllQrs}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', borderColor: '#CBD5E1', color: '#0F2A1D', fontWeight: 700, padding: '0.55rem 1.15rem' }}
+            title="Print QR standees for all tables at once"
+          >
+            <Printer size={16} />
+            <span>Print All QRs</span>
+          </button>
           <button className="btn btn-primary" onClick={() => setIsAddTableModalOpen(true)}>
             <Plus size={16} />
             <span>Add New Table</span>
@@ -824,6 +1198,64 @@ export default function ManagerTablesPage() {
                   <button
                     type="button"
                     className="table-card-dropdown-item"
+                    onClick={() => handlePrintSingleQr(tbl)}
+                    style={{ color: '#166534', fontWeight: 700 }}
+                  >
+                    <Printer size={14} color="#166534" />
+                    <span>Print QR Standee</span>
+                  </button>
+
+                  {tbl.status === 'Available' && (
+                    <button
+                      type="button"
+                      className="table-card-dropdown-item"
+                      onClick={async () => {
+                        try {
+                          if (tbl.id) await api.updateTableStatus(tbl.id, 'Cleaning').catch(() => { });
+                          const localKey = `flavora_cleaning_start_${tbl.num}`;
+                          localStorage.setItem(localKey, Date.now().toString());
+                          const updated = tables.map(t => t.id === tbl.id ? { ...t, status: 'Cleaning' } : t);
+                          updateAndSaveTables(updated);
+                          showToast(`🧹 ${tbl.num} moved to Cleaning state.`);
+                          window.dispatchEvent(new Event('flavora_tables_updated'));
+                        } catch (e) {
+                          handleToggleTableStatus(tbl.id, 'Cleaning');
+                        }
+                      }}
+                      style={{ color: '#B45309', fontWeight: 700 }}
+                    >
+                      <Sparkles size={14} color="#B45309" />
+                      <span>Set to Cleaning</span>
+                    </button>
+                  )}
+
+                  {tbl.status === 'Cleaning' && (
+                    <button
+                      type="button"
+                      className="table-card-dropdown-item"
+                      onClick={async () => {
+                        try {
+                          if (tbl.id) await api.updateTableStatus(tbl.id, 'Available').catch(() => { });
+                          const localKey = `flavora_cleaning_start_${tbl.num}`;
+                          localStorage.removeItem(localKey);
+                          const updated = tables.map(t => t.id === tbl.id ? { ...t, status: 'Available', cleaningUntil: null } : t);
+                          updateAndSaveTables(updated);
+                          showToast(`✨ ${tbl.num} marked as Available!`);
+                          window.dispatchEvent(new Event('flavora_tables_updated'));
+                        } catch (e) {
+                          handleToggleTableStatus(tbl.id, 'Available');
+                        }
+                      }}
+                      style={{ color: '#166534', fontWeight: 700 }}
+                    >
+                      <Check size={14} color="#166534" />
+                      <span>Mark as Available</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="table-card-dropdown-item"
                     onClick={() => handleOpenEditModal(tbl)}
                     disabled={tbl.status === 'Occupied'}
                     title={tbl.status === 'Occupied' ? '🔒 Cannot edit table while table is Occupied' : ''}
@@ -994,29 +1426,6 @@ export default function ManagerTablesPage() {
                     </span>
                   </div>
 
-                  {/* Encoded Customer Menu URL */}
-                  {selectedQrLink && (
-                    <div style={{ marginTop: '0.75rem', textAlign: 'left', backgroundColor: '#F8FAFC', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                      <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600, marginBottom: '0.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>Customer Menu URL:</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(selectedQrLink);
-                            showToast('Menu URL copied to clipboard!');
-                          }}
-                          style={{ background: 'none', border: 'none', color: '#0F2A1D', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                        >
-                          <Copy size={12} />
-                          <span>Copy Link</span>
-                        </button>
-                      </div>
-                      <div style={{ fontSize: '0.76rem', color: '#0F2A1D', fontFamily: 'monospace', wordBreak: 'break-all', fontWeight: 600 }}>
-                        {selectedQrLink}
-                      </div>
-                    </div>
-                  )}
-
                   {selectedQrTable.customQrUrl && (
                     <button
                       type="button"
@@ -1121,33 +1530,68 @@ export default function ManagerTablesPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="admin-modal-footer">
-              <button className="btn btn-outline" onClick={() => setSelectedQrTable(null)} style={{ padding: '0.55rem 1.25rem' }}>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button className="btn btn-outline" onClick={() => setSelectedQrTable(null)} style={{ padding: '0.55rem 1.1rem' }}>
                 Close
               </button>
 
-              {qrModalTab === 'custom' ? (
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <button
+                  type="button"
                   className="btn btn-primary"
-                  onClick={() => handleSaveCustomQr(selectedQrTable.id)}
-                  style={{ backgroundColor: '#FF8A00', color: '#FFFFFF', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.4rem' }}
-                >
-                  <Check size={16} />
-                  <span>Save Custom QR</span>
-                </button>
-              ) : (
-                <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    handlePlaceQrOnTable(selectedQrTable.id);
-                    setSelectedQrTable(null);
+                  onClick={() => handlePrintSingleQr(selectedQrTable)}
+                  style={{
+                    backgroundColor: '#166534',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    padding: '0.55rem 1.3rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
                   }}
-                  style={{ backgroundColor: '#FF8A00', color: '#FFFFFF', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.4rem' }}
+                  title="Print official table standee card with QR code"
                 >
-                  <Printer size={15} />
-                  <span>Place QR on Table</span>
+                  <Printer size={16} />
+                  <span>Print QR</span>
                 </button>
-              )}
+
+                {qrModalTab === 'custom' ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => handleSaveCustomQr(selectedQrTable.id)}
+                    style={{ backgroundColor: '#FF8A00', color: '#FFFFFF', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.25rem', cursor: 'pointer' }}
+                  >
+                    <Check size={16} />
+                    <span>Save Custom QR</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      handlePlaceQrOnTable(selectedQrTable.id);
+                      setSelectedQrTable(null);
+                    }}
+                    style={{
+                      backgroundColor: selectedQrTable.qrPlaced ? '#FEF2F2' : '#F0FDF4',
+                      color: selectedQrTable.qrPlaced ? '#DC2626' : '#166534',
+                      border: selectedQrTable.qrPlaced ? '1.5px solid #FCA5A5' : '1.5px solid #86EFAC',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding: '0.55rem 1.1rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <QrCode size={15} />
+                    <span>{selectedQrTable.qrPlaced ? 'Deactivate QR' : 'Place QR on Table'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
           </div>
@@ -1232,6 +1676,26 @@ export default function ManagerTablesPage() {
                   onChange={(e) => setEditingTable({ ...editingTable, cap: Number(e.target.value) })}
                   className="form-control"
                 />
+              </div>
+
+              <div className="admin-form-group mb-3">
+                <label className="form-label" style={{ fontWeight: 700 }}>Table Status</label>
+                <select
+                  value={editingTable.status || 'Available'}
+                  onChange={(e) => setEditingTable({ ...editingTable, status: e.target.value })}
+                  className="form-control"
+                  disabled={editingTable.status === 'Occupied'}
+                >
+                  <option value="Available">🟢 Available</option>
+                  <option value="Cleaning">🧹 Cleaning in Progress</option>
+                  <option value="Reserved">🟡 Reserved</option>
+                  <option value="Occupied" disabled>🔴 Occupied (Active Dining)</option>
+                </select>
+                {editingTable.status === 'Occupied' && (
+                  <span style={{ fontSize: '0.74rem', color: '#DC2626', fontWeight: 600, display: 'block', marginTop: '0.2rem' }}>
+                    🔒 Status cannot be changed while an active guest order is seated.
+                  </span>
+                )}
               </div>
 
               <div className="admin-form-group mb-4">

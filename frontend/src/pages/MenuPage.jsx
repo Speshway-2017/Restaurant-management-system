@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Utensils, UtensilsCrossed, Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle2, QrCode, Sparkles, ChevronDown, ChefHat, Send, Clock, Lock, Filter, Flame, Globe, UserCheck } from 'lucide-react';
 import { api } from '../services/api';
 import MenuDishStrip from '../components/MenuDishStrip';
@@ -14,6 +14,7 @@ import CustomerBillModal from '../components/customer/CustomerBillModal';
 import CustomerEngagementModal from '../components/customer/CustomerEngagementModal';
 import CustomerBottomNav from '../components/customer/CustomerBottomNav';
 import CustomerMobileMenuView from '../components/customer/CustomerMobileMenuView';
+import { onSocketEvent } from '../services/socket';
 
 export default function MenuPage({ onOpenDemoModal }) {
   const { brandName } = useRestaurantBranding();
@@ -21,6 +22,9 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [vegOnly, setVegOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+  const [ratingOrderData, setRatingOrderData] = useState(null);
+  const dismissedRatingOrderIds = useRef(new Set());
 
   useEffect(() => {
     const handleResize = () => {
@@ -59,39 +63,21 @@ export default function MenuPage({ onOpenDemoModal }) {
     }
   });
 
-  const getCartStorageKey = (targetTable) => {
-    const t = targetTable || tableNum || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('table') : '') || localStorage.getItem('flavora_scanned_table') || '';
+  const getCartStorageKey = (targetTable, targetSessionToken) => {
+    const t = targetTable || tableNum || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('table') : '') || sessionStorage.getItem('flavora_scanned_table') || '';
+    const sessToken = targetSessionToken || activeTableSession?.sessionToken || '';
     if (t) {
       const clean = String(t).toUpperCase().replace(/[^A-Z0-9-]/g, '');
-      return `flavora_cart_${clean}`;
+      return sessToken ? `flavora_cart_${clean}_${sessToken}` : `flavora_cart_${clean}`;
     }
     return 'flavora_cart_GENERAL';
   };
 
-  const [cart, setCart] = useState(() => {
-    try {
-      const t = tableNum || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('table') : '') || localStorage.getItem('flavora_scanned_table') || '';
-      if (t) {
-        const clean = String(t).toUpperCase().replace(/[^A-Z0-9-]/g, '');
-        const saved = localStorage.getItem(`flavora_cart_${clean}`);
-        return saved ? JSON.parse(saved) : {};
-      }
-    } catch (e) { }
-    return {};
-  });
+  const [cart, setCart] = useState({});
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [isCustomerOrdersModalOpen, setIsCustomerOrdersModalOpen] = useState(false);
   const [isCategoryDrawerOpen, setIsCategoryDrawerOpen] = useState(false);
-  const [guestName, setGuestName] = useState(() => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const tbl = urlParams.get('table') || sessionStorage.getItem('flavora_scanned_table') || 'GENERAL';
-      const cleanTbl = String(tbl).toUpperCase().replace(/[^A-Z0-9-]/g, '');
-      return sessionStorage.getItem(`flavora_guest_name_${cleanTbl}`) || '';
-    } catch (e) {
-      return '';
-    }
-  });
+  const [guestName, setGuestName] = useState('');
   const [chefNotes, setChefNotes] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderSuccessMsg, setOrderSuccessMsg] = useState(null);
@@ -202,6 +188,7 @@ export default function MenuPage({ onOpenDemoModal }) {
   });
 
   const [tableCleaningInfo, setTableCleaningInfo] = useState(null);
+  const [currentTableStatus, setCurrentTableStatus] = useState('Available');
 
   // Poll backend API for real-time table occupancy & cleaning status across mobile devices
   useEffect(() => {
@@ -211,47 +198,151 @@ export default function MenuPage({ onOpenDemoModal }) {
       try {
         const cleanTableNum = String(tableNum).replace(/[^0-9]/g, '');
 
-        // 1. ALWAYS query active receptionist session first (Backend Source of Truth)
+        // 1. Query active session (Backend Source of Truth for both Receptionist & Direct Walk-In)
+        let activeSess = null;
+        let sessTableStatus = null;
         try {
-          const sess = await api.getActiveTableSession(tableNum);
-          if (sess && (sess._id || sess.guestName)) {
-            setActiveTableSession(sess);
-            if (sess.guestName && sess.guestName !== 'Guest Diner' && sess.guestName !== 'Guest') {
-              setGuestName(sess.guestName);
-            }
-          } else {
-            setActiveTableSession(null);
+          const sessRes = await api.getActiveTableSession(tableNum);
+          if (sessRes && (sessRes.tableStatus === 'Cleaning' || sessRes.message === 'Table Unavailable — Cleaning')) {
+            sessTableStatus = 'Cleaning';
+          }
+          const sess = sessRes && sessRes.data !== undefined ? sessRes.data : sessRes;
+          if (sess && (sess._id || sess.sessionToken)) {
+            activeSess = sess;
           }
         } catch (e) {
-          setActiveTableSession(null);
+          activeSess = null;
         }
 
-        // 2. Check active order status across backend orders
-        const orders = await api.getOrders();
+        // 2. Fetch table record from DB & local storage to check table status (e.g. Cleaning, Reserved)
+        let matchedTbl = null;
+        try {
+          const dbTables = await api.getTables();
+          let allTables = Array.isArray(dbTables) ? dbTables : [];
+          try {
+            const localSaved = localStorage.getItem('flavora_tables');
+            if (localSaved) {
+              const parsed = JSON.parse(localSaved);
+              if (Array.isArray(parsed)) {
+                // DB tables MUST take precedence over stale localStorage cache!
+                allTables = [...allTables, ...parsed];
+              }
+            }
+          } catch (e) { }
+
+          matchedTbl = allTables.find(t => {
+            const tNum = String(t.num || t.number || t.name || '').replace(/[^0-9]/g, '');
+            return tNum && cleanTableNum && String(parseInt(tNum, 10)) === String(parseInt(cleanTableNum, 10));
+          });
+        } catch (e) { }
+
+        // If table is Cleaning in DB or Session API, no active session should be displayed
+        if ((matchedTbl && matchedTbl.status === 'Cleaning') || sessTableStatus === 'Cleaning') {
+          activeSess = null;
+        }
+
+        if (activeSess) {
+          setActiveTableSession(activeSess);
+          if (activeSess.guestName && activeSess.guestName !== 'Guest Diner' && activeSess.guestName !== 'Guest' && activeSess.guestName.trim()) {
+            setGuestName(activeSess.guestName.trim());
+          } else {
+            // Direct walk-in: check if user entered a name during this specific session
+            const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+            const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeSess.sessionToken}`);
+            if (selfName) setGuestName(selfName.trim());
+          }
+
+          // Cart sync: load cart strictly for this session
+          const cartKey = getCartStorageKey(tableNum, activeSess.sessionToken);
+          const savedCart = localStorage.getItem(cartKey);
+          if (savedCart) {
+            try { setCart(JSON.parse(savedCart)); } catch (e) { setCart({}); }
+          }
+        } else {
+          setActiveTableSession(null);
+          setGuestName('');
+          setCart({});
+        }
+
+        // 3. Check active order status across backend orders and local storage
+        let orders = [];
+        try {
+          orders = await api.getOrders();
+        } catch (e) { }
+
+        let localOrders = [];
+        try {
+          const saved = localStorage.getItem('flavora_manager_orders');
+          if (saved) localOrders = JSON.parse(saved);
+        } catch (e) { }
+
+        const allOrderSources = [...(Array.isArray(orders) ? orders : []), ...(Array.isArray(localOrders) ? localOrders : [])];
         let activeBackendOrders = [];
-        if (Array.isArray(orders) && orders.length > 0) {
-          activeBackendOrders = orders.filter(ord => {
+        if (allOrderSources.length > 0 && activeSess && (!matchedTbl || matchedTbl.status !== 'Cleaning')) {
+          const seen = new Set();
+          activeBackendOrders = allOrderSources.filter(ord => {
+            const rawId = ord.orderId || ord.id || ord._id;
+            if (rawId && seen.has(String(rawId))) return false;
+            if (rawId) seen.add(String(rawId));
+
             const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
             const isMatch = ordTableDigits && cleanTableNum && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
             const isClosedOrPaid = ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled' || ord.payment === 'Paid' || ord.payment === 'Completed' || ord.paymentStatus === 'Paid';
+
+            // STRICT SESSION ISOLATION:
+            // Ensure order belongs to CURRENT active session
+            const matchesSession = Boolean(
+              (ord.sessionId && (ord.sessionId === String(activeSess._id) || ord.sessionId === activeSess.sessionToken)) ||
+              (ord.sessionToken && ord.sessionToken === activeSess.sessionToken) ||
+              (activeSess.orderId && (String(activeSess.orderId) === String(ord.orderId) || String(activeSess.orderId) === String(ord._id)))
+            );
+
+            if (ord.sessionId || ord.sessionToken) {
+              return isMatch && !isClosedOrPaid && matchesSession;
+            }
             return isMatch && !isClosedOrPaid;
           });
         }
 
         if (activeBackendOrders.length > 0) {
+          const ordWithCustomer = activeBackendOrders.find(o => o.customer && o.customer !== 'Guest Diner' && o.customer !== 'Guest' && o.customer.trim());
+          if (ordWithCustomer && ordWithCustomer.customer) {
+            setGuestName(prev => (prev && prev !== 'Guest Diner' && prev !== 'Guest') ? prev : ordWithCustomer.customer.trim());
+          }
+        }
+
+        let isBillGen = false;
+        if (activeBackendOrders.length > 0) {
           const primaryActive = activeBackendOrders[0];
+          isBillGen = Boolean(
+            primaryActive.isBillGenerated ||
+            primaryActive.billGenerated ||
+            primaryActive.status === 'Bill Generated' ||
+            primaryActive.status === 'Billing' ||
+            primaryActive.payment === 'Awaiting Payment' ||
+            primaryActive.paymentStatus === 'Awaiting Payment'
+          );
+
           setTableOccupiedInfo({
             isOccupied: true,
             orderId: primaryActive.orderId || primaryActive.id || primaryActive._id,
-            status: primaryActive.status || 'Placed'
+            status: primaryActive.status || 'Placed',
+            isBillGenerated: isBillGen
           });
-          setTableCleaningInfo(null);
 
           const mappedActive = activeBackendOrders.map(ao => ({
             orderId: ao.orderId || ao.id || ao._id,
             table: ao.table || tableNum,
             customer: ao.customer || 'Guest Diner',
             status: ao.status || 'Placed',
+            isBillGenerated: Boolean(
+              ao.isBillGenerated ||
+              ao.billGenerated ||
+              ao.status === 'Bill Generated' ||
+              ao.status === 'Billing' ||
+              ao.payment === 'Awaiting Payment' ||
+              ao.paymentStatus === 'Awaiting Payment'
+            ),
             items: ao.items || [],
             totalAmount: ao.total || 0,
             chefNotes: ao.notes || ''
@@ -261,32 +352,62 @@ export default function MenuPage({ onOpenDemoModal }) {
           setTableOccupiedInfo(null);
           setPlacedTableOrders([]);
 
-          // 3. If NO active order exists, check if table is currently in Cleaning timer state
-          const dbTables = await api.getTables();
-          if (Array.isArray(dbTables)) {
-            const matchedTbl = dbTables.find(t => {
-              const tNum = String(t.number || t.name || '').replace(/[^0-9]/g, '');
-              return tNum && cleanTableNum && String(parseInt(tNum, 10)) === String(parseInt(cleanTableNum, 10));
-            });
+          // Check for recently paid/completed order on this table belonging to CURRENT session
+          const recentCompletedOrder = allOrderSources.find(ord => {
+            const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
+            const isMatch = ordTableDigits && cleanTableNum && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
+            const isPaidOrCompleted = ord.status === 'Completed' || ord.status === 'Paid' || ord.payment === 'Paid' || ord.paymentStatus === 'Paid';
+            const belongsToCurrentSession = activeSess && (
+              (ord.sessionId && (ord.sessionId === String(activeSess._id) || ord.sessionId === activeSess.sessionToken)) ||
+              (ord.sessionToken && ord.sessionToken === activeSess.sessionToken)
+            );
+            return isMatch && isPaidOrCompleted && belongsToCurrentSession;
+          });
 
-            if (matchedTbl && matchedTbl.status === 'Cleaning') {
-              const remainingMs = matchedTbl.cleaningUntil ? (new Date(matchedTbl.cleaningUntil).getTime() - Date.now()) : 0;
-              if (remainingMs > 0) {
-                setTableCleaningInfo({
-                  isCleaning: true,
-                  tableNum: matchedTbl.number || `T-${cleanTableNum.padStart(2, '0')}`,
-                  remainingSec: Math.ceil(remainingMs / 1000)
-                });
-              } else {
-                setTableCleaningInfo(null);
-              }
-            } else {
-              setTableCleaningInfo(null);
+          if (recentCompletedOrder) {
+            const compId = recentCompletedOrder.orderId || recentCompletedOrder.id || recentCompletedOrder._id;
+            if (compId && !sessionStorage.getItem(`flavora_rated_${compId}`) && !dismissedRatingOrderIds.current.has(compId)) {
+              dismissedRatingOrderIds.current.add(compId);
+              setRatingOrderData(recentCompletedOrder);
+              setIsBillModalOpen(false);
+              setEngagementTab('rating');
+              setIsEngagementModalOpen(true);
             }
-          } else {
-            setTableCleaningInfo(null);
           }
         }
+
+        // 4. Determine resolved table status for customer view
+        let resolvedStatus = 'Available';
+        if ((matchedTbl && matchedTbl.status === 'Cleaning') || sessTableStatus === 'Cleaning') {
+          resolvedStatus = 'Cleaning';
+          let targetTime = matchedTbl && matchedTbl.cleaningUntil ? new Date(matchedTbl.cleaningUntil).getTime() : null;
+          if (!targetTime) {
+            const localKey = `flavora_cleaning_start_${matchedTbl?.num || matchedTbl?.number || tableNum}`;
+            const startTime = localStorage.getItem(localKey);
+            if (startTime) {
+              targetTime = parseInt(startTime, 10) + (10 * 60 * 1000);
+            }
+          }
+          const remainingMs = targetTime ? (targetTime - Date.now()) : 0;
+          setTableCleaningInfo({
+            isCleaning: true,
+            tableNum: matchedTbl?.num || matchedTbl?.number || `T-${cleanTableNum.padStart(2, '0')}`,
+            remainingSec: remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0
+          });
+        } else {
+          setTableCleaningInfo(null);
+          if (isBillGen || (matchedTbl && matchedTbl.status === 'Billing')) {
+            resolvedStatus = 'Bill Generated';
+          } else if (activeBackendOrders.length > 0 || (matchedTbl && matchedTbl.status === 'Occupied')) {
+            resolvedStatus = 'Order in Progress';
+          } else if (matchedTbl && matchedTbl.status === 'Reserved') {
+            resolvedStatus = 'Reserved';
+          } else {
+            resolvedStatus = 'Available';
+          }
+        }
+
+        setCurrentTableStatus(resolvedStatus);
       } catch (err) {
         console.warn("Could not fetch backend table status:", err);
       }
@@ -294,13 +415,106 @@ export default function MenuPage({ onOpenDemoModal }) {
 
     checkTableStatus();
     const interval = setInterval(checkTableStatus, 3000);
-    return () => clearInterval(interval);
+
+    const unsubSession = onSocketEvent('table_session_updated', (data) => {
+      checkTableStatus();
+    });
+    const unsubTable = onSocketEvent('table_updated', (data) => {
+      checkTableStatus();
+    });
+    const unsubOrder = onSocketEvent('order_status_updated', () => checkTableStatus());
+    const unsubOrderCreated = onSocketEvent('order_created', () => checkTableStatus());
+
+    window.addEventListener('flavora_orders_updated', checkTableStatus);
+    window.addEventListener('flavora_tables_updated', checkTableStatus);
+    window.addEventListener('storage', checkTableStatus);
+    return () => {
+      clearInterval(interval);
+      if (typeof unsubSession === 'function') unsubSession();
+      if (typeof unsubTable === 'function') unsubTable();
+      if (typeof unsubOrder === 'function') unsubOrder();
+      if (typeof unsubOrderCreated === 'function') unsubOrderCreated();
+      window.removeEventListener('flavora_orders_updated', checkTableStatus);
+      window.removeEventListener('flavora_tables_updated', checkTableStatus);
+      window.removeEventListener('storage', checkTableStatus);
+    };
   }, [tableNum]);
 
-  const updateCartState = (newCart, targetTbl) => {
+  // Event-driven rating modal trigger (e.g. online settlement completed by customer)
+  useEffect(() => {
+    const handlePaymentCompleted = (e) => {
+      const orderId = e?.detail?.orderId || placedTableOrders[0]?.orderId || ratingOrderData?.orderId;
+      if (orderId && !sessionStorage.getItem(`flavora_rated_${orderId}`)) {
+        setIsBillModalOpen(false);
+        setEngagementTab('rating');
+        setIsEngagementModalOpen(true);
+      }
+    };
+
+    const handleOpenRatingModal = (e) => {
+      setIsBillModalOpen(false);
+      setEngagementTab('rating');
+      setIsEngagementModalOpen(true);
+    };
+
+    window.addEventListener('flavora_payment_completed', handlePaymentCompleted);
+    window.addEventListener('flavora_open_rating_modal', handleOpenRatingModal);
+    return () => {
+      window.removeEventListener('flavora_payment_completed', handlePaymentCompleted);
+      window.removeEventListener('flavora_open_rating_modal', handleOpenRatingModal);
+    };
+  }, [placedTableOrders, ratingOrderData]);
+
+  const isTableBillGenerated = Boolean(
+    currentTableStatus === 'Bill Generated' ||
+    tableOccupiedInfo?.isBillGenerated ||
+    placedTableOrders.some(o => 
+      o.isBillGenerated || 
+      o.status === 'Bill Generated' || 
+      o.status === 'Billing' || 
+      o.payment === 'Awaiting Payment' || 
+      o.paymentStatus === 'Awaiting Payment'
+    )
+  );
+
+  const isAddDisabled = Boolean(
+    !tableNum ||
+    currentTableStatus === 'Cleaning' ||
+    currentTableStatus === 'Bill Generated' ||
+    isTableBillGenerated
+  );
+
+  const addDisabledReason = !tableNum
+    ? 'Scan QR to Order'
+    : currentTableStatus === 'Cleaning'
+    ? 'Table Unavailable • Cleaning in Progress'
+    : (isTableBillGenerated || currentTableStatus === 'Bill Generated')
+    ? 'Bill Generated • Ordering Closed'
+    : '';
+
+  const confirmedDinerName = React.useMemo(() => {
+    if (activeTableSession && activeTableSession.guestName && activeTableSession.guestName !== 'Guest Diner' && activeTableSession.guestName !== 'Guest' && activeTableSession.guestName.trim()) {
+      return activeTableSession.guestName.trim();
+    }
+    const orderWithCust = placedTableOrders.find(o => o.customer && o.customer !== 'Guest Diner' && o.customer !== 'Guest' && o.customer.trim());
+    if (orderWithCust && orderWithCust.customer) {
+      return orderWithCust.customer.trim();
+    }
+    if (activeTableSession && guestName && guestName.trim() && guestName !== 'Guest Diner' && guestName !== 'Guest') {
+      const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+      const submitted = sessionStorage.getItem(`flavora_order_submitted_${cleanTbl}_${activeTableSession.sessionToken}`);
+      if (submitted || placedTableOrders.length > 0) {
+        return guestName.trim();
+      }
+    }
+    return '';
+  }, [activeTableSession, placedTableOrders, guestName, tableNum]);
+
+  const updateCartState = (newCart, targetTbl, targetSessToken) => {
     setCart(newCart);
     try {
-      const key = getCartStorageKey(targetTbl || tableNum);
+      const sess = targetSessToken || activeTableSession?.sessionToken;
+      const key = getCartStorageKey(targetTbl || tableNum, sess);
       if (Object.keys(newCart).length === 0) {
         localStorage.removeItem(key);
       } else {
@@ -313,20 +527,30 @@ export default function MenuPage({ onOpenDemoModal }) {
   useEffect(() => {
     const handleCartSync = () => {
       try {
-        const key = getCartStorageKey(tableNum);
+        const key = getCartStorageKey(tableNum, activeTableSession?.sessionToken);
         const saved = localStorage.getItem(key);
         if (saved) {
           setCart(JSON.parse(saved));
+        } else {
+          setCart({});
         }
       } catch (e) { }
     };
     window.addEventListener('flavora_cart_updated', handleCartSync);
     return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
-  }, [tableNum]);
+  }, [tableNum, activeTableSession?.sessionToken]);
 
   const handleAddToCart = (id) => {
     if (!tableNum) {
       alert(`Ordering is available exclusively for Dine-In guests via Table QR Code. Please scan your dining table's QR code to unlock dish ordering.`);
+      return;
+    }
+    if (currentTableStatus === 'Cleaning') {
+      alert(`Table ${tableNum} is currently unavailable due to cleaning & sanitization. Please wait until table cleaning is completed.`);
+      return;
+    }
+    if (isTableBillGenerated || currentTableStatus === 'Bill Generated') {
+      alert(`The bill has already been generated for Table ${tableNum || 'this table'}. Additional items cannot be added.`);
       return;
     }
     const updated = { ...cart, [id]: (cart[id] || 0) + 1 };
@@ -580,7 +804,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       if (!groupsMap[normCat]) {
         groupsMap[normCat] = [];
       }
-      groupsMap[normCat].push(item);
+              groupsMap[normCat].push(item);
     });
 
     return Object.keys(groupsMap).map(catName => ({
@@ -594,6 +818,14 @@ export default function MenuPage({ onOpenDemoModal }) {
     e.preventDefault();
     if (isClosedNow) {
       alert(statusDetails.closedMessage);
+      return;
+    }
+    if (currentTableStatus === 'Cleaning' || tableCleaningInfo?.isCleaning) {
+      alert(`Table ${tableNum} is currently unavailable due to cleaning & sanitization. Please wait until table cleaning is completed.`);
+      return;
+    }
+    if (isTableBillGenerated || currentTableStatus === 'Bill Generated') {
+      alert(`The bill has already been generated for Table ${tableNum || 'your table'}. Additional items cannot be placed.`);
       return;
     }
     if (totalCartCount === 0) return;
@@ -616,6 +848,8 @@ export default function MenuPage({ onOpenDemoModal }) {
       table: activeTable,
       type: 'Dine-In',
       customer: guestName.trim() || 'Guest Diner',
+      sessionId: activeTableSession?._id ? String(activeTableSession._id) : (activeTableSession?.sessionToken || ''),
+      sessionToken: activeTableSession?.sessionToken || '',
       notes: chefNotes.trim(),
       items: orderItems,
       total: totalCartPrice,
@@ -631,7 +865,8 @@ export default function MenuPage({ onOpenDemoModal }) {
       // 2. SUCCESS! The backend persisted the order document in MongoDB database.
       setIsSubmittingOrder(false);
       setIsCheckoutModalOpen(false);
-      const cartKey = getCartStorageKey(activeTable || tableNum);
+      const sessTok = activeTableSession?.sessionToken || '';
+      const cartKey = getCartStorageKey(activeTable || tableNum, sessTok);
       try {
         localStorage.removeItem(cartKey);
         localStorage.removeItem('flavora_active_cart'); // Clear legacy single key if exists
@@ -641,9 +876,10 @@ export default function MenuPage({ onOpenDemoModal }) {
       if (guestName.trim()) {
         try {
           const cleanTbl = String(activeTable || tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}`, guestName.trim());
-          sessionStorage.setItem(`flavora_order_submitted_${cleanTbl}`, 'true');
+          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${sessTok}`, guestName.trim());
+          sessionStorage.setItem(`flavora_order_submitted_${cleanTbl}_${sessTok}`, 'true');
         } catch (e) { }
+        setActiveTableSession(prev => prev ? { ...prev, guestName: guestName.trim() } : prev);
       }
       setChefNotes('');
 
@@ -661,51 +897,44 @@ export default function MenuPage({ onOpenDemoModal }) {
         const cleanT = activeTable.toUpperCase().replace('TABLE', '').replace('T-', '').trim();
         const savedOrders = Array.isArray(placedTableOrders) ? [...placedTableOrders] : [];
 
-        const formattedOrderObj = {
-          orderId: backendOrderId,
-          table: persistedOrder?.table || activeTable,
-          customer: persistedOrder?.customer || (guestName.trim() || 'Guest Diner'),
-          status: persistedOrder?.status || 'Placed',
-          items: persistedOrder?.items || orderItems,
-          totalAmount: persistedOrder?.total || persistedOrder?.totalAmount || totalCartPrice,
-          chefNotes: persistedOrder?.notes || persistedOrder?.chefNotes || chefNotes
-        };
+        const existingIdx = savedOrders.findIndex(o => {
+          const oTable = String(o.table || '').toUpperCase().replace('TABLE', '').replace('T-', '').trim();
+          return oTable === cleanT;
+        });
 
-        const existingIdx = savedOrders.findIndex(o => (o.orderId || o.id) === backendOrderId);
-        let newPlacedOrders = [];
         if (existingIdx >= 0) {
-          newPlacedOrders = savedOrders;
-          newPlacedOrders[existingIdx] = formattedOrderObj;
-        } else {
-          newPlacedOrders = [formattedOrderObj];
-        }
-
-        setPlacedTableOrders(newPlacedOrders);
-
-        localStorage.setItem(`flavora_table_orders_${activeTable}`, JSON.stringify(newPlacedOrders));
-        localStorage.setItem(`flavora_table_orders_T-${cleanT}`, JSON.stringify(newPlacedOrders));
-
-        // Update local table list
-        const savedTables = localStorage.getItem('flavora_tables');
-        let tablesList = savedTables ? JSON.parse(savedTables) : [];
-        if (Array.isArray(tablesList) && tablesList.length > 0) {
-          tablesList = tablesList.map(t => {
-            const tClean = (t.num || '').replace(/[^0-9]/g, '');
-            const activeClean = activeTable.replace(/[^0-9]/g, '');
-            if (tClean && activeClean && parseInt(tClean, 10) === parseInt(activeClean, 10)) {
-              return {
-                ...t,
-                status: 'Occupied',
-                cleaningUntil: null,
-                orderId: backendOrderId,
-                amount: `₹${totalCartPrice}`,
-                customer: guestName.trim() || 'QR Diner'
-              };
+          const existingOrd = savedOrders[existingIdx];
+          const mergedItems = [...(existingOrd.items || [])];
+          orderItems.forEach(ni => {
+            const mIdx = mergedItems.findIndex(mi => mi.name.toLowerCase() === ni.name.toLowerCase());
+            if (mIdx >= 0) {
+              mergedItems[mIdx].quantity = (mergedItems[mIdx].quantity || 1) + ni.quantity;
+            } else {
+              mergedItems.push({ ...ni });
             }
-            return t;
           });
-          localStorage.setItem('flavora_tables', JSON.stringify(tablesList));
+          savedOrders[existingIdx] = {
+            ...existingOrd,
+            items: mergedItems,
+            totalAmount: (existingOrd.totalAmount || 0) + totalCartPrice,
+            orderId: backendOrderId
+          };
+        } else {
+          savedOrders.push({
+            orderId: backendOrderId,
+            table: activeTable,
+            customer: guestName.trim() || 'Guest Diner',
+            items: orderItems,
+            totalAmount: totalCartPrice,
+            chefNotes: chefNotes.trim(),
+            status: 'Placed'
+          });
         }
+
+        setPlacedTableOrders(savedOrders);
+        localStorage.setItem(`flavora_orders_${cleanT}`, JSON.stringify(savedOrders));
+        localStorage.setItem(`flavora_table_session_${cleanT}`, JSON.stringify({ isOccupied: true, orderId: backendOrderId }));
+        window.dispatchEvent(new Event('flavora_orders_updated'));
       } catch (e) { }
 
       window.dispatchEvent(new Event('flavora_tables_updated'));
@@ -717,7 +946,7 @@ export default function MenuPage({ onOpenDemoModal }) {
     }
   };
 
-  const isFixedTableBarActive = Boolean(tableNum && !tableCleaningInfo?.isCleaning);
+  const isFixedTableBarActive = Boolean(tableNum);
 
   if (isMobile) {
     return (
@@ -753,6 +982,13 @@ export default function MenuPage({ onOpenDemoModal }) {
           activeTableSession={activeTableSession}
           isClosedNow={isClosedNow}
           statusDetails={statusDetails}
+          isTableBillGenerated={isTableBillGenerated}
+          currentTableStatus={currentTableStatus}
+          tableCleaningInfo={tableCleaningInfo}
+          isAddDisabled={isAddDisabled}
+          disabledReason={addDisabledReason}
+          confirmedDinerName={confirmedDinerName}
+          setIsOrderTrackingOpen={setIsOrderTrackingOpen}
         />
 
         {/* Category Drawer Modal */}
@@ -837,8 +1073,15 @@ export default function MenuPage({ onOpenDemoModal }) {
         {selectedDishForDetail && (
           <CustomerDishDetailModal
             dish={selectedDishForDetail}
+            isBillGenerated={isTableBillGenerated}
+            isAddDisabled={isAddDisabled}
+            disabledReason={addDisabledReason}
             onClose={() => setSelectedDishForDetail(null)}
             onAddToCart={(dishObj, qty) => {
+              if (isAddDisabled) {
+                alert(addDisabledReason || 'Ordering is currently locked for this table.');
+                return;
+              }
               const id = dishObj.id || dishObj._id;
               const currentQty = cart[id] || 0;
               const newCart = { ...cart, [id]: currentQty + qty };
@@ -852,6 +1095,7 @@ export default function MenuPage({ onOpenDemoModal }) {
         {isOrderTrackingOpen && (
           <CustomerOrderTrackingModal
             activeOrder={placedTableOrders[0] || null}
+            orders={placedTableOrders}
             tableNum={tableNum}
             onClose={() => setIsOrderTrackingOpen(false)}
             onAddMoreItems={() => setIsOrderTrackingOpen(false)}
@@ -865,10 +1109,20 @@ export default function MenuPage({ onOpenDemoModal }) {
         {/* Live Running Bill Modal */}
         {isBillModalOpen && (
           <CustomerBillModal
-            activeOrder={placedTableOrders[0] || null}
+            activeOrder={placedTableOrders[0] || ratingOrderData || null}
             tableNum={tableNum}
             onClose={() => setIsBillModalOpen(false)}
-            onPaymentSuccess={() => setAppliedCoupon(null)}
+            onPaymentSuccess={() => {
+              setAppliedCoupon(null);
+              setIsBillModalOpen(false);
+              setEngagementTab('rating');
+              setIsEngagementModalOpen(true);
+            }}
+            onOpenRating={() => {
+              setIsBillModalOpen(false);
+              setEngagementTab('rating');
+              setIsEngagementModalOpen(true);
+            }}
             appliedCoupon={appliedCoupon}
             setAppliedCoupon={setAppliedCoupon}
             loyaltyPoints={250}
@@ -880,8 +1134,12 @@ export default function MenuPage({ onOpenDemoModal }) {
         {isEngagementModalOpen && (
           <CustomerEngagementModal
             activeTab={engagementTab}
-            onClose={() => setIsEngagementModalOpen(false)}
-            activeOrder={placedTableOrders[0] || null}
+            onClose={() => {
+              setIsEngagementModalOpen(false);
+              const compId = ratingOrderData?.orderId || ratingOrderData?.id || ratingOrderData?._id || placedTableOrders[0]?.orderId;
+              if (compId) dismissedRatingOrderIds.current.add(compId);
+            }}
+            activeOrder={placedTableOrders[0] || ratingOrderData || null}
             tableNum={tableNum}
             currentLanguage={currentLanguage}
             onLanguageChange={(lang) => setCurrentLanguage(lang)}
@@ -952,9 +1210,14 @@ export default function MenuPage({ onOpenDemoModal }) {
                               <span className="customer-qr-qty-val">{qty}</span>
                               <button
                                 type="button"
-                                onClick={() => handleAddToCart(dish.id || id)}
+                                disabled={isTableBillGenerated}
+                                onClick={() => !isTableBillGenerated && handleAddToCart(dish.id || id)}
                                 className="customer-qr-qty-btn"
                                 aria-label="Increase quantity"
+                                style={{
+                                  opacity: isTableBillGenerated ? 0.5 : 1,
+                                  cursor: isTableBillGenerated ? 'not-allowed' : 'pointer'
+                                }}
                               >
                                 <Plus size={13} />
                               </button>
@@ -1023,13 +1286,18 @@ export default function MenuPage({ onOpenDemoModal }) {
                   )}
                 </div>
 
-                {/* ASSIGNED DINER — READ ONLY (Strictly No Text Input, No Edit Button when Active Session Exists) */}
-                {activeTableSession && activeTableSession.guestName && activeTableSession.guestName !== 'Guest Diner' ? (
+                {/* CONFIRMED DINER — READ ONLY (Persists for the entire session once entered or assigned) */}
+                {confirmedDinerName ? (
                   <div className="admin-form-group mb-3">
-                    <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.4rem' }}>
-                      <UserCheck size={16} color="#15803D" />
-                      <span>Assigned Diner</span>
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                      <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0 }}>
+                        <UserCheck size={16} color="#15803D" />
+                        <span>Diner Name (Locked)</span>
+                      </label>
+                      <span style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 800, backgroundColor: '#DCFCE7', padding: '0.15rem 0.5rem', borderRadius: '6px' }}>
+                        🔒 Cannot be changed
+                      </span>
+                    </div>
                     <div style={{
                       backgroundColor: '#F0FDF4',
                       border: '1.5px solid #86EFAC',
@@ -1042,16 +1310,16 @@ export default function MenuPage({ onOpenDemoModal }) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                           <span style={{ fontSize: '1.4rem' }}>👤</span>
                           <div>
-                            <div style={{ color: '#0F2A1D', fontWeight: 900, fontSize: '1.05rem', lineHeight: 1.2 }}>
-                              {activeTableSession.guestName}
+                            <div style={{ color: '#0F2A1D', fontWeight: 900, fontSize: '1.08rem', lineHeight: 1.2 }}>
+                              {confirmedDinerName}
                             </div>
-                            <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.15rem' }}>
-                              Name assigned by Receptionist
+                            <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <span>🔒 Name locked for Table {tableNum || ''} until order is completed</span>
                             </div>
                           </div>
                         </div>
                         <span style={{ fontSize: '0.76rem', backgroundColor: '#DCFCE7', padding: '0.25rem 0.65rem', borderRadius: '8px', color: '#15803D', fontWeight: 800 }}>
-                          👥 {activeTableSession.partySize || 2} Guests
+                          👥 {activeTableSession?.partySize || 2} Guests
                         </span>
                       </div>
                     </div>
@@ -1059,7 +1327,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                 ) : (
                   <div className="admin-form-group mb-3">
                     <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D' }}>
-                      Your Name
+                      Your Name / Diner Name
                     </label>
                     <input
                       type="text"
@@ -1070,18 +1338,22 @@ export default function MenuPage({ onOpenDemoModal }) {
                         setGuestName(val);
                         try {
                           const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}`, val);
+                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val);
                         } catch (err) { }
                       }}
                       className="form-control"
                       style={{
+                        padding: '0.75rem 1rem',
+                        fontSize: '0.92rem',
                         borderRadius: '10px',
-                        padding: '0.65rem 0.85rem',
-                        fontSize: '0.9rem',
-                        fontWeight: 600,
-                        border: '1.5px solid #CBD5E1'
+                        border: '1.5px solid #CBD5E1',
+                        backgroundColor: '#FFFFFF',
+                        fontWeight: 600
                       }}
                     />
+                    <div style={{ fontSize: '0.73rem', color: '#64748B', marginTop: '0.35rem', fontWeight: 600 }}>
+                      ℹ️ Once submitted, this name will be permanently locked for Table {tableNum || ''} until your order is completed.
+                    </div>
                   </div>
                 )}
 
@@ -1105,28 +1377,35 @@ export default function MenuPage({ onOpenDemoModal }) {
                   </div>
                 )}
 
+                {isTableBillGenerated && (
+                  <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.7rem 0.9rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Clock size={16} color="#DC2626" />
+                    <span>Bill has already been generated for Table {tableNum}. Additional items cannot be added or placed.</span>
+                  </div>
+                )}
+
                 <div className="customer-qr-footer-actions">
                   <button
                     type="button"
                     className="btn btn-outline customer-qr-btn-secondary"
                     onClick={() => setIsCheckoutModalOpen(false)}
                   >
-                    <span>Add More Items</span>
+                    <span>{isTableBillGenerated ? 'Close' : 'Add More Items'}</span>
                   </button>
 
                   <button
                     type="submit"
-                    disabled={isSubmittingOrder || isClosedNow}
+                    disabled={isSubmittingOrder || isClosedNow || isTableBillGenerated}
                     className="btn btn-primary customer-qr-btn-primary"
                     style={{
-                      backgroundColor: isClosedNow ? '#94A3B8' : '#FF8A00',
-                      borderColor: isClosedNow ? '#94A3B8' : '#FF8A00',
-                      cursor: isClosedNow ? 'not-allowed' : 'pointer',
-                      opacity: isClosedNow ? 0.7 : 1
+                      backgroundColor: (isClosedNow || isTableBillGenerated) ? '#94A3B8' : '#FF8A00',
+                      borderColor: (isClosedNow || isTableBillGenerated) ? '#94A3B8' : '#FF8A00',
+                      cursor: (isClosedNow || isTableBillGenerated) ? 'not-allowed' : 'pointer',
+                      opacity: (isClosedNow || isTableBillGenerated) ? 0.7 : 1
                     }}
                   >
                     <Send size={15} />
-                    <span>{isClosedNow ? 'Closed for Orders' : (isSubmittingOrder ? 'Placing Order...' : 'Confirm & Place Order')}</span>
+                    <span>{isClosedNow ? 'Closed for Orders' : (isTableBillGenerated ? 'Bill Generated • Ordering Closed' : (isSubmittingOrder ? 'Placing Order...' : 'Confirm & Place Order'))}</span>
                   </button>
                 </div>
 
@@ -1211,9 +1490,91 @@ export default function MenuPage({ onOpenDemoModal }) {
           </div>
         )}
 
+        {/* Real-time Order Tracking Modal */}
+        {isOrderTrackingOpen && (
+          <CustomerOrderTrackingModal
+            activeOrder={placedTableOrders[0] || null}
+            orders={placedTableOrders}
+            tableNum={tableNum}
+            onClose={() => {
+              setIsOrderTrackingOpen(false);
+              setCustomerNavTab('menu');
+            }}
+            onAddMoreItems={() => {
+              setIsOrderTrackingOpen(false);
+              setCustomerNavTab('menu');
+              window.scrollTo({ top: 400, behavior: 'smooth' });
+            }}
+            onViewBill={() => {
+              setIsOrderTrackingOpen(false);
+              setCustomerNavTab('bill');
+              setIsBillModalOpen(true);
+            }}
+          />
+        )}
+
+        {/* Live Running Bill & Settlement Modal */}
+        {isBillModalOpen && (
+          <CustomerBillModal
+            activeOrder={placedTableOrders[0] || ratingOrderData || null}
+            tableNum={tableNum}
+            onClose={() => {
+              setIsBillModalOpen(false);
+              setCustomerNavTab('menu');
+            }}
+            onPaymentSuccess={() => {
+              setAppliedCoupon(null);
+              setIsBillModalOpen(false);
+              setCustomerNavTab('more');
+              setEngagementTab('rating');
+              setIsEngagementModalOpen(true);
+            }}
+            onOpenRating={() => {
+              setIsBillModalOpen(false);
+              setCustomerNavTab('more');
+              setEngagementTab('rating');
+              setIsEngagementModalOpen(true);
+            }}
+            appliedCoupon={appliedCoupon}
+            setAppliedCoupon={setAppliedCoupon}
+            loyaltyPoints={250}
+            brandSettings={{ brandName }}
+          />
+        )}
+
+        {/* Engagement Modal (Rating, Table Booking, Referral, Language) */}
+        {isEngagementModalOpen && (
+          <CustomerEngagementModal
+            activeTab={engagementTab}
+            onClose={() => {
+              setIsEngagementModalOpen(false);
+              setCustomerNavTab('menu');
+              const compId = ratingOrderData?.orderId || ratingOrderData?.id || ratingOrderData?._id || placedTableOrders[0]?.orderId;
+              if (compId) dismissedRatingOrderIds.current.add(compId);
+            }}
+            activeOrder={placedTableOrders[0] || ratingOrderData || null}
+            tableNum={tableNum}
+            currentLanguage={currentLanguage}
+            onLanguageChange={(lang) => setCurrentLanguage(lang)}
+          />
+        )}
+
+        {/* Dish Detail Modal */}
+        {selectedDishForDetail && (
+          <CustomerDishDetailModal
+            dish={selectedDishForDetail}
+            onClose={() => setSelectedDishForDetail(null)}
+            onAddToCart={handleAddToCart}
+            cartQty={cart[selectedDishForDetail._id || selectedDishForDetail.id] || 0}
+            isAddDisabled={isAddDisabled}
+            disabledReason={addDisabledReason}
+          />
+        )}
+
         {/* Mobile Customer Bottom Nav */}
         <CustomerBottomNav
           activeTab={customerNavTab}
+          activeOrderCount={placedTableOrders.length}
           onSelectTab={(tab) => {
             setCustomerNavTab(tab);
             if (tab === 'menu') {
@@ -1272,14 +1633,34 @@ export default function MenuPage({ onOpenDemoModal }) {
       {/* ================= CUSTOMER SEATED QR BADGE STRIP (SINGLE LINE FIT AT TOP) ================= */}
       {isFixedTableBarActive && (
         <div className="customer-seated-bar">
-          {/* Left Side: Table Badge & Seated Text */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, flexShrink: 1 }}>
-            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
+          {/* Left Side: Table Badge & Real-Time Status Pill */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0, flexShrink: 1 }}>
+            <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
               Table {tableNum}
             </span>
-            <span style={{ fontSize: '0.75rem', color: '#C8E6C9', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              📍 Seated
-            </span>
+            {confirmedDinerName && (
+              <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #86EFAC', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}>
+                <span>👤</span>
+                <span>{confirmedDinerName}</span>
+              </span>
+            )}
+            {currentTableStatus === 'Cleaning' ? (
+              <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #FCD34D' }}>
+                🧹 Cleaning in Progress
+              </span>
+            ) : currentTableStatus === 'Order in Progress' ? (
+              <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #BFDBFE' }}>
+                ⏳ Order in Progress
+              </span>
+            ) : (currentTableStatus === 'Bill Generated' || isTableBillGenerated) ? (
+              <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #FDE68A' }}>
+                🧾 Bill Generated
+              </span>
+            ) : (
+              <span style={{ backgroundColor: '#DCFCE7', color: '#166534', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #86EFAC' }}>
+                🟢 Table Available
+              </span>
+            )}
           </div>
 
           {/* Right Side: My Orders (if any) + Cart Button */}
@@ -1287,7 +1668,7 @@ export default function MenuPage({ onOpenDemoModal }) {
             {placedTableOrders.length > 0 && (
               <button
                 type="button"
-                onClick={() => setIsCustomerOrdersModalOpen(true)}
+                onClick={() => setIsOrderTrackingOpen(true)}
                 style={{
                   backgroundColor: '#F2C14E',
                   color: '#0F2A1D',
@@ -1392,10 +1773,10 @@ export default function MenuPage({ onOpenDemoModal }) {
       )}
 
       {/* Active Table Order Info Banner */}
-      {tableNum && tableOccupiedInfo && tableOccupiedInfo.isOccupied && (
+      {tableNum && currentTableStatus === 'Order in Progress' && (
         <div style={{
-          backgroundColor: '#F0FDF4',
-          border: '1.5px solid #86EFAC',
+          backgroundColor: '#EFF6FF',
+          border: '1.5px solid #60A5FA',
           borderRadius: '14px',
           padding: '0.85rem 1.25rem',
           margin: '1rem auto 0.5rem auto',
@@ -1405,23 +1786,51 @@ export default function MenuPage({ onOpenDemoModal }) {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '0.85rem',
-          boxShadow: '0 4px 16px rgba(22, 101, 52, 0.06)'
+          boxShadow: '0 4px 16px rgba(37, 99, 235, 0.08)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ backgroundColor: '#166534', color: '#FFFFFF', padding: '0.55rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <QrCode size={22} />
+            <div style={{ backgroundColor: '#2563EB', color: '#FFFFFF', padding: '0.55rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Clock size={22} />
             </div>
             <div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                <span>📍 Seated at Table {tableNum}</span>
-                <span style={{ backgroundColor: '#DCFCE7', color: '#166534', fontSize: '0.72rem', padding: '0.15rem 0.55rem', borderRadius: '9999px', fontWeight: 800, border: '1px solid #86EFAC' }}>
-                  🟢 Active Session
+              <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                <span>📍 Table {tableNum} — Order in Progress</span>
+                <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', fontSize: '0.72rem', padding: '0.15rem 0.55rem', borderRadius: '9999px', fontWeight: 800, border: '1px solid #BFDBFE' }}>
+                  ⏳ Order in Progress
                 </span>
               </div>
-              <p style={{ fontSize: '0.82rem', color: '#15803D', margin: '0.2rem 0 0 0', fontWeight: 600 }}>
-                You are currently ordering for Table {tableNum}. Feel free to browse the menu and add dishes to your order anytime!
+              <p style={{ fontSize: '0.82rem', color: '#1D4ED8', margin: '0.2rem 0 0 0', fontWeight: 600 }}>
+                Dishes are currently being prepared or served for this table. Adding additional items is locked until the table becomes available.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bill Generated Notice Banner */}
+      {tableNum && (currentTableStatus === 'Bill Generated' || isTableBillGenerated) && (
+        <div style={{
+          backgroundColor: '#FFFBEB',
+          border: '1.5px solid #FCD34D',
+          borderRadius: '14px',
+          padding: '0.85rem 1.25rem',
+          margin: '1rem auto 0.5rem auto',
+          maxWidth: '1200px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.85rem',
+          boxShadow: '0 4px 16px rgba(245, 158, 11, 0.08)'
+        }}>
+          <div style={{ backgroundColor: '#D97706', color: '#FFFFFF', padding: '0.55rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={22} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#92400E', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span>🧾 Bill Generated for Table {tableNum}</span>
+            </div>
+            <p style={{ fontSize: '0.82rem', color: '#78350F', margin: '0.2rem 0 0 0', fontWeight: 600 }}>
+              The bill has been generated for this table. Additional dishes cannot be placed until payment is completed.
+            </p>
           </div>
         </div>
       )}
@@ -1745,6 +2154,41 @@ export default function MenuPage({ onOpenDemoModal }) {
                               <span style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 700, fontStyle: 'italic', backgroundColor: '#F1F5F9', padding: '0.3rem 0.75rem', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
                                 Scan QR to Order
                               </span>
+                            ) : isAddDisabled ? (
+                              <button
+                                type="button"
+                                disabled
+                                title={
+                                  currentTableStatus === 'Cleaning'
+                                    ? `Table ${tableNum} is currently unavailable due to cleaning & sanitization.`
+                                    : currentTableStatus === 'Order in Progress'
+                                    ? `Table ${tableNum} currently has an order in progress.`
+                                    : isTableBillGenerated || currentTableStatus === 'Bill Generated'
+                                    ? `Bill has already been generated for Table ${tableNum}. Additional items cannot be added.`
+                                    : 'Table is currently unavailable.'
+                                }
+                                style={{
+                                  backgroundColor: '#F1F5F9',
+                                  color: '#94A3B8',
+                                  border: '1.5px solid #CBD5E1',
+                                  borderRadius: '8px',
+                                  padding: '0.45rem 1rem',
+                                  fontWeight: 800,
+                                  fontSize: '0.78rem',
+                                  cursor: 'not-allowed',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                <span>
+                                  {currentTableStatus === 'Cleaning'
+                                    ? 'CLEANING'
+                                    : currentTableStatus === 'Order in Progress'
+                                    ? 'IN PROGRESS'
+                                    : isTableBillGenerated || currentTableStatus === 'Bill Generated'
+                                    ? 'BILL GEN'
+                                    : 'LOCKED'}
+                                </span>
+                              </button>
                             ) : qty > 0 ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.2rem 0.5rem', borderRadius: '8px' }}>
                                 <button
@@ -1757,8 +2201,9 @@ export default function MenuPage({ onOpenDemoModal }) {
                                 <span style={{ fontWeight: 800, fontSize: '0.88rem', minWidth: '18px', textAlign: 'center' }}>{qty}</span>
                                 <button
                                   type="button"
-                                  onClick={() => handleAddToCart(item.id)}
-                                  style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
+                                  disabled={isAddDisabled}
+                                  onClick={() => !isAddDisabled && handleAddToCart(item.id)}
+                                  style={{ background: 'none', border: 'none', color: isAddDisabled ? '#94A3B8' : '#FFFFFF', cursor: isAddDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
                                 >
                                   <Plus size={14} />
                                 </button>
@@ -1969,9 +2414,14 @@ export default function MenuPage({ onOpenDemoModal }) {
                             <span className="customer-qr-qty-val">{qty}</span>
                             <button
                               type="button"
-                              onClick={() => handleAddToCart(dish.id || id)}
+                              disabled={isTableBillGenerated}
+                              onClick={() => !isTableBillGenerated && handleAddToCart(dish.id || id)}
                               className="customer-qr-qty-btn"
                               aria-label="Increase quantity"
+                              style={{
+                                opacity: isTableBillGenerated ? 0.5 : 1,
+                                cursor: isTableBillGenerated ? 'not-allowed' : 'pointer'
+                              }}
                             >
                               <Plus size={13} />
                             </button>
@@ -2040,13 +2490,18 @@ export default function MenuPage({ onOpenDemoModal }) {
                 )}
               </div>
 
-              {/* ASSIGNED DINER — READ ONLY (Strictly No Text Input, No Edit Button when Active Session Exists) */}
-              {activeTableSession && activeTableSession.guestName && activeTableSession.guestName !== 'Guest Diner' ? (
+              {/* CONFIRMED DINER — READ ONLY (Persists for the entire session once entered or assigned) */}
+              {confirmedDinerName ? (
                 <div className="admin-form-group mb-3">
-                  <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.4rem' }}>
-                    <UserCheck size={16} color="#15803D" />
-                    <span>Assigned Diner</span>
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0 }}>
+                      <UserCheck size={16} color="#15803D" />
+                      <span>Diner Name (Locked)</span>
+                    </label>
+                    <span style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 800, backgroundColor: '#DCFCE7', padding: '0.15rem 0.5rem', borderRadius: '6px' }}>
+                      🔒 Cannot be changed
+                    </span>
+                  </div>
                   <div style={{
                     backgroundColor: '#F0FDF4',
                     border: '1.5px solid #86EFAC',
@@ -2059,16 +2514,16 @@ export default function MenuPage({ onOpenDemoModal }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                         <span style={{ fontSize: '1.4rem' }}>👤</span>
                         <div>
-                          <div style={{ color: '#0F2A1D', fontWeight: 900, fontSize: '1.05rem', lineHeight: 1.2 }}>
-                            {activeTableSession.guestName}
+                          <div style={{ color: '#0F2A1D', fontWeight: 900, fontSize: '1.08rem', lineHeight: 1.2 }}>
+                            {confirmedDinerName}
                           </div>
-                          <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.15rem' }}>
-                            Name assigned by Reception
+                          <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span>🔒 Name locked for Table {tableNum || ''} until order is completed</span>
                           </div>
                         </div>
                       </div>
                       <span style={{ fontSize: '0.76rem', backgroundColor: '#DCFCE7', padding: '0.25rem 0.65rem', borderRadius: '8px', color: '#15803D', fontWeight: 800 }}>
-                        👥 {activeTableSession.partySize || 2} Guests
+                        👥 {activeTableSession?.partySize || 2} Guests
                       </span>
                     </div>
                   </div>
@@ -2087,18 +2542,22 @@ export default function MenuPage({ onOpenDemoModal }) {
                       setGuestName(val);
                       try {
                         const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                        sessionStorage.setItem(`flavora_guest_name_${cleanTbl}`, val);
+                        sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val);
                       } catch (err) { }
                     }}
                     className="form-control"
                     style={{
                       borderRadius: '10px',
-                      padding: '0.65rem 0.85rem',
-                      fontSize: '0.9rem',
+                      padding: '0.75rem 0.95rem',
+                      fontSize: '0.92rem',
                       fontWeight: 600,
-                      border: '1.5px solid #CBD5E1'
+                      border: '1.5px solid #CBD5E1',
+                      backgroundColor: '#FFFFFF'
                     }}
                   />
+                  <div style={{ fontSize: '0.73rem', color: '#64748B', marginTop: '0.35rem', fontWeight: 600 }}>
+                    ℹ️ Once submitted, this name will be permanently locked for Table {tableNum || ''} until your order is completed.
+                  </div>
                 </div>
               )}
 
@@ -2122,28 +2581,35 @@ export default function MenuPage({ onOpenDemoModal }) {
                 </div>
               )}
 
+              {isTableBillGenerated && (
+                <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.7rem 0.9rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Clock size={16} color="#DC2626" />
+                  <span>Bill has already been generated for Table {tableNum}. Additional items cannot be added or placed.</span>
+                </div>
+              )}
+
               <div className="customer-qr-footer-actions">
                 <button
                   type="button"
                   className="btn btn-outline customer-qr-btn-secondary"
                   onClick={() => setIsCheckoutModalOpen(false)}
                 >
-                  <span>Add More Items</span>
+                  <span>{isTableBillGenerated ? 'Close' : 'Add More Items'}</span>
                 </button>
 
                 <button
                   type="submit"
-                  disabled={isSubmittingOrder || isClosedNow}
+                  disabled={isSubmittingOrder || isClosedNow || isTableBillGenerated}
                   className="btn btn-primary customer-qr-btn-primary"
                   style={{
-                    backgroundColor: isClosedNow ? '#94A3B8' : '#FF8A00',
-                    borderColor: isClosedNow ? '#94A3B8' : '#FF8A00',
-                    cursor: isClosedNow ? 'not-allowed' : 'pointer',
-                    opacity: isClosedNow ? 0.7 : 1
+                    backgroundColor: (isClosedNow || isTableBillGenerated) ? '#94A3B8' : '#FF8A00',
+                    borderColor: (isClosedNow || isTableBillGenerated) ? '#94A3B8' : '#FF8A00',
+                    cursor: (isClosedNow || isTableBillGenerated) ? 'not-allowed' : 'pointer',
+                    opacity: (isClosedNow || isTableBillGenerated) ? 0.7 : 1
                   }}
                 >
                   <Send size={15} />
-                  <span>{isClosedNow ? 'Closed for Orders' : (isSubmittingOrder ? 'Placing Order...' : 'Confirm & Place Order')}</span>
+                  <span>{isClosedNow ? 'Closed for Orders' : (isTableBillGenerated ? 'Bill Generated • Ordering Closed' : (isSubmittingOrder ? 'Placing Order...' : 'Confirm & Place Order'))}</span>
                 </button>
               </div>
 
@@ -2356,8 +2822,15 @@ export default function MenuPage({ onOpenDemoModal }) {
       {selectedDishForDetail && (
         <CustomerDishDetailModal
           dish={selectedDishForDetail}
+          isBillGenerated={isTableBillGenerated}
+          isAddDisabled={isAddDisabled}
+          disabledReason={addDisabledReason}
           onClose={() => setSelectedDishForDetail(null)}
           onAddToCart={(dishObj, qty, options) => {
+            if (isAddDisabled) {
+              alert(addDisabledReason || 'Ordering is currently locked for this table.');
+              return;
+            }
             const id = dishObj.id || dishObj._id;
             const currentQty = cart[id] || 0;
             const newCart = { ...cart, [id]: currentQty + qty };
@@ -2368,17 +2841,24 @@ export default function MenuPage({ onOpenDemoModal }) {
       )}
 
       {/* Real-time Order Tracking Modal */}
+      {/* Customer Mobile Order Tracking Modal */}
       {isOrderTrackingOpen && (
         <CustomerOrderTrackingModal
           activeOrder={placedTableOrders[0] || null}
+          orders={placedTableOrders}
           tableNum={tableNum}
-          onClose={() => setIsOrderTrackingOpen(false)}
+          onClose={() => {
+            setIsOrderTrackingOpen(false);
+            setCustomerNavTab('menu');
+          }}
           onAddMoreItems={() => {
             setIsOrderTrackingOpen(false);
+            setCustomerNavTab('menu');
             window.scrollTo({ top: 400, behavior: 'smooth' });
           }}
           onViewBill={() => {
             setIsOrderTrackingOpen(false);
+            setCustomerNavTab('bill');
             setIsBillModalOpen(true);
           }}
         />
@@ -2387,11 +2867,24 @@ export default function MenuPage({ onOpenDemoModal }) {
       {/* Live Running Bill & Settlement Modal */}
       {isBillModalOpen && (
         <CustomerBillModal
-          activeOrder={placedTableOrders[0] || null}
+          activeOrder={placedTableOrders[0] || ratingOrderData || null}
           tableNum={tableNum}
-          onClose={() => setIsBillModalOpen(false)}
+          onClose={() => {
+            setIsBillModalOpen(false);
+            setCustomerNavTab('menu');
+          }}
           onPaymentSuccess={() => {
             setAppliedCoupon(null);
+            setIsBillModalOpen(false);
+            setCustomerNavTab('more');
+            setEngagementTab('rating');
+            setIsEngagementModalOpen(true);
+          }}
+          onOpenRating={() => {
+            setIsBillModalOpen(false);
+            setCustomerNavTab('more');
+            setEngagementTab('rating');
+            setIsEngagementModalOpen(true);
           }}
           appliedCoupon={appliedCoupon}
           setAppliedCoupon={setAppliedCoupon}
@@ -2404,8 +2897,13 @@ export default function MenuPage({ onOpenDemoModal }) {
       {isEngagementModalOpen && (
         <CustomerEngagementModal
           activeTab={engagementTab}
-          onClose={() => setIsEngagementModalOpen(false)}
-          activeOrder={placedTableOrders[0] || null}
+          onClose={() => {
+            setIsEngagementModalOpen(false);
+            setCustomerNavTab('menu');
+            const compId = ratingOrderData?.orderId || ratingOrderData?.id || ratingOrderData?._id || placedTableOrders[0]?.orderId;
+            if (compId) dismissedRatingOrderIds.current.add(compId);
+          }}
+          activeOrder={placedTableOrders[0] || ratingOrderData || null}
           tableNum={tableNum}
           currentLanguage={currentLanguage}
           onLanguageChange={(lang) => setCurrentLanguage(lang)}
@@ -2415,6 +2913,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       {/* Customer Mobile Bottom Navigation Bar */}
       <CustomerBottomNav
         activeTab={customerNavTab}
+        activeOrderCount={placedTableOrders.length}
         onSelectTab={(tab) => {
           setCustomerNavTab(tab);
           if (tab === 'menu') {

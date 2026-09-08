@@ -26,6 +26,7 @@ export default function ReceptionistReservationsPage() {
   const [inspectResv, setInspectResv] = useState(null);
   const [assignTableResv, setAssignTableResv] = useState(null);
   const [selectedAssignTable, setSelectedAssignTable] = useState('');
+  const [isAssigningTable, setIsAssigningTable] = useState(false);
 
   // New Reservation Form
   const [resvForm, setResvForm] = useState({
@@ -175,17 +176,22 @@ export default function ReceptionistReservationsPage() {
 
   const handleAssignTableSubmit = async (e) => {
     e.preventDefault();
-    if (!assignTableResv || !selectedAssignTable) return;
+    if (!assignTableResv || !selectedAssignTable || isAssigningTable) return;
+    setIsAssigningTable(true);
     try {
       const res = await api.updateReservationStatus(assignTableResv._id, assignTableResv.status, selectedAssignTable);
       if (res.success) {
-        showToast(`🪑 Table ${selectedAssignTable} assigned to ${assignTableResv.guestName}!`);
+        const resvNum = res.data?.bookingId || assignTableResv.bookingId || assignTableResv._id;
+        showToast(`Confirmed Table ${selectedAssignTable} for reservation number ${resvNum}`);
         setAssignTableResv(null);
         setSelectedAssignTable('');
         fetchReservationsData();
+        window.dispatchEvent(new Event('flavora_tables_updated'));
       }
     } catch (err) {
       alert(`Could not assign table: ${err.message}`);
+    } finally {
+      setIsAssigningTable(false);
     }
   };
 
@@ -827,17 +833,17 @@ export default function ReceptionistReservationsPage() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                    {/* Assign / Change Table */}
-                    {resv.status !== 'Cancelled' && resv.status !== 'Completed' && (
+                    {/* Assign Table - Disappears once table is assigned */}
+                    {isUnassigned && resv.status !== 'Cancelled' && resv.status !== 'Completed' && (
                       <button
                         onClick={() => {
                           setAssignTableResv(resv);
-                          setSelectedAssignTable(resv.tableNo !== 'Unassigned' ? resv.tableNo : '');
+                          setSelectedAssignTable('');
                         }}
                         style={{
-                          backgroundColor: isUnassigned ? '#FFF7ED' : '#F8FAFC',
-                          color: isUnassigned ? '#C2410C' : '#0F2A1D',
-                          border: isUnassigned ? '1.5px solid #FDBA74' : '1px solid #CBD5E1',
+                          backgroundColor: '#FFF7ED',
+                          color: '#C2410C',
+                          border: '1.5px solid #FDBA74',
                           padding: '0.45rem 0.85rem',
                           borderRadius: '10px',
                           fontSize: '0.78rem',
@@ -849,7 +855,7 @@ export default function ReceptionistReservationsPage() {
                         }}
                       >
                         <Armchair size={14} />
-                        <span>{isUnassigned ? 'Assign Table Now' : `Change Table (${resv.tableNo})`}</span>
+                        <span>Assign Table</span>
                       </button>
                     )}
 
@@ -1042,18 +1048,20 @@ export default function ReceptionistReservationsPage() {
                 >
                   Close
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const r = inspectResv;
-                    setInspectResv(null);
-                    setAssignTableResv(r);
-                    setSelectedAssignTable(r.tableNo !== 'Unassigned' ? r.tableNo : '');
-                  }}
-                  style={{ padding: '0.65rem 1.2rem', borderRadius: '10px', border: 'none', backgroundColor: '#0F2A1D', color: '#FFF', fontWeight: 800 }}
-                >
-                  Assign Table
-                </button>
+                {(!inspectResv.tableNo || inspectResv.tableNo === 'Unassigned') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const r = inspectResv;
+                      setInspectResv(null);
+                      setAssignTableResv(r);
+                      setSelectedAssignTable('');
+                    }}
+                    style={{ padding: '0.65rem 1.2rem', borderRadius: '10px', border: 'none', backgroundColor: '#0F2A1D', color: '#FFF', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Assign Table
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1097,7 +1105,22 @@ export default function ReceptionistReservationsPage() {
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
                 <button type="button" onClick={() => setAssignTableResv(null)} style={{ padding: '0.65rem 1.1rem', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 700 }}>Cancel</button>
-                <button type="submit" disabled={!selectedAssignTable} style={{ padding: '0.65rem 1.3rem', borderRadius: '10px', border: 'none', backgroundColor: '#0F2A1D', color: '#FFF', fontWeight: 800, cursor: selectedAssignTable ? 'pointer' : 'not-allowed' }}>Confirm Table Assignment</button>
+                <button
+                  type="submit"
+                  disabled={!selectedAssignTable || isAssigningTable}
+                  style={{
+                    padding: '0.65rem 1.3rem',
+                    borderRadius: '10px',
+                    border: 'none',
+                    backgroundColor: '#0F2A1D',
+                    color: '#FFF',
+                    fontWeight: 800,
+                    cursor: (selectedAssignTable && !isAssigningTable) ? 'pointer' : 'not-allowed',
+                    opacity: isAssigningTable ? 0.6 : 1
+                  }}
+                >
+                  {isAssigningTable ? 'Assigning Table...' : 'Confirm Table Assignment'}
+                </button>
               </div>
             </form>
           </div>
