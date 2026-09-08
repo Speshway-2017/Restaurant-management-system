@@ -120,7 +120,7 @@ export default function App() {
                 if (existing && (String(existing._id || existing.id) === String(userObj._id || userObj.id) || (existing.email && existing.email.toLowerCase() === (userObj.email || '').toLowerCase()))) {
                   merged = { ...existing, ...userObj };
                 }
-              } catch (e) {}
+              } catch (e) { }
             }
             sessionStorage.setItem('flavora_user_role', normRole);
             sessionStorage.setItem('flavora_user_data', JSON.stringify(merged));

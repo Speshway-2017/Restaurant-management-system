@@ -963,8 +963,6 @@ export default function ManagerTablesPage() {
                             height: '40px',
                             backgroundColor: '#FFFFFF',
                             borderRadius: '50%',
-                            border: '1.5px solid #0F2A1D',
-                            boxShadow: '0 2px 8px rgba(15, 42, 29, 0.22)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
