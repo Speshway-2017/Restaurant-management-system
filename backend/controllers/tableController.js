@@ -189,7 +189,7 @@ const generateTableQr = async (req, res) => {
     }
     frontendBase = frontendBase.trim().replace(/\/+$/, '');
 
-    const targetUrl = req.body?.targetUrl || `${frontendBase}/menu?table=${encodeURIComponent(tableNum)}`;
+    const targetUrl = req.body?.targetUrl || `${frontendBase}/?table=${encodeURIComponent(tableNum)}`;
     
     // Generate base64 Data URL for table QR code
     const qrDataUrl = await QRCode.toDataURL(targetUrl, {

@@ -42,7 +42,7 @@ export const getFrontendBaseUrl = () => {
 export const getTableMenuUrl = (tableNum) => {
   const cleanTableNum = String(tableNum || 'T-01').trim();
   const baseUrl = getFrontendBaseUrl();
-  return `${baseUrl}/menu?table=${encodeURIComponent(cleanTableNum)}`;
+  return `${baseUrl}/?table=${encodeURIComponent(cleanTableNum)}`;
 };
 
 /**

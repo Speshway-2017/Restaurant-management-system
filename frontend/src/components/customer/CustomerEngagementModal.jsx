@@ -198,36 +198,7 @@ export default function CustomerEngagementModal({
             >
               ⭐ Rate Experience
             </button>
-            <button
-              onClick={() => setSelectedTab('booking')}
-              style={{
-                padding: '0.4rem 0.75rem',
-                borderRadius: '9999px',
-                border: selectedTab === 'booking' ? '2px solid #166534' : '1px solid #CBD5E1',
-                backgroundColor: selectedTab === 'booking' ? '#F0FDF4' : '#FFFFFF',
-                color: selectedTab === 'booking' ? '#166534' : '#475569',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer'
-              }}
-            >
-              📅 Book Table
-            </button>
-            <button
-              onClick={() => setSelectedTab('referral')}
-              style={{
-                padding: '0.4rem 0.75rem',
-                borderRadius: '9999px',
-                border: selectedTab === 'referral' ? '2px solid #166534' : '1px solid #CBD5E1',
-                backgroundColor: selectedTab === 'referral' ? '#F0FDF4' : '#FFFFFF',
-                color: selectedTab === 'referral' ? '#166534' : '#475569',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer'
-              }}
-            >
-              🎁 Refer & Earn
-            </button>
+            
           </div>
 
           <button onClick={onClose} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#F1F5F9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>

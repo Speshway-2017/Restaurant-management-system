@@ -1059,7 +1059,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                 ) : (
                   <div className="admin-form-group mb-3">
                     <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D' }}>
-                      Your Name 
+                      Your Name
                     </label>
                     <input
                       type="text"
