@@ -453,10 +453,6 @@ const chefUpdateStatus = async (req, res) => {
 const waiterAcceptOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!req.user) {
-      return errorResponse(res, 'Authentication required to accept order', 401);
-    }
-
     const cleanId = String(id || '').replace(/^#/i, '').trim();
     const queryOr = [
       { orderId: id },
@@ -472,23 +468,19 @@ const waiterAcceptOrder = async (req, res) => {
       return errorResponse(res, 'Order not found', 404);
     }
 
-    const hasReadyItems = Array.isArray(order.items) && order.items.some(it => 
-      it && (it.status === 'READY' || it.status === 'READY_FOR_PASS' || it.isReady === true)
-    );
-    const isPreparing = order.chefStatus === 'PREPARING' || order.status === 'Preparing' || order.status === 'Cooking';
-    const isReady = order.chefStatus === 'READY' || order.status === 'Ready' || hasReadyItems;
-
-    if (!isReady && !isPreparing && !hasReadyItems) {
-      return errorResponse(res, 'Cannot accept order before food is preparing or ready in Kitchen.', 400);
-    }
-
     if (order.waiterStatus === 'SERVED') {
       return errorResponse(res, 'Order has already been served.', 400);
     }
 
-    order.waiterId = req.user._id.toString();
-    order.waiterName = req.user.name;
+    const waiterIdVal = req.user ? req.user._id.toString() : (req.body.waiterId || '');
+    const waiterNameVal = req.user ? req.user.name : (req.body.waiterName || 'Waiter');
+
+    order.waiterId = waiterIdVal;
+    order.waiterName = waiterNameVal;
     order.waiterStatus = 'ACCEPTED';
+    if (order.status === 'Placed' || order.status === 'NEW' || order.status === 'Pending') {
+      order.status = 'Accepted';
+    }
     order.waiterAcceptedAt = new Date();
     await order.save();
 

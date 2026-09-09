@@ -1205,29 +1205,6 @@ export default function ManagerTablesPage() {
                     <span>Print QR Standee</span>
                   </button>
 
-                  {tbl.status === 'Available' && (
-                    <button
-                      type="button"
-                      className="table-card-dropdown-item"
-                      onClick={async () => {
-                        try {
-                          if (tbl.id) await api.updateTableStatus(tbl.id, 'Cleaning').catch(() => { });
-                          const localKey = `flavora_cleaning_start_${tbl.num}`;
-                          localStorage.setItem(localKey, Date.now().toString());
-                          const updated = tables.map(t => t.id === tbl.id ? { ...t, status: 'Cleaning' } : t);
-                          updateAndSaveTables(updated);
-                          showToast(`🧹 ${tbl.num} moved to Cleaning state.`);
-                          window.dispatchEvent(new Event('flavora_tables_updated'));
-                        } catch (e) {
-                          handleToggleTableStatus(tbl.id, 'Cleaning');
-                        }
-                      }}
-                      style={{ color: '#B45309', fontWeight: 700 }}
-                    >
-                      <Sparkles size={14} color="#B45309" />
-                      <span>Set to Cleaning</span>
-                    </button>
-                  )}
 
                   {tbl.status === 'Cleaning' && (
                     <button
