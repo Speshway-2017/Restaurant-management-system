@@ -1,0 +1,16 @@
+# Flutter gitignore
+.dart_tool/
+.idea/
+.vscode/
+.packages
+.pub-cache/
+.pub/
+build/
+ios/Runner.xcodeproj/project.xcworkspace
+ios/Runner.xcodeproj/xcuserdata
+android/.gradle
+android/captures/
+android/gradlew
+android/gradlew.bat
+android/local.properties
+android/app/release

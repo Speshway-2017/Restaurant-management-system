@@ -31,9 +31,11 @@ class AuthService {
     // 4. Generate JWT Token with exact user ID
     const token = generateToken(user._id, user.role);
 
-    const resolvedEmpId = user.empId || (user.role && user.role.toLowerCase().includes('manager')
-      ? (String(user.email).toLowerCase().includes('manager2') ? 'RMSM-02' : `RMSM-${String(user._id).slice(-2).toUpperCase()}`)
-      : '');
+    const resolvedEmpId = user.empId || (user.role && user.role.toLowerCase().includes('waiter')
+      ? 'RMSW-01'
+      : (user.role && user.role.toLowerCase().includes('manager')
+        ? (String(user.email).toLowerCase().includes('manager2') ? 'RMSM-02' : 'RMSM-01')
+        : ''));
 
     const userPayload = {
       _id: user._id,
@@ -42,11 +44,18 @@ class AuthService {
       email: user.email,
       role: user.role,
       phone: user.phone || '',
-      branch: user.branch || '',
+      branch: user.branch || 'Jubilee Hills (Main Branch)',
       empId: resolvedEmpId,
-      avatarUrl: user.avatarUrl || '',
+      status: user.status || 'Active',
       department: user.department || 'Operations & Floor Management',
       joinedDate: user.joinedDate || '',
+      checkInTime: user.checkInTime || '09:00 AM',
+      checkOutTime: user.checkOutTime || '06:00 PM',
+      scheduledShift: user.scheduledShift || '09:00 AM – 06:00 PM (Morning)',
+      hoursLogged: user.hoursLogged || '8h 30m',
+      attendanceStatus: user.attendanceStatus || 'Present',
+      avatarUrl: user.avatarUrl || '',
+      assignedTables: user.assignedTables || [],
       managerSettings: user.managerSettings || {}
     };
 
@@ -183,7 +192,7 @@ class AuthService {
     const user = await User.findById(userId);
     if (!user) throw new Error('User not found');
 
-    const allowed = ['name', 'phone', 'branch', 'avatarUrl', 'department', 'joinedDate', 'documentUrl', 'managerSettings'];
+    const allowed = ['name', 'phone', 'branch', 'avatarUrl', 'department', 'joinedDate', 'documentUrl', 'managerSettings', 'scheduledShift', 'status', 'checkInTime', 'checkOutTime', 'hoursLogged', 'attendanceStatus'];
     allowed.forEach(field => {
       if (data[field] !== undefined) {
         user[field] = data[field];

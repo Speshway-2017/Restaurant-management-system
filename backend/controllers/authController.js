@@ -25,11 +25,18 @@ const getMe = async (req, res) => {
         email: u.email,
         role: u.role,
         phone: u.phone || '',
-        branch: u.branch || '',
-        empId: u.empId || '',
-        avatarUrl: u.avatarUrl || '',
+        branch: u.branch || 'Jubilee Hills (Main Branch)',
+        empId: u.empId || (u.role && u.role.toLowerCase().includes('waiter') ? 'RMSW-01' : 'RMSM-01'),
+        status: u.status || 'Active',
         department: u.department || 'Operations & Floor Management',
         joinedDate: u.joinedDate || '',
+        checkInTime: u.checkInTime || '09:00 AM',
+        checkOutTime: u.checkOutTime || '06:00 PM',
+        scheduledShift: u.scheduledShift || '09:00 AM – 06:00 PM (Morning)',
+        hoursLogged: u.hoursLogged || '8h 30m',
+        attendanceStatus: u.attendanceStatus || 'Present',
+        avatarUrl: u.avatarUrl || '',
+        assignedTables: u.assignedTables || [],
         managerSettings: u.managerSettings || {}
       },
       role: u.role
@@ -45,19 +52,30 @@ const updateMe = async (req, res) => {
       return errorResponse(res, 'Not authorized', 401);
     }
     const user = await authService.updateUser(req.user._id, req.body);
-    return successResponse(res, {
+    const updatedPayload = {
       _id: user._id,
       id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
       phone: user.phone || '',
-      branch: user.branch || '',
-      empId: user.empId || '',
-      avatarUrl: user.avatarUrl || '',
+      branch: user.branch || 'Jubilee Hills (Main Branch)',
+      empId: user.empId || (user.role && user.role.toLowerCase().includes('waiter') ? 'RMSW-01' : 'RMSM-01'),
+      status: user.status || 'Active',
       department: user.department || 'Operations & Floor Management',
       joinedDate: user.joinedDate || '',
+      checkInTime: user.checkInTime || '09:00 AM',
+      checkOutTime: user.checkOutTime || '06:00 PM',
+      scheduledShift: user.scheduledShift || '09:00 AM – 06:00 PM (Morning)',
+      hoursLogged: user.hoursLogged || '8h 30m',
+      attendanceStatus: user.attendanceStatus || 'Present',
+      avatarUrl: user.avatarUrl || '',
+      assignedTables: user.assignedTables || [],
       managerSettings: user.managerSettings || {}
+    };
+    return successResponse(res, {
+      user: updatedPayload,
+      ...updatedPayload
     }, 'Profile updated successfully');
   } catch (error) {
     return errorResponse(res, error.message || 'Error updating profile', 400);

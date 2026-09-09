@@ -197,6 +197,60 @@ const notifyReservationCreated = (reservation) => {
   });
 };
 
+const notifyTableUpdated = (table) => {
+  if (!io || !table) return;
+  const payload = {
+    table,
+    tableNumber: table.number || table.name,
+    status: table.status,
+    currentOrder: table.currentOrder,
+    assignedWaiterId: table.assignedWaiterId,
+    assignedWaiterName: table.assignedWaiterName
+  };
+  io.emit('table_updated', payload);
+  io.emit('table_status_updated', payload);
+};
+
+const notifyWaiterAssigned = (data) => {
+  if (!io || !data) return;
+  io.emit('waiter_assignment_updated', data);
+  io.emit('table_updated', data);
+};
+
+const notifyOrderItemCancelled = (data) => {
+  if (!io || !data) return;
+  io.emit('order_item_cancelled', data);
+  io.emit('order_updated', data.order || data);
+};
+
+const notifyPaymentCreated = (payment) => {
+  if (!io || !payment) return;
+  const payload = {
+    payment,
+    orderId: payment.orderId,
+    table: payment.table || payment.tableNumber,
+    status: payment.status || 'PAID',
+    amount: payment.totalAmount || payment.amount
+  };
+  io.emit('payment_created', payload);
+  io.emit('payment_updated', payload);
+};
+
+const notifyPaymentUpdated = (payment) => {
+  if (!io || !payment) return;
+  io.emit('payment_updated', { payment });
+};
+
+const notifyAssistanceUpdated = (assistance) => {
+  if (!io || !assistance) return;
+  io.emit('assistance_updated', { assistance });
+};
+
+const notifyWaiterProfileUpdated = (user) => {
+  if (!io || !user) return;
+  io.emit('waiter_profile_updated', { user, userId: user._id || user.id });
+};
+
 module.exports = {
   initSocket,
   getIO,
@@ -207,5 +261,12 @@ module.exports = {
   notifyWaiterAccepted,
   notifyWaiterServing,
   notifyWaiterServed,
-  notifyReservationCreated
+  notifyReservationCreated,
+  notifyTableUpdated,
+  notifyWaiterAssigned,
+  notifyOrderItemCancelled,
+  notifyPaymentCreated,
+  notifyPaymentUpdated,
+  notifyAssistanceUpdated,
+  notifyWaiterProfileUpdated
 };

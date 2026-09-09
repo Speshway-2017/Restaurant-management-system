@@ -1,0 +1,11 @@
+{
+    "name": "Flavora Waiter Portal",
+    "short_name": "Flavora Waiter",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0F2A1D",
+    "theme_color": "#0F2A1D",
+    "description": "Flavora Waiter Mobile Operations Portal",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false
+}
