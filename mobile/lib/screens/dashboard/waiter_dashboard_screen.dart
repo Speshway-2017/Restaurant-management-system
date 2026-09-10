@@ -324,81 +324,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                         ],
                         const SizedBox(height: 24),
 
-                        // 4. Quick Actions Row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Quick Actions',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF2C140E),
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                if (widget.onNavigateTab != null) widget.onNavigateTab!(1); // Go to Orders
-                              },
-                              child: const Row(
-                                children: [
-                                  Text(
-                                    'See All',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFFE87524),
-                                    ),
-                                  ),
-                                  Icon(Icons.chevron_right, size: 18, color: Color(0xFFE87524)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Quick Action Items
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          child: Row(
-                            children: [
-                              _buildQuickActionTile(
-                                context,
-                                icon: Icons.table_restaurant_rounded,
-                                label: 'Table Status',
-                                onTap: () {
-                                  if (widget.onNavigateTab != null) widget.onNavigateTab!(2); // Tables
-                                },
-                              ),
-                              const SizedBox(width: 12),
-                              _buildQuickActionTile(
-                                context,
-                                icon: Icons.description_outlined,
-                                label: 'Orders',
-                                onTap: () {
-                                  if (widget.onNavigateTab != null) widget.onNavigateTab!(1); // Orders
-                                },
-                              ),
-                              const SizedBox(width: 12),
-                              _buildQuickActionTile(
-                                context,
-                                icon: Icons.settings_outlined,
-                                label: 'Settings',
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => const WaiterSettingsScreen()),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // 5. Dashboard Overview Section
+                        
+                        // 4. Dashboard Overview Section
                         const Text(
                           'Dashboard Overview',
                           style: TextStyle(
@@ -451,7 +378,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => const WaiterOrdersScreen(initialTabIndex: 4),
+                                      builder: (_) => const WaiterOrdersScreen(initialTabIndex: 0),
                                     ),
                                   );
                                 },
@@ -466,6 +393,61 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               ),
                             ],
                           ),
+                        ),
+                        const SizedBox(height: 24),
+
+
+                        // 5. Quick Actions Section Title
+                        const Text(
+                          'Quick Actions',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2C140E),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Quick Action Items (4 Balanced Full-Width Tiles)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildQuickActionTile(
+                              context,
+                              icon: Icons.table_restaurant_rounded,
+                              label: 'Tables',
+                              onTap: () {
+                                if (widget.onNavigateTab != null) widget.onNavigateTab!(2); // Tables
+                              },
+                            ),
+                            _buildQuickActionTile(
+                              context,
+                              icon: Icons.receipt_long_rounded,
+                              label: 'Orders',
+                              onTap: () {
+                                if (widget.onNavigateTab != null) widget.onNavigateTab!(1); // Orders
+                              },
+                            ),
+                            _buildQuickActionTile(
+                              context,
+                              icon: Icons.person_outline_rounded,
+                              label: 'Profile',
+                              onTap: () {
+                                if (widget.onNavigateTab != null) widget.onNavigateTab!(4); // Profile
+                              },
+                            ),
+                            _buildQuickActionTile(
+                              context,
+                              icon: Icons.settings_outlined,
+                              label: 'Settings',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const WaiterSettingsScreen()),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 24),
 
@@ -709,10 +691,10 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 72,
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: Column(
           children: [
             Container(
@@ -738,7 +720,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                     color: Color(0xFFFFF4ED), // Soft Peach Tint
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: const Color(0xFFE87524), size: 20),
+                  child: Icon(icon, color: const Color(0xFFE87524), size: 21),
                 ),
               ),
             ),
@@ -1683,8 +1665,6 @@ class _ProfilePopupModal extends StatefulWidget {
 }
 
 class _ProfilePopupModalState extends State<_ProfilePopupModal> {
-  bool _isOnline = true;
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -1776,60 +1756,7 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-
-            // Availability Status
-            const Text(
-              'Availability Status',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF94A3B8),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: _isOnline ? const Color(0xFF10B981) : Colors.grey,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _isOnline ? 'Online' : 'Offline',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: _isOnline ? const Color(0xFF10B981) : Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-                Transform.scale(
-                  scale: 0.85,
-                  child: Switch(
-                    value: _isOnline,
-                    activeThumbColor: Colors.white,
-                    activeTrackColor: const Color(0xFF10B981),
-                    inactiveThumbColor: Colors.white,
-                    inactiveTrackColor: Colors.grey[300],
-                    onChanged: (val) {
-                      setState(() {
-                        _isOnline = val;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             const Divider(height: 1, color: Color(0xFFE2E8F0)),
             const SizedBox(height: 10),
 
