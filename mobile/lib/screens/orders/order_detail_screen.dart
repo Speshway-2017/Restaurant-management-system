@@ -643,8 +643,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 style: TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w600),
                               ),
                               Text(
-                                currentOrd.paymentMethod.isNotEmpty ? currentOrd.paymentMethod.toUpperCase() : 'CASH',
-                                style: const TextStyle(color: Color(0xFF0F2A1D), fontSize: 14, fontWeight: FontWeight.w800),
+                                !currentOrd.isPaid
+                                    ? 'Pending Payment'
+                                    : (currentOrd.paymentMethod.isNotEmpty ? currentOrd.paymentMethod.toUpperCase() : 'CASH'),
+                                style: TextStyle(
+                                  color: !currentOrd.isPaid ? const Color(0xFF64748B) : const Color(0xFF0F2A1D),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ],
                           ),

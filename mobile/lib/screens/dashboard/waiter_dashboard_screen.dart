@@ -409,7 +409,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               icon: Icons.table_restaurant_rounded,
                               label: 'Tables',
                               onTap: () {
-                                if (widget.onNavigateTab != null) widget.onNavigateTab!(2); // Tables
+                                if (widget.onNavigateTab != null) widget.onNavigateTab!(1); // Tables
                               },
                             ),
                             _buildQuickActionTile(
@@ -417,7 +417,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               icon: Icons.receipt_long_rounded,
                               label: 'Orders',
                               onTap: () {
-                                if (widget.onNavigateTab != null) widget.onNavigateTab!(1); // Orders
+                                if (widget.onNavigateTab != null) widget.onNavigateTab!(2); // Orders
                               },
                             ),
                             _buildQuickActionTile(
@@ -457,7 +457,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                             ),
                             GestureDetector(
                               onTap: () {
-                                if (widget.onNavigateTab != null) widget.onNavigateTab!(1); // Go to Orders
+                                if (widget.onNavigateTab != null) widget.onNavigateTab!(2); // Go to Orders
                               },
                               child: const Row(
                                 children: [
