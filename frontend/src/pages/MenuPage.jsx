@@ -117,6 +117,8 @@ export default function MenuPage({ onOpenDemoModal }) {
       window.removeEventListener('flavora_menu_updated', handleStockUpdate);
       window.removeEventListener('storage', handleStockUpdate);
     };
+  }, []);
+
   // Always auto-scroll to top when category changes or Customer Menu loads
   useEffect(() => {
     const scrollToTop = () => {
