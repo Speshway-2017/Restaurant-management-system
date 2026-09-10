@@ -33,31 +33,20 @@ export default function MenuPage({ onOpenDemoModal }) {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  // Locked Table session initialized strictly from original QR scan in sessionStorage to prevent manual URL tampering
+  // Table session initialized strictly from explicit QR scan URL parameter (?table=)
   const [tableNum, setTableNum] = useState(() => {
     try {
-      const savedSessionTable = sessionStorage.getItem('flavora_scanned_table');
       const urlParams = new URLSearchParams(window.location.search);
       const urlTableParam = urlParams.get('table');
 
-      // If session table is already locked in this tab session, maintain locked session!
-      if (savedSessionTable) {
-        const lockedUpper = savedSessionTable.toUpperCase();
-        // If someone manually edited the URL parameter in address bar, reset URL back to locked table!
-        if (urlTableParam && urlTableParam.toUpperCase() !== lockedUpper) {
-          window.history.replaceState(null, '', `${window.location.pathname}?table=${lockedUpper}`);
-        }
-        return lockedUpper;
-      }
-
-      // First time scanning table QR code
-      if (urlTableParam) {
-        const upper = urlTableParam.toUpperCase();
+      // Only display table number if explicit table parameter exists in URL (e.g. ?table=T-02 from QR scan)
+      if (urlTableParam && urlTableParam.trim()) {
+        const upper = urlTableParam.trim().toUpperCase();
         sessionStorage.setItem('flavora_scanned_table', upper);
         localStorage.setItem('flavora_scanned_table', upper);
         return upper;
       }
-      return localStorage.getItem('flavora_scanned_table') || '';
+      return '';
     } catch (e) {
       return '';
     }
@@ -170,7 +159,7 @@ export default function MenuPage({ onOpenDemoModal }) {
 
   const [placedTableOrders, setPlacedTableOrders] = useState(() => {
     try {
-      const currentTable = tableNum || localStorage.getItem('flavora_scanned_table');
+      const currentTable = tableNum;
       if (currentTable) {
         const saved = localStorage.getItem(`flavora_table_orders_${currentTable}`);
         if (saved) {
@@ -840,7 +829,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       };
     });
 
-    const activeTable = tableNum || localStorage.getItem('flavora_scanned_table') || 'T-10';
+    const activeTable = tableNum;
     const generatedOrderId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const orderPayload = {

@@ -11,9 +11,7 @@ export default function Navbar({ activePage, setActivePage, onOpenBookTable }) {
     activePage === 'menu' ||
     (typeof window !== 'undefined' && (
       window.location.pathname.toLowerCase().includes('/menu') ||
-      window.location.search.toLowerCase().includes('table=') ||
-      Boolean(sessionStorage.getItem('flavora_scanned_table')) ||
-      Boolean(localStorage.getItem('flavora_scanned_table'))
+      window.location.search.toLowerCase().includes('table=')
     ));
 
   const isBannerVisible = !isDismissed && branding && branding.announcementEnabled !== false && Boolean(branding.announcementMessage || branding.messageText || branding.message || branding.announcementBadge || branding.badgeText);
