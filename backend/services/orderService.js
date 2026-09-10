@@ -524,16 +524,25 @@ class OrderService {
     const updatedItems = rawItems.map((item, idx) => {
       const itemObj = item.toObject ? item.toObject() : item;
       const itemIdStr = String(itemObj._id || itemObj.id || itemObj.itemId || `item-${idx}`);
-      const isTarget = itemIdsToUpdate.includes(itemIdStr) ||
-        itemIdsToUpdate.includes(String(idx)) ||
-        itemIdsToUpdate.includes(String(itemObj.name));
+      const itemNameStr = String(itemObj.name || '').trim().toLowerCase();
+
+      const isTarget = itemIdsToUpdate.some(target => {
+        const cleanTarget = String(target || '').trim().toLowerCase();
+        if (!cleanTarget) return false;
+        return cleanTarget === itemIdStr.toLowerCase() ||
+               cleanTarget === String(idx) ||
+               cleanTarget === itemNameStr ||
+               cleanTarget === String(itemObj._id || '').toLowerCase() ||
+               cleanTarget === String(itemObj.id || '').toLowerCase() ||
+               cleanTarget === String(itemObj.itemId || '').toLowerCase();
+      });
 
       if (isTarget) {
         if (targetStatus === 'DELIVERED') {
           // Backend Validation Rule (Req #12):
           // Must ONLY allow delivery if item's current status is READY (or isReady is true) and NOT ALREADY DELIVERED.
-          const isCurrentlyReady = itemObj.status === 'READY' || itemObj.isReady === true || order.status === 'Ready';
-          const isAlreadyDelivered = itemObj.status === 'DELIVERED' || itemObj.isDelivered === true;
+          const isCurrentlyReady = itemObj.status === 'READY' || itemObj.isReady === true;
+          const isAlreadyDelivered = itemObj.status === 'DELIVERED' || itemObj.status === 'SERVED' || itemObj.isDelivered === true;
 
           if (isCurrentlyReady && !isAlreadyDelivered) {
             itemObj.status = 'DELIVERED';

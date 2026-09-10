@@ -428,14 +428,43 @@ const chefUpdateStatus = async (req, res) => {
       }
     } else if (targetStatus === 'READY') {
       order.chefStatus = 'READY';
-      order.status = 'Ready';
       order.chefReadyAt = new Date();
-      if (Array.isArray(order.items)) {
+      if (Array.isArray(req.body.items) && req.body.items.length > 0) {
+        order.items = req.body.items.map((it, idx) => {
+          const orig = (order.items && order.items[idx]) || {};
+          const isDel = Boolean(it.isDelivered || it.status === 'SERVED' || it.status === 'DELIVERED' || orig.isDelivered);
+          const isExplicitlyPreparing = it.status === 'PREPARING' || it.status === 'PLACED' || it.status === 'COOKING';
+          const isRdy = !isDel && !isExplicitlyPreparing && Boolean(it.isReady || it.status === 'READY');
+          return {
+            id: String(it.id || it._id || orig.id || `item-${idx}`),
+            name: it.name || orig.name || 'Dish Item',
+            price: Number(it.price || orig.price || 0),
+            quantity: Number(it.quantity || orig.quantity || 1),
+            status: isDel ? 'DELIVERED' : (isRdy ? 'READY' : (it.status === 'CANCELLED' ? 'CANCELLED' : 'PREPARING')),
+            isReady: isRdy,
+            isDelivered: isDel
+          };
+        });
+      } else if (Array.isArray(order.items)) {
         order.items = order.items.map(it => {
           if (it.status === 'CANCELLED' || it.isDelivered || it.status === 'SERVED' || it.status === 'DELIVERED') return it;
-          return { ...it, status: 'READY', isReady: true };
+          const isRdy = Boolean(it.isReady || it.status === 'READY');
+          return {
+            ...it,
+            status: isRdy ? 'READY' : 'PREPARING',
+            isReady: isRdy
+          };
         });
       }
+      
+      const activeItems = (order.items || []).filter(it => it.status !== 'CANCELLED');
+      const allActiveReadyOrDelivered = activeItems.length > 0 && activeItems.every(it => it.isReady || it.status === 'READY' || it.isDelivered || it.status === 'SERVED' || it.status === 'DELIVERED');
+      if (allActiveReadyOrDelivered) {
+        order.status = 'Ready';
+      } else {
+        order.status = 'Preparing';
+      }
+      
       await order.save();
       try {
         notifyChefReady(order);
@@ -537,18 +566,23 @@ const waiterUpdateStatus = async (req, res) => {
         console.warn('Socket emit error on waiter serving:', e.message);
       }
     } else if (targetStatus === 'SERVED') {
-      order.waiterStatus = 'SERVED';
-      order.status = 'Served';
-      order.waiterServedAt = new Date();
       if (!order.waiterId) {
         order.waiterId = req.user._id.toString();
         order.waiterName = req.user.name;
       }
-      if (Array.isArray(order.items)) {
-        order.items = order.items.map(it => {
-          if (it.status === 'CANCELLED') return it;
-          return { ...it, status: 'SERVED', isDelivered: true, isReady: true };
-        });
+      const activeItems = (order.items || []).filter(it => it.status !== 'CANCELLED');
+      const isAllServed = activeItems.length > 0 && activeItems.every(it => it.isDelivered || it.status === 'SERVED' || it.status === 'DELIVERED');
+
+      if (isAllServed) {
+        order.waiterStatus = 'SERVED';
+        order.status = 'Served';
+        order.waiterServedAt = new Date();
+      } else {
+        order.waiterStatus = 'SERVING';
+        if (activeItems.some(it => it.isDelivered || it.status === 'SERVED' || it.status === 'DELIVERED')) {
+          order.status = 'PARTIALLY DELIVERED';
+        }
+        order.waiterServingAt = new Date();
       }
       await order.save();
       try {

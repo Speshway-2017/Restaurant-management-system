@@ -103,11 +103,11 @@ export const api = {
     const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
     return request(`/orders/${cleanId}/chef-accept`, { method: 'PATCH' });
   },
-  chefUpdateStatus: (id, status) => {
+  chefUpdateStatus: (id, status, extraData = {}) => {
     const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
     return request(`/orders/${cleanId}/chef-status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status, ...extraData })
     });
   },
   waiterAcceptOrder: (id) => {
