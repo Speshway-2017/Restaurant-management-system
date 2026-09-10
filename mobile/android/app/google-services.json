@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "243651277620",
+    "project_id": "restaurant-management-sy-78068",
+    "storage_bucket": "restaurant-management-sy-78068.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:243651277620:android:1036dd9b623d387b2b6b61",
+        "android_client_info": {
+          "package_name": "com.speshway.flavora_waiter_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_PV1Wmv28I597tz6BMUK_Q-VPCqZZoYc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
