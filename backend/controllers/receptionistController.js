@@ -712,11 +712,6 @@ const getActiveTableSession = async (req, res) => {
       });
     }
 
-    const reqDeviceToken = req.headers['x-device-token'] || req.query.deviceToken || req.body?.deviceToken || '';
-    const reqSessionToken = req.headers['x-session-token'] || req.query.sessionToken || req.body?.sessionToken || '';
-    const reqCustomerToken = req.headers['x-customer-token'] || req.body?.customerToken || '';
-    const isStaff = Boolean(req.headers.authorization);
-
     // 2. QUERY EXISTING ACTIVE SESSION FIRST (Single Source of Truth)
     let activeSession = await TableSession.findOne({
       $or: [
@@ -726,35 +721,8 @@ const getActiveTableSession = async (req, res) => {
       status: 'ACTIVE'
     });
 
-    // 3. IF AN ACTIVE SESSION ALREADY EXISTS:
+    // 3. IF AN ACTIVE SESSION ALREADY EXISTS: REUSE IT (Do NOT close or recreate!)
     if (activeSession) {
-      // Check device/session ownership for non-staff requests
-      if (!isStaff) {
-        const isOwner = Boolean(
-          (reqSessionToken && reqSessionToken === activeSession.sessionToken) ||
-          (reqCustomerToken && reqCustomerToken === activeSession.customerToken) ||
-          (reqDeviceToken && activeSession.deviceToken && reqDeviceToken === activeSession.deviceToken)
-        );
-
-        if (!activeSession.deviceToken && reqDeviceToken && !activeSession.customerToken) {
-          // First customer scan on an unassigned active session -> bind customer's device token
-          activeSession.deviceToken = reqDeviceToken;
-          activeSession.customerToken = reqCustomerToken || reqDeviceToken;
-          await activeSession.save();
-        } else if (!isOwner && (activeSession.deviceToken || activeSession.sessionToken)) {
-          // Table is occupied by another customer's active session! Return HTTP 403 TABLE_ALREADY_OCCUPIED
-          return res.status(403).json({
-            success: false,
-            code: 'TABLE_ALREADY_OCCUPIED',
-            accessGranted: false,
-            isOccupied: true,
-            message: `Table ${formattedNum} is currently being used on another device.`,
-            data: null,
-            tableStatus: 'Occupied'
-          });
-        }
-      }
-
       const isReceptionistAssigned = Boolean(
         activeSession.isReceptionistAssigned ||
         (table && table.status === 'Occupied' && activeSession.guestName && activeSession.guestName !== 'Guest Diner' && activeSession.guestName !== 'Guest')
@@ -764,14 +732,11 @@ const getActiveTableSession = async (req, res) => {
 
       return res.json({
         success: true,
-        code: 'SESSION_ACTIVE',
-        accessGranted: true,
         data: {
           _id: activeSession._id,
           tableNum: activeSession.tableNum,
           mergedTableNums: activeSession.mergedTableNums || [],
           sessionToken: activeSession.sessionToken,
-          customerToken: activeSession.customerToken || activeSession.deviceToken || '',
           guestName: resolvedGuestName,
           phone: activeSession.phone || '',
           partySize: activeSession.partySize || 2,
@@ -779,8 +744,7 @@ const getActiveTableSession = async (req, res) => {
           notes: activeSession.notes || '',
           seatedAt: activeSession.seatedAt,
           isReceptionistAssigned,
-          isWalkIn: Boolean(activeSession.isWalkIn),
-          deviceToken: activeSession.deviceToken || null
+          isWalkIn: Boolean(activeSession.isWalkIn)
         },
         tableStatus: table ? table.status : (activeSession.guestName ? 'Occupied' : 'Available'),
         isOccupied: table ? (table.status === 'Occupied') : Boolean(activeSession.guestName)
@@ -788,72 +752,37 @@ const getActiveTableSession = async (req, res) => {
     }
 
     // 4. IF NO ACTIVE SESSION EXISTS AT ALL (Fresh QR scan after previous session was closed):
-    // Start a new walk-in session bound to requesting device (Atomic DB creation)
+    // Start a new walk-in session with empty guest name
     const sessionToken = `SESS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    let freshWalkInSession = null;
-    try {
-      freshWalkInSession = await TableSession.create({
-        tableNum: formattedNum,
-        sessionToken,
-        deviceToken: reqDeviceToken || null,
-        customerToken: reqCustomerToken || reqDeviceToken || sessionToken,
+    const freshWalkInSession = await TableSession.create({
+      tableNum: formattedNum,
+      sessionToken,
+      guestName: '',
+      phone: '',
+      partySize: 2,
+      specialOccasion: 'None',
+      notes: '',
+      status: 'ACTIVE',
+      isWalkIn: true,
+      isReceptionistAssigned: false,
+      seatedAt: new Date()
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        _id: freshWalkInSession._id,
+        tableNum: freshWalkInSession.tableNum,
+        mergedTableNums: [],
+        sessionToken: freshWalkInSession.sessionToken,
         guestName: '',
         phone: '',
         partySize: 2,
         specialOccasion: 'None',
         notes: '',
-        status: 'ACTIVE',
-        isWalkIn: true,
-        isReceptionistAssigned: false,
-        seatedAt: new Date()
-      });
-    } catch (createErr) {
-      if (createErr.code === 11000) {
-        // Race condition caught by MongoDB unique partial index! Re-query active session.
-        const existingSession = await TableSession.findOne({ tableNum: formattedNum, status: 'ACTIVE' });
-        if (existingSession) {
-          const isOwner = Boolean(
-            (reqSessionToken && reqSessionToken === existingSession.sessionToken) ||
-            (reqDeviceToken && reqDeviceToken === existingSession.deviceToken)
-          );
-          if (!isOwner && !isStaff) {
-            return res.status(403).json({
-              success: false,
-              code: 'TABLE_ALREADY_OCCUPIED',
-              accessGranted: false,
-              isOccupied: true,
-              message: `Table ${formattedNum} is currently being used on another device.`,
-              data: null
-            });
-          }
-          freshWalkInSession = existingSession;
-        } else {
-          throw createErr;
-        }
-      } else {
-        throw createErr;
-      }
-    }
-
-    return res.json({
-      success: true,
-      code: 'SESSION_CREATED',
-      accessGranted: true,
-      data: {
-        _id: freshWalkInSession._id,
-        tableNum: freshWalkInSession.tableNum,
-        mergedTableNums: freshWalkInSession.mergedTableNums || [],
-        sessionToken: freshWalkInSession.sessionToken,
-        customerToken: freshWalkInSession.customerToken || freshWalkInSession.deviceToken || '',
-        guestName: freshWalkInSession.guestName || '',
-        phone: freshWalkInSession.phone || '',
-        partySize: freshWalkInSession.partySize || 2,
-        specialOccasion: freshWalkInSession.specialOccasion || 'None',
-        notes: freshWalkInSession.notes || '',
         seatedAt: freshWalkInSession.seatedAt,
-        isReceptionistAssigned: Boolean(freshWalkInSession.isReceptionistAssigned),
-        isWalkIn: Boolean(freshWalkInSession.isWalkIn),
-        deviceToken: freshWalkInSession.deviceToken || null
+        isReceptionistAssigned: false,
+        isWalkIn: true
       },
       tableStatus: table ? table.status : 'Available',
       isOccupied: false
@@ -909,7 +838,6 @@ module.exports = {
   getReceptionistKPIs,
   getFloorPlan,
   getActiveTableSession,
-  claimTableSession: getActiveTableSession,
   vacateTable,
   seatWalkIn,
   mergeTables,

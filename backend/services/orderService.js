@@ -40,7 +40,7 @@ class OrderService {
       throw new Error(`The bill has already been generated for Table ${formattedTable}. Additional items cannot be placed.`);
     }
 
-    // 0. Resolve current ACTIVE session as single source of truth for customer name and authorization
+    // 0. Resolve current ACTIVE session as single source of truth for customer name
     const TableSession = require('../models/TableSession');
     const searchNums = [formattedTable, cleanNum, `T-${cleanNum.padStart(2, '0')}`];
     let activeSession = await TableSession.findOne({
@@ -51,26 +51,11 @@ class OrderService {
       status: 'ACTIVE'
     });
 
-    // Validate customer session ownership for non-staff order placement
-    if (activeSession && !data.isStaffOverride && !data.managerId && !data.waiterId) {
-      const callerSessToken = data.sessionToken || data.sessionId || '';
-      const callerDevToken = data.deviceToken || '';
-      if (
-        activeSession.deviceToken &&
-        callerDevToken &&
-        activeSession.deviceToken !== callerDevToken &&
-        callerSessToken !== activeSession.sessionToken
-      ) {
-        throw new Error(`Unauthorized: Table ${formattedTable} is currently active on another customer device.`);
-      }
-    }
-
     if (!activeSession) {
-      const sessionToken = data.sessionToken || `SESS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const sessionToken = `SESS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
       activeSession = await TableSession.create({
         tableNum: formattedTable,
         sessionToken,
-        deviceToken: data.deviceToken || null,
         guestName: (data.customer && data.customer !== 'Guest Diner' && data.customer !== 'Guest') ? String(data.customer).trim() : '',
         phone: data.phone || '',
         partySize: 2,
