@@ -704,7 +704,7 @@ export default function ManagerOrdersPage() {
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#1C130E', fontWeight: 800, paddingTop: '0.35rem', borderTop: '1px solid #EAE3D2' }}>
                         <span>Payment Method:</span>
-                        <span>{selectedOrderTicketModal.paymentMethod || 'UPI / QR'}</span>
+                        <span>{(selectedOrderTicketModal.paymentStatus === 'Paid' || selectedOrderTicketModal.payment === 'Paid') ? (selectedOrderTicketModal.paymentMethod || 'UPI / QR') : 'Pending Payment'}</span>
                       </div>
                     </>
                   );
