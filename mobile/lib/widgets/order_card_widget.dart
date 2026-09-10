@@ -68,7 +68,7 @@ class OrderCardWidget extends StatelessWidget {
                       ),
                     ],
                   ),
-                  StatusBadgeWidget(status: order.isServed ? 'Served' : (order.isServingInTransit ? 'Serving' : (order.isReadyToServe ? 'Ready' : order.status))),
+                  StatusBadgeWidget(status: order.isPaid ? 'Completed' : (order.isBillGenerated ? 'Bill Generated' : (order.isServed ? 'Served' : (order.isServingInTransit ? 'Serving' : (order.isReadyToServe ? 'Ready' : order.status))))),
                 ],
               ),
               const SizedBox(height: 12),
@@ -92,7 +92,7 @@ class OrderCardWidget extends StatelessWidget {
                     ],
                   ),
                   Text(
-                    '${order.items.length} Items • ₹${order.totalAmount.toStringAsFixed(0)}',
+                    '${order.items.length} Items • ₹${(order.totalAmount > 0 ? order.totalAmount : order.netTotal).toStringAsFixed(0)}',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -112,36 +112,61 @@ class OrderCardWidget extends StatelessWidget {
                 ),
                 child: Column(
                   children: order.items.take(3).map((item) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
+                    final bool isReady = (item.isReady || item.status == 'READY') && !item.isDelivered && item.status != 'SERVED' && item.status != 'DELIVERED';
+                    final bool isServed = item.isDelivered || item.status == 'SERVED' || item.status == 'DELIVERED';
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(vertical: 2),
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                      decoration: BoxDecoration(
+                        color: isReady ? const Color(0xFFDCFCE7) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: isReady ? Border.all(color: const Color(0xFF86EFAC), width: 1) : null,
+                      ),
                       child: Row(
                         children: [
                           Text(
                             '${item.quantity}x ',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.accentGreen,
+                              color: isReady ? const Color(0xFF166534) : AppColors.accentGreen,
                             ),
                           ),
                           Expanded(
-                            child: Text(
-                              item.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: item.isCancelled ? AppColors.cancelledText : AppColors.textPrimary,
-                                decoration: item.isCancelled ? TextDecoration.lineThrough : null,
-                              ),
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    item.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: isReady ? FontWeight.bold : FontWeight.normal,
+                                      color: item.isCancelled ? AppColors.cancelledText : (isReady ? const Color(0xFF166534) : AppColors.textPrimary),
+                                      decoration: item.isCancelled ? TextDecoration.lineThrough : null,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                if (item.isCancelled)
+                                  const Text(' (Cancelled)', style: TextStyle(fontSize: 10, color: AppColors.cancelledText))
+                                else if (isServed)
+                                  const Text(' • ✅ Served', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold))
+                                else if (isReady)
+                                  const Text(' • 🟢 READY TO SERVE', style: TextStyle(fontSize: 10, color: Color(0xFF166534), fontWeight: FontWeight.bold))
+                                else
+                                  const Text(' • ⏳ Cooking', style: TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
+                              ],
                             ),
                           ),
                           Text(
                             '₹${(item.price * item.quantity).toStringAsFixed(0)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
+                              color: isReady ? const Color(0xFF166534) : AppColors.textPrimary,
                             ),
                           ),
                         ],
@@ -165,20 +190,60 @@ class OrderCardWidget extends StatelessWidget {
                     onPressed: onAcceptOrder,
                   ),
                 ),
-              ] else if (order.isAcceptedByWaiter && !order.isServingInTransit && !order.isServed) ...[
-                // STEP 2: START SERVING
+              ] else if (order.canGenerateBill) ...[
+                // STEP 2: ALL DISHES SERVED -> GENERATE BILL UNLOCKED
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
-                    text: 'Start Serving (In Transit)',
-                    icon: Icons.directions_run,
+                    text: 'Generate Bill',
+                    icon: Icons.receipt_long,
                     isLoading: isActionLoading,
-                    backgroundColor: AppColors.warmOrange,
-                    onPressed: onStartServing,
+                    backgroundColor: AppColors.darkGreen,
+                    onPressed: onBillingPayment,
+                  ),
+                ),
+              ] else if (order.readyItemsCount > 0) ...[
+                // STEP 3: SERVE READY DISHES
+                SizedBox(
+                  width: double.infinity,
+                  child: CustomButton(
+                    text: 'Serve Ready Dishes (${order.readyItemsCount} Ready)',
+                    icon: Icons.restaurant,
+                    isLoading: isActionLoading,
+                    backgroundColor: AppColors.accentGreen,
+                    onPressed: onMarkServed ?? onStartServing,
+                  ),
+                ),
+              ] else if (order.pendingItemsCount > 0) ...[
+                // STEP 4: WAITING FOR KITCHEN / OTHER DISHES TO BE PREPARED
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFCD34D)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.soup_kitchen_rounded, color: Color(0xFFD97706), size: 16),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Waiting for Kitchen (${order.pendingItemsCount} Dish${order.pendingItemsCount > 1 ? 'es' : ''} Preparing)',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFB45309),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ] else if (order.isServingInTransit && !order.isServed) ...[
-                // STEP 3: MARK AS SERVED
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
@@ -190,7 +255,6 @@ class OrderCardWidget extends StatelessWidget {
                   ),
                 ),
               ] else if (order.isServed && !order.isPaid && order.status != 'Bill Generated') ...[
-                // STEP 4: GENERATE BILL ONLY
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(

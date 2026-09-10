@@ -22,7 +22,6 @@ class WaiterDashboardScreen extends StatefulWidget {
 
 class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
   Timer? _pollingTimer;
-  bool _isPopupShowing = false;
   final Set<String> _notifiedOrderIds = {};
   int _selectedActiveOrderIndex = 0;
 
@@ -49,27 +48,20 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     final ordersProvider = Provider.of<OrdersProvider>(context, listen: false);
     await ordersProvider.fetchOrders(silent: true);
 
-    if (_isPopupShowing || !mounted) return;
+    if (!mounted) return;
 
     final latestOrder = ordersProvider.latestNewOrder;
-    if (latestOrder != null && !_notifiedOrderIds.contains(latestOrder.id)) {
+    if (latestOrder != null) {
       _notifiedOrderIds.add(latestOrder.id);
-      _isPopupShowing = true;
       ordersProvider.clearLatestNewOrder();
-      _showNewOrderPopup(context, latestOrder);
-      return;
     }
 
-    // Also check if any order is recently placed or ready to serve
     final unhandledOrders = ordersProvider.orders.where((o) =>
       !o.isPaid && !_notifiedOrderIds.contains(o.id) && (o.status == 'Placed' || o.isReadyToServe || o.waiterStatus == 'PENDING')
     ).toList();
 
-    if (unhandledOrders.isNotEmpty) {
-      final newest = unhandledOrders.first;
-      _notifiedOrderIds.add(newest.id);
-      _isPopupShowing = true;
-      _showNewOrderPopup(context, newest);
+    for (var o in unhandledOrders) {
+      _notifiedOrderIds.add(o.id);
     }
   }
 
@@ -486,14 +478,14 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                         const SizedBox(height: 12),
 
                         // Recent Orders List Cards
-                        if (ordersProvider.orders.isEmpty) ...[
+                        if (myOrders.isEmpty) ...[
                           _buildSampleOrderCard(context, 'Table T - 07', '2 Items • ₹320', '11:45 AM', 'Preparing', const Color(0xFFE6F4ED), const Color(0xFF0F3526), Icons.soup_kitchen_rounded, const Color(0xFFFFF4ED)),
                           _buildSampleOrderCard(context, 'Table T - 04', '3 Items • ₹450', '11:32 AM', 'Served', const Color(0xFFFEF3C7), const Color(0xFFD97706), Icons.local_drink_rounded, const Color(0xFFFCE7F3)),
                           _buildSampleOrderCard(context, 'Table T - 12', '1 Item • ₹180', '11:20 AM', 'New Order', const Color(0xFFEFF6FF), const Color(0xFF2563EB), Icons.ramen_dining_rounded, const Color(0xFFE6F4ED)),
                           _buildSampleOrderCard(context, 'Table T - 03', '4 Items • ₹620', '10:58 AM', 'Completed', const Color(0xFFE6FFFA), const Color(0xFF059669), Icons.dinner_dining_rounded, const Color(0xFFEEF2FF)),
                         ] else ...[
                           Column(
-                            children: ordersProvider.orders.take(6).map((ord) {
+                            children: myOrders.take(6).map((ord) {
                               return _buildRealOrderCard(context, ord);
                             }).toList(),
                           ),
@@ -508,180 +500,6 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
         ),
       ),
     );
-  }
-
-  // 🔔 New Order Popup Modal
-  void _showNewOrderPopup(BuildContext context, OrderModel order) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          elevation: 16,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Animated Bell / Icon Container
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFF4ED),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.notifications_active_rounded,
-                    color: Color(0xFFE87524),
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  '🔔 NEW ORDER ARRIVED!',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F2A1D),
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDCFCE7),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF86EFAC)),
-                  ),
-                  child: Text(
-                    'TABLE ${order.table.toUpperCase()} • ${order.orderId}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF166534),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Order Items & Total Summary Box
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Customer: ${order.customer}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                          ),
-                          Text(
-                            'Status: ${order.status}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFE87524)),
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 16),
-                      if (order.items.isNotEmpty)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: order.items.take(4).map((it) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '${it.quantity}x  ${it.name}',
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
-                                  ),
-                                  Text(
-                                    '₹${(it.price * it.quantity).toStringAsFixed(0)}',
-                                    style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        )
-                      else
-                        const Text('Items summary placed by customer', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      const Divider(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Total Bill Amount:',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                          ),
-                          Text(
-                            '₹${order.totalAmount.toStringAsFixed(0)}',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF166534)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Buttons Row
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () {
-                          _isPopupShowing = false;
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text('Dismiss', style: TextStyle(fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F2A1D),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () {
-                          _isPopupShowing = false;
-                          Navigator.pop(ctx);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)),
-                          );
-                        },
-                        child: const Text('View & Accept', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    ).then((_) {
-      _isPopupShowing = false;
-    });
   }
 
   // Helper Widget for Quick Action Tiles

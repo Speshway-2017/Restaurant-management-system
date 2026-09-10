@@ -23,14 +23,38 @@ class OrdersProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Return all floor orders so waiter can view and accept orders from any table
+  // Return floor orders: unassigned/pending orders OR orders accepted by/assigned to this specific waiter
   List<OrderModel> getMyOrders(String waiterId, String waiterName, List<String> assignedTables) {
-    return _orders;
+    final cleanId = waiterId.trim().toLowerCase();
+    final cleanName = waiterName.trim().toLowerCase();
+
+    return _orders.where((ord) {
+      final ordId = ord.waiterId.trim().toLowerCase();
+      final ordName = ord.waiterName.trim().toLowerCase();
+
+      final isClaimed = ord.isAcceptedByWaiter || ordId.isNotEmpty || ordName.isNotEmpty;
+
+      if (isClaimed) {
+        // If order has been accepted by/assigned to a waiter, check if it matches current waiter
+        bool belongsToMe = false;
+        if (cleanId.isNotEmpty && ordId.isNotEmpty && ordId == cleanId) {
+          belongsToMe = true;
+        }
+        if (cleanName.isNotEmpty && ordName.isNotEmpty && ordName == cleanName) {
+          belongsToMe = true;
+        }
+        return belongsToMe;
+      }
+
+      // Unclaimed / pending orders remain visible so any waiter on floor can view and accept
+      return true;
+    }).toList();
   }
 
-  // Filter ready orders across all tables needing waiter pickup/acceptance
+  // Filter ready orders belonging to this waiter (or unassigned ready orders)
   List<OrderModel> getReadyOrders(String waiterId, String waiterName, List<String> assignedTables) {
-    return _orders.where((ord) => ord.isReadyToServe && !ord.isServed).toList();
+    final myOrds = getMyOrders(waiterId, waiterName, assignedTables);
+    return myOrds.where((ord) => ord.isReadyToServe && !ord.isServed).toList();
   }
 
   double _gstRate = 0.05;
@@ -176,6 +200,60 @@ class OrdersProvider with ChangeNotifier {
       );
       await fetchOrders();
       return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // 2b. Serve Ready Dishes (Only mark dishes that Chef has set as READY to SERVED)
+  Future<bool> serveReadyItems(String orderId, String waiterId, String waiterName) async {
+    return deliverSelectedItems(orderId, [], waiterId, waiterName);
+  }
+
+  // 2c. Deliver Selected Ready Items
+  Future<bool> deliverSelectedItems(String orderId, List<String> selectedIdentifiers, String waiterId, String waiterName) async {
+    try {
+      final idx = _orders.indexWhere((o) => o.id == orderId || o.orderId == orderId);
+      if (idx != -1) {
+        final ord = _orders[idx];
+        final readyItems = ord.activeItems.where((it) => (it.isReady || it.status == 'READY') && !it.isDelivered && it.status != 'SERVED' && it.status != 'DELIVERED').toList();
+
+        final Set<String> targets = {};
+        if (selectedIdentifiers.isNotEmpty) {
+          for (var key in selectedIdentifiers) {
+            if (key.isNotEmpty) targets.add(key);
+            for (var item in ord.activeItems) {
+              if (item.id == key || item.name == key) {
+                if (item.id.isNotEmpty) targets.add(item.id);
+                if (item.name.isNotEmpty) targets.add(item.name);
+              }
+            }
+          }
+        } else {
+          for (var item in readyItems) {
+            if (item.id.isNotEmpty) targets.add(item.id);
+            if (item.name.isNotEmpty) targets.add(item.name);
+          }
+        }
+
+        if (targets.isNotEmpty) {
+          await ApiClient.patch(
+            '/orders/${ord.id}/items/status',
+            body: {
+              'itemIds': targets.toList(),
+              'status': 'DELIVERED',
+            },
+          );
+
+          await fetchOrders();
+          return true;
+        } else {
+          return true;
+        }
+      }
+      return false;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
       notifyListeners();

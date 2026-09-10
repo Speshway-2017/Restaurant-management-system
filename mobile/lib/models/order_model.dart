@@ -26,7 +26,7 @@ class OrderItemModel {
       price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
       quantity: int.tryParse(json['quantity']?.toString() ?? json['qty']?.toString() ?? '1') ?? 1,
       status: json['status']?.toString() ?? 'PLACED',
-      isReady: json['isReady'] == true || json['status'] == 'READY' || json['status'] == 'DELIVERED',
+      isReady: (json['isReady'] == true || json['status'] == 'READY') && json['status'] != 'DELIVERED' && json['status'] != 'SERVED' && json['isDelivered'] != true,
       isDelivered: json['isDelivered'] == true || json['status'] == 'DELIVERED' || json['status'] == 'SERVED',
       notes: json['notes']?.toString() ?? json['chefNotes']?.toString() ?? '',
     );
@@ -120,11 +120,22 @@ class OrderModel {
     return clean.isNotEmpty ? clean : table;
   }
 
-  bool get isReadyToServe => chefStatus == 'READY' || status == 'Ready';
+  bool get isReadyToServe => chefStatus == 'READY' || status == 'Ready' || readyItemsCount > 0;
   bool get isAcceptedByWaiter => waiterStatus == 'ACCEPTED' || waiterStatus == 'SERVING' || waiterStatus == 'SERVED';
   bool get isServingInTransit => waiterStatus == 'SERVING' || servingStatus == 'IN_TRANSIT';
-  bool get isServed => waiterStatus == 'SERVED' || servingStatus == 'SERVED' || status == 'Served' || status == 'Completed';
+  bool get isServed => (waiterStatus == 'SERVED' || servingStatus == 'SERVED' || status == 'Served' || status == 'Completed') && areAllItemsServed;
   bool get isPaid => paymentStatus == 'Paid' || paymentStatus == 'Completed';
+  bool get isBillGenerated => status == 'Bill Generated' || status == 'Billed' || paymentStatus == 'Awaiting Payment';
+
+  List<OrderItemModel> get activeItems => items.where((it) => !it.isCancelled).toList();
+  int get readyItemsCount => activeItems.where((it) => (it.isReady || it.status == 'READY') && !it.isDelivered && it.status != 'SERVED' && it.status != 'DELIVERED').length;
+  int get servedItemsCount => activeItems.where((it) => it.isDelivered || it.status == 'SERVED' || it.status == 'DELIVERED').length;
+  int get pendingItemsCount => activeItems.where((it) => !it.isReady && !it.isDelivered && it.status != 'READY' && it.status != 'SERVED' && it.status != 'DELIVERED').length;
+  bool get areAllItemsServed {
+    if (activeItems.isEmpty) return waiterStatus == 'SERVED' || servingStatus == 'SERVED' || status == 'Served' || status == 'Completed';
+    return activeItems.every((it) => it.isDelivered || it.status == 'SERVED' || it.status == 'DELIVERED');
+  }
+  bool get canGenerateBill => areAllItemsServed && !isPaid && !isBillGenerated;
 
   double get calculatedSubtotal {
     double sum = 0;
@@ -138,12 +149,15 @@ class OrderModel {
 
   double getGstAmount([double? rate]) {
     final r = rate ?? 0.05;
-    return calculatedSubtotal * r;
+    return (calculatedSubtotal * r).roundToDouble();
   }
 
   double getNetTotal([double? rate]) {
     final r = rate ?? 0.05;
-    return (calculatedSubtotal - discountAmount) + getGstAmount(r);
+    final totalBeforeDisc = calculatedSubtotal + getGstAmount(r);
+    final amountAfterDisc = totalBeforeDisc - discountAmount;
+    final finalRevenue = amountAfterDisc > 0 ? amountAfterDisc : 0.0;
+    return finalRevenue + tipAmount;
   }
 
   double get gstAmount => getGstAmount(0.05);

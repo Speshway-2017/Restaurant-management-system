@@ -107,8 +107,8 @@ class OrderRepository {
       if (fullOrderData.items && Array.isArray(fullOrderData.items)) {
         doc.items = fullOrderData.items.map((it, idx) => {
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
-          const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || targetStatus === 'Ready'));
-          const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (targetStatus === 'Preparing' || targetStatus === 'Cooking' || it.status === 'PREPARING' || it.status === 'COOKING' ? 'PREPARING' : (it.status || 'PLACED')));
+          const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY'));
+          const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (it.status === 'CANCELLED' ? 'CANCELLED' : (it.status || 'PREPARING')));
 
           return {
             id: String(it.id || it._id || `item-${idx}`),
@@ -143,15 +143,19 @@ class OrderRepository {
       payment: targetPayment,
       paymentStatus: targetPayment,
       time: fullOrderData.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      items: (fullOrderData.items || []).map((it, idx) => ({
-        id: it.id || `item-${idx}`,
-        name: it.name || 'Dish Item',
-        price: Number(it.price) || 0,
-        quantity: Number(it.quantity || it.qty || 1),
-        status: (targetStatus === 'Ready' || it.status === 'READY' || it.isReady) ? 'READY' : (targetStatus === 'Preparing' || targetStatus === 'Cooking' || it.status === 'PREPARING' || it.status === 'COOKING' ? 'PREPARING' : (it.status || 'PLACED')),
-        isReady: targetStatus === 'Ready' || Boolean(it.isReady || it.status === 'READY' || it.status === 'DELIVERED'),
-        isDelivered: Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED')
-      }))
+      items: (fullOrderData.items || []).map((it, idx) => {
+        const isDel = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
+        const isRdy = Boolean(!isDel && (it.isReady || it.status === 'READY'));
+        return {
+          id: it.id || `item-${idx}`,
+          name: it.name || 'Dish Item',
+          price: Number(it.price) || 0,
+          quantity: Number(it.quantity || it.qty || 1),
+          status: isDel ? 'DELIVERED' : (isRdy ? 'READY' : (it.status || 'PREPARING')),
+          isReady: isRdy,
+          isDelivered: isDel
+        };
+      })
     });
     return newDoc;
   }
