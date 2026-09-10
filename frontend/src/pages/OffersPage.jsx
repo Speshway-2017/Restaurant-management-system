@@ -22,7 +22,7 @@ export default function OffersPage({ onOpenDemoModal, setActivePage }) {
   const getCartStorageKey = () => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const tableParam = urlParams.get('table') || localStorage.getItem('flavora_scanned_table') || '';
+      const tableParam = urlParams.get('table') || '';
       if (tableParam) {
         const clean = String(tableParam).toUpperCase().replace(/[^A-Z0-9-]/g, '');
         return `flavora_cart_${clean}`;

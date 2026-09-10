@@ -89,7 +89,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
   const getCartStorageKey = () => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const tableParam = urlParams.get('table') || localStorage.getItem('flavora_scanned_table') || '';
+      const tableParam = urlParams.get('table') || '';
       if (tableParam) {
         const clean = String(tableParam).toUpperCase().replace(/[^A-Z0-9-]/g, '');
         return `flavora_cart_${clean}`;
@@ -450,43 +450,6 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
                 onSecondaryClick={() => setActivePage('about')}
                 style={{ marginBottom: 0 }}
               />
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (onOpenBookTable) {
-                    onOpenBookTable();
-                  } else if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new Event('flavora_open_book_table'));
-                  }
-                }}
-                style={{
-                  backgroundColor: '#0F2A1D',
-                  color: '#FFFFFF',
-                  borderRadius: '12px',
-                  padding: '0.75rem 1.4rem',
-                  fontSize: '0.92rem',
-                  fontWeight: 800,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  border: '2px solid #0F2A1D',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(15, 42, 29, 0.22)',
-                  transition: 'transform 0.15s ease, background-color 0.15s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.backgroundColor = '#1E4636';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.backgroundColor = '#0F2A1D';
-                }}
-              >
-                <Calendar size={17} color="#FF8A00" />
-                <span>Book a Table</span>
-              </button>
             </div>
 
             {/* Elevated Trust Badges Bar */}
