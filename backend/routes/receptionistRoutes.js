@@ -4,6 +4,7 @@ const {
   getReceptionistKPIs,
   getFloorPlan,
   getActiveTableSession,
+  claimTableSession,
   vacateTable,
   seatWalkIn,
   mergeTables,
@@ -27,6 +28,7 @@ const {
 router.get('/kpis', getReceptionistKPIs);
 router.get('/floor-plan', getFloorPlan);
 router.get('/active-session/:tableNum', getActiveTableSession);
+router.post('/claim-session', claimTableSession);
 
 // Walk-in Seating & Table Operations
 router.post('/walk-ins/seat', seatWalkIn);
