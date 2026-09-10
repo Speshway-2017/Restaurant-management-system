@@ -69,8 +69,9 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [guestName, setGuestName] = useState('');
   const [chefNotes, setChefNotes] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
-  const [orderSuccessMsg, setOrderSuccessMsg] = useState(null);
   const [tableOccupiedInfo, setTableOccupiedInfo] = useState(null);
+  const [networkErrorInfo, setNetworkErrorInfo] = useState(null);
+  const [isAuthorizingTableSession, setIsAuthorizingTableSession] = useState(Boolean(tableNum));
   const [activeTableSession, setActiveTableSession] = useState(null);
 
   // New Customer Enhancement States
@@ -102,6 +103,13 @@ export default function MenuPage({ onOpenDemoModal }) {
       return [];
     }
   });
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem('flavora_device_id')) {
+      const newDeviceId = `DEV-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      localStorage.setItem('flavora_device_id', newDeviceId);
+    }
+  }, []);
 
   useEffect(() => {
     const handleStockUpdate = () => {
@@ -197,28 +205,65 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [tableCleaningInfo, setTableCleaningInfo] = useState(null);
   const [currentTableStatus, setCurrentTableStatus] = useState('Available');
 
-  // Poll backend API for real-time table occupancy & cleaning status across mobile devices
+  // Poll backend API for real-time table session access & cleaning status
   useEffect(() => {
-    if (!tableNum) return;
+    if (!tableNum) {
+      setIsAuthorizingTableSession(false);
+      return;
+    }
+
+    let isMounted = true;
 
     const checkTableStatus = async () => {
       try {
         const cleanTableNum = String(tableNum).replace(/[^0-9]/g, '');
+        const deviceToken = typeof localStorage !== 'undefined' ? localStorage.getItem('flavora_device_id') : '';
+        const savedSessToken = typeof localStorage !== 'undefined' ? localStorage.getItem(`flavora_session_token_${cleanTableNum}`) : '';
 
-        // 1. Query active session (Backend Source of Truth for both Receptionist & Direct Walk-In)
+        // 1. Claim/Verify Active Table Session via Backend Single Source of Truth
+        const claimRes = await api.claimTableSession(tableNum, savedSessToken, deviceToken);
+
+        if (!isMounted) return;
+
+        if (claimRes.status === 403 || claimRes.code === 'TABLE_ALREADY_OCCUPIED' || claimRes.accessGranted === false) {
+          setTableOccupiedInfo({
+            tableNum: tableNum,
+            message: claimRes.message || `Table ${tableNum} is currently being used on another device.`
+          });
+          setActiveTableSession(null);
+          setNetworkErrorInfo(null);
+          setIsAuthorizingTableSession(false);
+          return;
+        }
+
+        if (claimRes.code === 'NETWORK_ERROR' || claimRes.status === 0) {
+          setNetworkErrorInfo({
+            message: claimRes.message || 'Unable to connect to restaurant server. Please try again.'
+          });
+          setActiveTableSession(null);
+          setIsAuthorizingTableSession(false);
+          return;
+        }
+
         let activeSess = null;
         let sessTableStatus = null;
-        try {
-          const sessRes = await api.getActiveTableSession(tableNum);
-          if (sessRes && (sessRes.tableStatus === 'Cleaning' || sessRes.message === 'Table Unavailable — Cleaning')) {
-            sessTableStatus = 'Cleaning';
-          }
-          const sess = sessRes && sessRes.data !== undefined ? sessRes.data : sessRes;
+
+        if (claimRes.ok || claimRes.status === 200 || claimRes.accessGranted === true) {
+          const sess = claimRes.data !== undefined ? claimRes.data : claimRes;
           if (sess && (sess._id || sess.sessionToken)) {
             activeSess = sess;
+            localStorage.setItem(`flavora_session_token_${cleanTableNum}`, sess.sessionToken);
           }
-        } catch (e) {
-          activeSess = null;
+          if (claimRes.tableStatus === 'Cleaning' || claimRes.message === 'Table Unavailable — Cleaning') {
+            sessTableStatus = 'Cleaning';
+          }
+          setTableOccupiedInfo(null);
+          setNetworkErrorInfo(null);
+          setIsAuthorizingTableSession(false);
+        } else {
+          setNetworkErrorInfo({ message: claimRes.message || 'Table verification failed.' });
+          setIsAuthorizingTableSession(false);
+          return;
         }
 
         // 2. Fetch table record from DB & local storage to check table status (e.g. Cleaning, Reserved)
@@ -857,6 +902,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       customer: guestName.trim() || 'Guest Diner',
       sessionId: activeTableSession?._id ? String(activeTableSession._id) : (activeTableSession?.sessionToken || ''),
       sessionToken: activeTableSession?.sessionToken || '',
+      deviceToken: typeof localStorage !== 'undefined' ? localStorage.getItem('flavora_device_id') : '',
       notes: chefNotes.trim(),
       items: orderItems,
       total: totalCartPrice,
@@ -954,6 +1000,168 @@ export default function MenuPage({ onOpenDemoModal }) {
   };
 
   const isFixedTableBarActive = Boolean(tableNum);
+
+  if (isAuthorizingTableSession) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#0F2A1D',
+        color: '#FFFFFF',
+        padding: '2rem 1.5rem',
+        textAlign: 'center',
+        fontFamily: 'Inter, system-ui, sans-serif'
+      }}>
+        <div style={{
+          width: '44px',
+          height: '44px',
+          border: '4px solid rgba(255,255,255,0.2)',
+          borderTopColor: '#E07A3C',
+          borderRadius: '50%',
+          marginBottom: '1.2rem'
+        }} />
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: '#FFFFFF' }}>
+          Verifying Table Session...
+        </h3>
+        <p style={{ color: '#94A3B8', fontSize: '0.85rem', marginTop: '0.4rem' }}>
+          Securing Table {tableNum} access
+        </p>
+      </div>
+    );
+  }
+
+  if (networkErrorInfo) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#0F2A1D',
+        color: '#FFFFFF',
+        padding: '2rem 1.5rem',
+        textAlign: 'center',
+        fontFamily: 'Inter, system-ui, sans-serif'
+      }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.6rem', color: '#EF4444' }}>
+          Connection Error
+        </h2>
+        <p style={{ color: '#94A3B8', fontSize: '0.95rem', maxWidth: '360px', marginBottom: '1.5rem' }}>
+          {networkErrorInfo.message || 'Unable to connect to restaurant server.'}
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            padding: '0.85rem 1.8rem',
+            borderRadius: '12px',
+            backgroundColor: '#E07A3C',
+            color: '#FFFFFF',
+            fontWeight: 700,
+            fontSize: '0.95rem',
+            border: 'none',
+            cursor: 'pointer'
+          }}
+        >
+          🔄 Retry Connection
+        </button>
+      </div>
+    );
+  }
+
+  if (tableOccupiedInfo) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#0F2A1D',
+        color: '#FFFFFF',
+        padding: '2rem 1.5rem',
+        textAlign: 'center',
+        fontFamily: 'Inter, system-ui, sans-serif'
+      }}>
+        <div style={{
+          width: '84px',
+          height: '84px',
+          borderRadius: '50%',
+          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+          border: '2px solid #EF4444',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '1.5rem',
+          boxShadow: '0 0 30px rgba(239, 68, 68, 0.3)'
+        }}>
+          <UtensilsCrossed size={44} color="#EF4444" />
+        </div>
+
+        <span style={{
+          backgroundColor: '#EF4444',
+          color: '#FFFFFF',
+          fontSize: '0.8rem',
+          fontWeight: 800,
+          padding: '0.35rem 0.9rem',
+          borderRadius: '9999px',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          marginBottom: '1rem'
+        }}>
+          Table Occupied
+        </span>
+
+        <h2 style={{ fontSize: '1.65rem', fontWeight: 900, marginBottom: '0.6rem', color: '#FFFFFF' }}>
+          Table {tableOccupiedInfo.tableNum || tableNum} is Currently Occupied
+        </h2>
+
+        <p style={{ color: '#94A3B8', fontSize: '0.95rem', maxWidth: '380px', lineHeight: '1.5', marginBottom: '2rem' }}>
+          Another customer has an active dining session at this table. If you are seated here with your party, please ask the primary guest to share access, or request assistance from our service staff.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', width: '100%', maxWidth: '320px' }}>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              width: '100%',
+              padding: '0.85rem',
+              borderRadius: '12px',
+              backgroundColor: '#E07A3C',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(224, 122, 60, 0.4)'
+            }}
+          >
+            🔄 Refresh Table Status
+          </button>
+
+          <button
+            onClick={() => window.location.href = '/'}
+            style={{
+              width: '100%',
+              padding: '0.85rem',
+              borderRadius: '12px',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              color: '#FFFFFF',
+              fontWeight: 600,
+              fontSize: '0.95rem',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              cursor: 'pointer'
+            }}
+          >
+            📖 View General Menu
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isMobile) {
     return (

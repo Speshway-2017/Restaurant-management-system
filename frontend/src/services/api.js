@@ -20,6 +20,11 @@ const request = async (endpoint, options = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const deviceToken = typeof localStorage !== 'undefined' ? localStorage.getItem('flavora_device_id') : null;
+  if (deviceToken) {
+    headers['x-device-token'] = deviceToken;
+  }
+
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
@@ -307,7 +312,44 @@ export const api = {
   // Receptionist & Host Dashboard API
   getReceptionistKPIs: () => request('/receptionist/kpis'),
   getFloorPlan: () => request('/receptionist/floor-plan'),
-  getActiveTableSession: (tableNum) => request(`/receptionist/active-session/${encodeURIComponent(tableNum)}`),
+  getActiveTableSession: (tableNum, deviceToken, sessionToken) => {
+    const extraHeaders = {};
+    if (deviceToken) extraHeaders['x-device-token'] = deviceToken;
+    if (sessionToken) extraHeaders['x-session-token'] = sessionToken;
+    return request(`/receptionist/active-session/${encodeURIComponent(tableNum)}`, { headers: extraHeaders });
+  },
+  claimTableSession: async (tableNum, sessionToken, deviceToken) => {
+    const extraHeaders = {};
+    if (deviceToken) extraHeaders['x-device-token'] = deviceToken;
+    if (sessionToken) extraHeaders['x-session-token'] = sessionToken;
+    try {
+      const token = sessionStorage.getItem('flavora_auth_token') || localStorage.getItem('flavora_auth_token');
+      if (token) extraHeaders['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE}/receptionist/claim-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...extraHeaders
+        },
+        body: JSON.stringify({ tableNum, sessionToken, deviceToken })
+      });
+      const data = await response.json();
+      return {
+        status: response.status,
+        ok: response.ok,
+        ...data
+      };
+    } catch (err) {
+      return {
+        status: 0,
+        ok: false,
+        success: false,
+        code: 'NETWORK_ERROR',
+        message: err.message || 'Server connection error.'
+      };
+    }
+  },
   seatWalkIn: (data) => request('/receptionist/walk-ins/seat', { method: 'POST', body: JSON.stringify(data) }),
   mergeTables: (primaryTableNum, secondaryTableNums) => request('/receptionist/tables/merge', { method: 'POST', body: JSON.stringify({ primaryTableNum, secondaryTableNums }) }),
   splitTables: (tableNum) => request('/receptionist/tables/split', { method: 'POST', body: JSON.stringify({ tableNum }) }),
