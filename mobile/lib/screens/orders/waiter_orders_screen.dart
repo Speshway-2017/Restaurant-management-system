@@ -74,16 +74,17 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
+          tabAlignment: TabAlignment.start,
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: [
+            Tab(text: 'History (${completedOrders.length})'),
+            Tab(text: 'Active (${activeOrders.length})'),
             Tab(text: 'Ready (${readyOrders.length})'),
             Tab(text: 'Serving (${servingOrders.length})'),
             Tab(text: 'Served (${servedOrders.length})'),
-            Tab(text: 'Active (${activeOrders.length})'),
-            Tab(text: 'History (${completedOrders.length})'),
           ],
         ),
       ),
@@ -125,11 +126,11 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
             child: TabBarView(
               controller: _tabController,
               children: [
+                _buildOrdersList(_filterBySearch(completedOrders), waiterId, waiterName, ordersProvider, isHistory: true),
+                _buildOrdersList(_filterBySearch(activeOrders), waiterId, waiterName, ordersProvider, isHistory: false),
                 _buildOrdersList(_filterBySearch(readyOrders), waiterId, waiterName, ordersProvider, isHistory: false),
                 _buildOrdersList(_filterBySearch(servingOrders), waiterId, waiterName, ordersProvider, isHistory: false),
                 _buildOrdersList(_filterBySearch(servedOrders), waiterId, waiterName, ordersProvider, isHistory: false),
-                _buildOrdersList(_filterBySearch(activeOrders), waiterId, waiterName, ordersProvider, isHistory: false),
-                _buildOrdersList(_filterBySearch(completedOrders), waiterId, waiterName, ordersProvider, isHistory: true),
               ],
             ),
           ),

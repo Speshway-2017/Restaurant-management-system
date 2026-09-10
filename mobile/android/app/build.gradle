@@ -27,7 +27,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.speshway.flavora_waiter_mobile"
-    compileSdkVersion 34
+    compileSdkVersion 36
     ndkVersion flutter.ndkVersion
 
     compileOptions {
