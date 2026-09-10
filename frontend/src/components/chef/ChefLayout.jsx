@@ -606,7 +606,7 @@ export default function ChefLayout({ setActivePage }) {
       const rawApiId = targetOrder ? (targetOrder.orderId || targetOrder.id || targetOrder._id || cleanOrderId) : cleanOrderId;
       const cleanApiId = String(rawApiId).replace(/^#/i, '').trim();
       if (newStatus === 'Preparing') {
-        await api.chefUpdateStatus(cleanApiId, 'PREPARING').catch(() => {
+        await api.chefUpdateStatus(cleanApiId, 'PREPARING', { items: updatedItems }).catch(() => {
           return api.updateOrderStatus(cleanApiId, effectiveOrderStatus, {
             items: updatedItems,
             status: effectiveOrderStatus,
@@ -615,7 +615,7 @@ export default function ChefLayout({ setActivePage }) {
           });
         });
       } else if (newStatus === 'Ready') {
-        await api.chefUpdateStatus(cleanApiId, 'READY').catch(() => {
+        await api.chefUpdateStatus(cleanApiId, 'READY', { items: updatedItems }).catch(() => {
           return api.updateOrderStatus(cleanApiId, effectiveOrderStatus, {
             items: updatedItems,
             status: effectiveOrderStatus,
