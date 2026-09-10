@@ -333,18 +333,20 @@ export default function ChefLayout({ setActivePage }) {
 
         const finalItems = activeItemsList.map((it, itemIdx) => {
           if (typeof it === 'string') {
-            return { id: `item-${itemIdx}`, name: it, price: 150, quantity: 1, status: 'PLACED', isReady: false, isDelivered: false };
+            return { id: `item-${itemIdx}`, name: it, price: 150, quantity: 1, status: (effectiveRawStatus === 'Accepted' || o.chefStatus === 'ACCEPTED') ? 'ACCEPTED' : 'PLACED', isReady: false, isDelivered: false };
           }
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
           const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || (rawStatus === 'Ready' && !hasPendingItems)));
-          const isCooking = Boolean(!isDelivered && !isReady && (it.status === 'COOKING' || it.status === 'PREPARING' || rawStatus === 'Preparing' || rawStatus === 'Cooking'));
+          const isOrderPreparing = rawStatus === 'Preparing' || rawStatus === 'Cooking' || o.chefStatus === 'PREPARING';
+          const isCooking = Boolean(!isDelivered && !isReady && isOrderPreparing && (it.status === 'COOKING' || it.status === 'PREPARING' || !it.status || it.status === 'PLACED' || it.status === 'ACCEPTED'));
+          const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : ((rawStatus === 'Accepted' || o.chefStatus === 'ACCEPTED') ? 'ACCEPTED' : 'PLACED')));
           return {
             ...it,
             id: it.id || it._id || `item-${itemIdx}`,
             name: it.name || it.dishId || 'Dish',
             price: Number(it.price) || 0,
             quantity: Number(it.quantity || it.qty || 1),
-            status: isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : 'PLACED')),
+            status: itemStatus,
             isReady: isReady,
             isDelivered: isDelivered
           };

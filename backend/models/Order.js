@@ -27,7 +27,7 @@ const orderSchema = new mongoose.Schema({
   tip: { type: Number, default: 0 },
   tipAmount: { type: Number, default: 0 },
   customerPaidAmount: { type: Number },
-  paymentMethod: { type: String, default: 'UPI' },
+  paymentMethod: { type: String, default: '' },
   status: { 
     type: String, 
     default: 'Placed' 

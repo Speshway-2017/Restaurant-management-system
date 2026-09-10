@@ -1959,20 +1959,8 @@ export default function WaiterOrdersPage() {
                 return (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', fontWeight: 700 }}>
-                      <span>Original Total:</span>
+                      <span>Total Bill:</span>
                       <span>₹{subtotal}</span>
-                    </div>
-
-                    {disc > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#991B1B', fontWeight: 800 }}>
-                        <span>Coupon Discount {code ? `(${code})` : ''}:</span>
-                        <span style={{ color: '#DC2626' }}>-₹{disc}</span>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#0F2A1D', fontWeight: 900 }}>
-                      <span>Amount After Discount:</span>
-                      <span>₹{amountAfterDisc}</span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', fontWeight: 700 }}>
@@ -1992,14 +1980,16 @@ export default function WaiterOrdersPage() {
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#166534', fontWeight: 900, fontSize: '1.05rem', paddingTop: '0.45rem', borderTop: '1.5px solid #CBD5E1' }}>
-                      <span>Customer Paid:</span>
-                      <span>₹{customerPaid}</span>
-                    </div>
+                    {(viewOrderDetailsModal.paymentStatus === 'Paid' || viewOrderDetailsModal.payment === 'Paid') && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#166534', fontWeight: 900, fontSize: '1.05rem', paddingTop: '0.45rem', borderTop: '1.5px solid #CBD5E1' }}>
+                        <span>Customer Paid:</span>
+                        <span>₹{customerPaid}</span>
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#0F2A1D', fontWeight: 800, paddingTop: '0.4rem', borderTop: '1px dashed #CBD5E1' }}>
                       <span>Payment Method:</span>
-                      <span>{viewOrderDetailsModal.paymentMethod || 'UPI / QR'}</span>
+                      <span>{ (viewOrderDetailsModal.paymentStatus === 'Paid' || viewOrderDetailsModal.payment === 'Paid') ? (viewOrderDetailsModal.paymentMethod || 'UPI / QR') : 'Pending Payment' }</span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#166534', fontWeight: 800 }}>

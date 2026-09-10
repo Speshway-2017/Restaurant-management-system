@@ -250,13 +250,15 @@ export default function MenuPage({ onOpenDemoModal }) {
 
         if (activeSess) {
           setActiveTableSession(activeSess);
-          if (activeSess.guestName && activeSess.guestName !== 'Guest Diner' && activeSess.guestName !== 'Guest' && activeSess.guestName.trim()) {
+          const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+          const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeSess.sessionToken}`);
+          
+          if (selfName && selfName.trim()) {
+            setGuestName(selfName.trim());
+          } else if (activeSess.isReceptionistAssigned && activeSess.guestName && activeSess.guestName !== 'Guest Diner' && activeSess.guestName !== 'Guest' && activeSess.guestName.trim()) {
             setGuestName(activeSess.guestName.trim());
           } else {
-            // Direct walk-in: check if user entered a name during this specific session
-            const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-            const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeSess.sessionToken}`);
-            if (selfName) setGuestName(selfName.trim());
+            setGuestName('');
           }
 
           // Cart sync: load cart strictly for this session
@@ -500,18 +502,20 @@ export default function MenuPage({ onOpenDemoModal }) {
     : '';
 
   const confirmedDinerName = React.useMemo(() => {
-    if (activeTableSession && activeTableSession.guestName && activeTableSession.guestName !== 'Guest Diner' && activeTableSession.guestName !== 'Guest' && activeTableSession.guestName.trim()) {
+    if (!activeTableSession) return '';
+    const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeTableSession.sessionToken}`);
+    if (selfName && selfName.trim()) {
+      return selfName.trim();
+    }
+    if (activeTableSession.isReceptionistAssigned && activeTableSession.guestName && activeTableSession.guestName !== 'Guest Diner' && activeTableSession.guestName !== 'Guest' && activeTableSession.guestName.trim()) {
       return activeTableSession.guestName.trim();
     }
-    const orderWithCust = placedTableOrders.find(o => o.customer && o.customer !== 'Guest Diner' && o.customer !== 'Guest' && o.customer.trim());
-    if (orderWithCust && orderWithCust.customer) {
-      return orderWithCust.customer.trim();
-    }
-    if (activeTableSession && guestName && guestName.trim() && guestName !== 'Guest Diner' && guestName !== 'Guest') {
-      const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    const cleanGuest = (guestName || '').trim();
+    if (cleanGuest && cleanGuest !== 'Guest Diner' && cleanGuest !== 'Guest') {
       const submitted = sessionStorage.getItem(`flavora_order_submitted_${cleanTbl}_${activeTableSession.sessionToken}`);
-      if (submitted || placedTableOrders.length > 0) {
-        return guestName.trim();
+      if (submitted || selfName) {
+        return cleanGuest;
       }
     }
     return '';
