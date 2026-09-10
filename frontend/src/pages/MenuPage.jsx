@@ -119,6 +119,24 @@ export default function MenuPage({ onOpenDemoModal }) {
     };
   }, []);
 
+  // Always auto-scroll to top when category changes or Customer Menu loads
+  useEffect(() => {
+    const scrollToTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      if (typeof document !== 'undefined') {
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        const scrollContainers = document.querySelectorAll('.customer-mobile-menu-page, .menu-page, .mobile-customer-view');
+        scrollContainers.forEach(el => {
+          if (el && el.scrollTop) el.scrollTop = 0;
+        });
+      }
+    };
+    scrollToTop();
+    const timer = setTimeout(scrollToTop, 50);
+    return () => clearTimeout(timer);
+  }, [selectedCategory]);
+
   useEffect(() => {
     const fetchLatestSettings = () => {
       api.getSettings()
@@ -1016,6 +1034,11 @@ export default function MenuPage({ onOpenDemoModal }) {
                         onClick={() => {
                           setSelectedCategory(cat.id);
                           setIsCategoryDrawerOpen(false);
+                          window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                          if (typeof document !== 'undefined') {
+                            document.documentElement.scrollTop = 0;
+                            document.body.scrollTop = 0;
+                          }
                         }}
                         style={{
                           display: 'flex',
@@ -1340,9 +1363,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                         fontWeight: 600
                       }}
                     />
-                    <div style={{ fontSize: '0.73rem', color: '#64748B', marginTop: '0.35rem', fontWeight: 600 }}>
-                      ℹ️ Once submitted, this name will be permanently locked for Table {tableNum || ''} until your order is completed.
-                    </div>
+                    
                   </div>
                 )}
 
@@ -1543,8 +1564,6 @@ export default function MenuPage({ onOpenDemoModal }) {
             }}
             activeOrder={placedTableOrders[0] || ratingOrderData || null}
             tableNum={tableNum}
-            currentLanguage={currentLanguage}
-            onLanguageChange={(lang) => setCurrentLanguage(lang)}
           />
         )}
 
@@ -1627,12 +1646,6 @@ export default function MenuPage({ onOpenDemoModal }) {
             <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
               Table {tableNum}
             </span>
-            {confirmedDinerName && (
-              <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #86EFAC', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}>
-                <span>👤</span>
-                <span>{confirmedDinerName}</span>
-              </span>
-            )}
             {currentTableStatus === 'Cleaning' ? (
               <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #FCD34D' }}>
                 🧹 Cleaning in Progress
@@ -2894,8 +2907,6 @@ export default function MenuPage({ onOpenDemoModal }) {
           }}
           activeOrder={placedTableOrders[0] || ratingOrderData || null}
           tableNum={tableNum}
-          currentLanguage={currentLanguage}
-          onLanguageChange={(lang) => setCurrentLanguage(lang)}
         />
       )}
 

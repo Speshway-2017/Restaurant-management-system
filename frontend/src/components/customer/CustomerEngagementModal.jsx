@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
-import { X, Star, Calendar, Share2, Globe, Heart, CheckCircle2, Copy } from 'lucide-react';
+import { X, Star, Calendar, Share2, Heart, CheckCircle2, Copy } from 'lucide-react';
 import { api } from '../../services/api';
 
 export default function CustomerEngagementModal({
   activeTab = 'rating',
   onClose,
   activeOrder,
-  tableNum,
-  currentLanguage = 'en',
-  onLanguageChange
+  tableNum
 }) {
   const [selectedTab, setSelectedTab] = useState(activeTab);
 
@@ -214,37 +212,7 @@ export default function CustomerEngagementModal({
           </button>
         </div>
 
-        {/* Multi-Language Selector Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: '0.65rem 0.85rem', borderRadius: '12px', marginBottom: '1.25rem', border: '1px solid #E2E8F0' }}>
-          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <Globe size={14} color="#166534" /> Select Language / भाषा
-          </span>
-          <div style={{ display: 'flex', gap: '0.25rem' }}>
-            {[
-              { code: 'en', label: 'English' },
-              { code: 'hi', label: 'हिंदी' },
-              { code: 'te', label: 'తెలుగు' },
-              { code: 'ta', label: 'தமிழ்' }
-            ].map(lang => (
-              <button
-                key={lang.code}
-                onClick={() => onLanguageChange && onLanguageChange(lang.code)}
-                style={{
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '6px',
-                  border: currentLanguage === lang.code ? '1.5px solid #166534' : '1px solid #CBD5E1',
-                  backgroundColor: currentLanguage === lang.code ? '#166534' : '#FFFFFF',
-                  color: currentLanguage === lang.code ? '#FFFFFF' : '#475569',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                {lang.label}
-              </button>
-            ))}
-          </div>
-        </div>
+       
 
         {/* 1. Rating & Feedback View */}
         {selectedTab === 'rating' && (
@@ -274,7 +242,7 @@ export default function CustomerEngagementModal({
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Priya Sharma"
+                    placeholder="e.g. Diner Name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     style={{ width: '100%', padding: '0.65rem 0.75rem', borderRadius: '12px', border: '1.5px solid #CBD5E1', fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box' }}

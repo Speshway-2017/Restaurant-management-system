@@ -979,14 +979,22 @@ export default function WaiterOrdersPage() {
 
                           const discountAmt = Number(order.discountAmount || order.discount || 0);
 
-                          // Net Food Revenue (original total amount - discount, excluding GST & tip)
-                          const netFoodRevenue = Math.max(0, rawFoodTotal - discountAmt);
+                          // Food subtotal minus discount
+                          const amountAfterDisc = Math.max(0, rawFoodTotal - discountAmt);
+
+                          // GST Tax (calculated on Amount After Discount)
+                          const gstAmt = order.gstAmount !== undefined && order.gstAmount !== null && Number(order.gstAmount) > 0
+                            ? Number(order.gstAmount)
+                            : Math.round(amountAfterDisc * dynamicGstRate);
+
+                          // Final Bill (Food + GST)
+                          const finalBillWithGst = amountAfterDisc + gstAmt;
 
                           return (
                             <div style={{ marginTop: '0.5rem' }}>
-                              {/* Net Food Revenue Line */}
+                              {/* Final Bill (Food + GST) Display */}
                               <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#166534', fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <span>₹{netFoodRevenue}</span>
+                                <span>₹{finalBillWithGst}</span>
                                 {isPaid && (
                                   <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '6px', border: '1px solid #86EFAC' }}>
                                     ✓ PAID
@@ -1934,27 +1942,25 @@ export default function WaiterOrdersPage() {
             <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.55rem', fontSize: '0.85rem' }}>
               {(() => {
                 const subtotal = Number(viewOrderDetailsModal.subtotal ?? viewOrderDetailsModal.originalTotal ?? viewOrderDetailsModal.originalAmount ?? viewOrderDetailsModal.total ?? 0);
+                const disc = Number(viewOrderDetailsModal.discountAmount ?? 0);
+                const amountAfterDisc = Math.max(0, subtotal - disc);
+
                 const gst = viewOrderDetailsModal.gstAmount !== undefined && viewOrderDetailsModal.gstAmount !== null && Number(viewOrderDetailsModal.gstAmount) > 0
                   ? Number(viewOrderDetailsModal.gstAmount)
-                  : Math.round(subtotal * dynamicGstRate);
-                const gstPct = (subtotal > 0 && gst > 0) ? Math.round((gst / subtotal) * 100) : Math.round(dynamicGstRate * 100);
-                const totalBeforeDisc = subtotal + gst;
-                const disc = Number(viewOrderDetailsModal.discountAmount ?? 0);
-                const amountAfterDisc = Number(viewOrderDetailsModal.amountAfterDiscount ?? viewOrderDetailsModal.finalAmount ?? (totalBeforeDisc - disc));
+                  : Math.round(amountAfterDisc * dynamicGstRate);
+                const gstPct = (amountAfterDisc > 0 && gst > 0) ? Math.round((gst / amountAfterDisc) * 100) : Math.round(dynamicGstRate * 100);
+
+                const finalBill = amountAfterDisc + gst;
                 const code = viewOrderDetailsModal.couponCode || '';
                 const tip = Number(viewOrderDetailsModal.tip ?? viewOrderDetailsModal.tipAmount ?? 0);
-                const customerPaid = Number(viewOrderDetailsModal.customerPaidAmount ?? (amountAfterDisc + tip));
+                const customerPaid = Number(viewOrderDetailsModal.customerPaidAmount ?? (finalBill + tip));
+                const restaurantRevenue = finalBill;
 
                 return (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', fontWeight: 700 }}>
                       <span>Original Total:</span>
                       <span>₹{subtotal}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', fontWeight: 700 }}>
-                      <span>GST ({gstPct}%):</span>
-                      <span>+₹{gst}</span>
                     </div>
 
                     {disc > 0 && (
@@ -1964,15 +1970,27 @@ export default function WaiterOrdersPage() {
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#0F2A1D', fontWeight: 900, paddingTop: '0.35rem', borderTop: '1px solid #E2E8F0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#0F2A1D', fontWeight: 900 }}>
                       <span>Amount After Discount:</span>
                       <span>₹{amountAfterDisc}</span>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#EA580C', fontWeight: 800 }}>
-                      <span>Customer Tip:</span>
-                      <span>+₹{tip}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', fontWeight: 700 }}>
+                      <span>GST ({gstPct}%):</span>
+                      <span>+₹{gst}</span>
                     </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#0F2A1D', fontWeight: 900, paddingTop: '0.35rem', borderTop: '1px solid #E2E8F0' }}>
+                      <span>Final Bill (Food + GST):</span>
+                      <span>₹{finalBill}</span>
+                    </div>
+
+                    {tip > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#EA580C', fontWeight: 800 }}>
+                        <span>Customer Tip:</span>
+                        <span>+₹{tip}</span>
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#166534', fontWeight: 900, fontSize: '1.05rem', paddingTop: '0.45rem', borderTop: '1.5px solid #CBD5E1' }}>
                       <span>Customer Paid:</span>
@@ -1991,13 +2009,15 @@ export default function WaiterOrdersPage() {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', fontSize: '0.78rem', paddingTop: '0.35rem', borderTop: '1px solid #E2E8F0' }}>
                       <span>Restaurant Revenue:</span>
-                      <span style={{ fontWeight: 800, color: '#166534' }}>₹{amountAfterDisc}</span>
+                      <span style={{ fontWeight: 800, color: '#166534' }}>₹{restaurantRevenue}</span>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', fontSize: '0.78rem' }}>
-                      <span>Tip (Excluded from Revenue):</span>
-                      <span style={{ fontWeight: 800, color: '#EA580C' }}>₹{tip}</span>
-                    </div>
+                    {tip > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', fontSize: '0.78rem' }}>
+                        <span>Tip (Excluded from Revenue):</span>
+                        <span style={{ fontWeight: 800, color: '#EA580C' }}>₹{tip}</span>
+                      </div>
+                    )}
                   </>
                 );
               })()}
