@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final isAuthLoading = authProvider.status == AuthStatus.authenticating;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4EC), // Clean Warm Cream (No Dots)
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [

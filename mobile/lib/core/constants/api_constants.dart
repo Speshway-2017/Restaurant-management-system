@@ -42,6 +42,7 @@ class ApiConstants {
   static const String getAssistanceRequests = '/orders/assistance';
   static String updateAssistanceStatus(String id) => '/orders/assistance/$id/status';
 
-  // Settings Endpoint
+  // Settings & Health Endpoint
   static const String getSettings = '/settings';
+  static const String healthCheck = '/settings';
 }

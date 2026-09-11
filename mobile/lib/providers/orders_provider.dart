@@ -3,6 +3,8 @@ import '../models/order_model.dart';
 import '../models/assistance_model.dart';
 import '../core/network/api_client.dart';
 import '../core/constants/api_constants.dart';
+import '../core/storage/storage_service.dart';
+import '../core/utils/sound_service.dart';
 
 class OrdersProvider with ChangeNotifier {
   List<OrderModel> _orders = [];
@@ -21,6 +23,16 @@ class OrdersProvider with ChangeNotifier {
   void clearLatestNewOrder() {
     _latestNewOrder = null;
     notifyListeners();
+  }
+
+  Future<void> _playNewOrderAlert() async {
+    try {
+      final soundEnabled = await StorageService.getSoundEnabled();
+      if (soundEnabled) {
+        final ringtone = await StorageService.getRingtone();
+        SoundService.playRingtone(ringtone);
+      }
+    } catch (_) {}
   }
 
   // Return floor orders: unassigned/pending orders OR orders accepted by/assigned to this specific waiter
@@ -90,6 +102,7 @@ class OrdersProvider with ChangeNotifier {
           for (var ord in fetchedOrders) {
             if (!_knownOrderIds.contains(ord.id) && ord.id.isNotEmpty && !ord.isPaid) {
               _latestNewOrder = ord;
+              _playNewOrderAlert();
               break;
             }
           }

@@ -460,16 +460,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               builder: (context) {
                 final gstRate = ordersProvider.gstRate;
                 final originalTotal = currentOrd.calculatedSubtotal > 0 ? currentOrd.calculatedSubtotal : (currentOrd.totalAmount > 0 ? currentOrd.totalAmount : 0.0);
-                final discount = currentOrd.discountAmount;
-                final couponName = currentOrd.couponCode.isNotEmpty ? currentOrd.couponCode.toUpperCase() : 'COUPON';
 
-                final amountAfterDiscount = (originalTotal - discount) > 0 ? (originalTotal - discount) : 0.0;
                 final gstAmount = currentOrd.getGstAmount(gstRate);
-                final gstPctStr = (amountAfterDiscount > 0 && gstAmount > 0)
-                    ? (gstAmount / amountAfterDiscount * 100).round().toString()
+                final gstPctStr = (originalTotal > 0 && gstAmount > 0)
+                    ? (gstAmount / originalTotal * 100).round().toString()
                     : (gstRate * 100).toStringAsFixed((gstRate * 100) % 1 == 0 ? 0 : 1);
 
-                final finalBill = amountAfterDiscount + gstAmount;
+                final finalBill = originalTotal + gstAmount;
                 final tip = currentOrd.tipAmount;
 
                 final customerPaid = currentOrd.totalAmount > 0 ? currentOrd.totalAmount : (finalBill + tip);
@@ -504,12 +501,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. Original Total
+                          // 1. Total Bill
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
-                                'Original Total:',
+                                'Total Bill:',
                                 style: TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w700),
                               ),
                               Text(
@@ -519,43 +516,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ],
                           ),
 
-                          // 2. Coupon Discount (if discount > 0 or coupon present)
-                          if (discount > 0 || currentOrd.couponCode.isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Coupon Discount ($couponName):',
-                                    style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 14, fontWeight: FontWeight.w800),
-                                  ),
-                                ),
-                                Text(
-                                  '-₹${discount.toStringAsFixed(0)}',
-                                  style: const TextStyle(color: Color(0xFFDC2626), fontSize: 15, fontWeight: FontWeight.w900),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          // 3. Amount After Discount
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Amount After Discount:',
-                                style: TextStyle(color: Color(0xFF0F2A1D), fontSize: 14, fontWeight: FontWeight.w800),
-                              ),
-                              Text(
-                                '₹${amountAfterDiscount.toStringAsFixed(0)}',
-                                style: const TextStyle(color: Color(0xFF0F2A1D), fontSize: 15, fontWeight: FontWeight.w900),
-                              ),
-                            ],
-                          ),
-
-                          // 4. GST
+                          // 2. GST
                           const SizedBox(height: 10),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -582,7 +543,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
-                                  'Final Bill (Food + GST):',
+                                  'Final Bill : ',
                                   style: TextStyle(color: Color(0xFF0F2A1D), fontSize: 14, fontWeight: FontWeight.w900),
                                 ),
                                 Text(
@@ -615,24 +576,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           const Divider(height: 1, color: Color(0xFFCBD5E1)),
                           const SizedBox(height: 12),
 
-                          // 6. Customer Paid
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Customer Paid:',
-                                style: TextStyle(color: Color(0xFF15803D), fontSize: 16, fontWeight: FontWeight.w800),
-                              ),
-                              Text(
-                                '₹${customerPaid.toStringAsFixed(0)}',
-                                style: const TextStyle(color: Color(0xFF15803D), fontSize: 18, fontWeight: FontWeight.w900),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 12),
-                          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                          const SizedBox(height: 12),
+                          // 6. Customer Paid (Only shown after payment is completed)
+                          if (currentOrd.isPaid) ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Customer Paid:',
+                                  style: TextStyle(color: Color(0xFF15803D), fontSize: 16, fontWeight: FontWeight.w800),
+                                ),
+                                Text(
+                                  '₹${customerPaid.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF15803D),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                            const SizedBox(height: 12),
+                          ],
 
                           // 7. Payment Method
                           Row(
@@ -643,14 +609,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 style: TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w600),
                               ),
                               Text(
-                                !currentOrd.isPaid
-                                    ? 'Pending Payment'
-                                    : (currentOrd.paymentMethod.isNotEmpty ? currentOrd.paymentMethod.toUpperCase() : 'CASH'),
-                                style: TextStyle(
-                                  color: !currentOrd.isPaid ? const Color(0xFF64748B) : const Color(0xFF0F2A1D),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                                currentOrd.paymentMethod.isNotEmpty ? currentOrd.paymentMethod.toUpperCase() : 'CASH',
+                                style: const TextStyle(color: Color(0xFF0F2A1D), fontSize: 14, fontWeight: FontWeight.w800),
                               ),
                             ],
                           ),

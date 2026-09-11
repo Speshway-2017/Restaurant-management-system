@@ -13,7 +13,7 @@ class AlertsScreen extends StatelessWidget {
     final resolvedCalls = assistanceList.where((a) => a.status.toUpperCase() == 'RESOLVED').toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4EC),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: const Color(0xFF2B150E),
         elevation: 0,

@@ -49,8 +49,15 @@ class AuthProvider with ChangeNotifier {
       });
 
       if (res is Map<String, dynamic>) {
-        final token = res['token']?.toString();
-        final userData = res['user'];
+        final token = res['token']?.toString() ?? (res['data'] is Map ? (res['data'] as Map)['token']?.toString() : null);
+        Map<String, dynamic>? userData;
+        if (res['user'] is Map<String, dynamic>) {
+          userData = res['user'] as Map<String, dynamic>;
+        } else if (res['data'] is Map && (res['data'] as Map)['user'] is Map<String, dynamic>) {
+          userData = (res['data'] as Map)['user'] as Map<String, dynamic>;
+        } else if (res['data'] is Map<String, dynamic>) {
+          userData = res['data'] as Map<String, dynamic>;
+        }
 
         if (token != null && userData != null) {
           final userObj = UserModel.fromJson(userData);
@@ -91,10 +98,21 @@ class AuthProvider with ChangeNotifier {
     try {
       final res = await ApiClient.get(ApiConstants.getMe);
       if (res is Map<String, dynamic>) {
-        final userObj = UserModel.fromJson(res);
-        _user = userObj;
-        await StorageService.saveUser(userObj);
-        notifyListeners();
+        final Map<String, dynamic> userData;
+        if (res['user'] is Map<String, dynamic>) {
+          userData = res['user'] as Map<String, dynamic>;
+        } else if (res['data'] is Map && (res['data'] as Map)['user'] is Map<String, dynamic>) {
+          userData = (res['data'] as Map)['user'] as Map<String, dynamic>;
+        } else {
+          userData = res;
+        }
+
+        if (userData.containsKey('name') || userData.containsKey('email') || userData.containsKey('_id') || userData.containsKey('id')) {
+          final userObj = UserModel.fromJson(userData);
+          _user = userObj;
+          await StorageService.saveUser(userObj);
+          notifyListeners();
+        }
       }
     } catch (e) {
       // If 401, logout
@@ -108,14 +126,20 @@ class AuthProvider with ChangeNotifier {
     try {
       final res = await ApiClient.put(ApiConstants.getMe, body: updateData);
       if (res is Map<String, dynamic>) {
-        final userData = res['user'] ?? res;
-        if (userData is Map<String, dynamic>) {
-          final userObj = UserModel.fromJson(userData);
-          _user = userObj;
-          await StorageService.saveUser(userObj);
-          notifyListeners();
-          return true;
+        final Map<String, dynamic> userData;
+        if (res['user'] is Map<String, dynamic>) {
+          userData = res['user'] as Map<String, dynamic>;
+        } else if (res['data'] is Map && (res['data'] as Map)['user'] is Map<String, dynamic>) {
+          userData = (res['data'] as Map)['user'] as Map<String, dynamic>;
+        } else {
+          userData = res;
         }
+
+        final userObj = UserModel.fromJson(userData);
+        _user = userObj;
+        await StorageService.saveUser(userObj);
+        notifyListeners();
+        return true;
       }
       return false;
     } catch (e) {
@@ -123,6 +147,32 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> checkIn() async {
+    final nowStr = _formatCurrentTime();
+    final success = await updateProfile({
+      'attendanceStatus': 'Present',
+      'checkInTime': nowStr,
+    });
+    return success;
+  }
+
+  Future<bool> checkOut() async {
+    final nowStr = _formatCurrentTime();
+    final success = await updateProfile({
+      'attendanceStatus': 'Checked Out',
+      'checkOutTime': nowStr,
+    });
+    return success;
+  }
+
+  String _formatCurrentTime() {
+    final now = DateTime.now();
+    final hour = now.hour % 12 == 0 ? 12 : now.hour % 12;
+    final minute = now.minute.toString().padLeft(2, '0');
+    final period = now.hour >= 12 ? 'PM' : 'AM';
+    return '${hour.toString().padLeft(2, '0')}:$minute $period';
   }
 
   Future<void> logout() async {
