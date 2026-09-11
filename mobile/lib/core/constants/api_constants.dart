@@ -1,25 +1,6 @@
-import 'package:flutter/foundation.dart';
-import 'dart:io' show Platform;
-
 class ApiConstants {
-  // Local Wi-Fi IP address of your backend server for physical device testing
-  static String hostIp = '192.168.1.4';
-
-  // Base URL (Uses hostIp for physical devices, 10.0.2.2 for Android emulator fallback, localhost for Web/Desktop)
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:5000/api';
-    }
-    if (hostIp.isNotEmpty) {
-      return 'http://$hostIp:5000/api';
-    }
-    try {
-      if (Platform.isAndroid) {
-        return 'http://10.0.2.2:5000/api';
-      }
-    } catch (_) {}
-    return 'http://localhost:5000/api';
-  }
+  // Backend Base URL
+  static String baseUrl = 'https://restaurant.speshway.site/api';
 
   // Auth Endpoints
   static const String login = '/auth/login';
