@@ -512,8 +512,10 @@ export default function ManagerProfilePage() {
                 <Phone size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="tel"
+                  maxLength={10}
+                  placeholder="10-digit mobile number"
                   value={profile.phone}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                  onChange={(e) => setProfile({ ...profile, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                   style={{
                     width: '100%',
                     padding: '0.65rem 0.85rem 0.65rem 2.3rem',
@@ -525,7 +527,6 @@ export default function ManagerProfilePage() {
                     outline: 'none',
                     backgroundColor: '#FAFAFA'
                   }}
-                  placeholder="+91 98765 43210"
                 />
               </div>
             </div>

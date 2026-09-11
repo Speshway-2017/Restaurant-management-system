@@ -3,7 +3,8 @@ import {
   ChefHat, Clock, CheckCircle2, AlertCircle, Flame, Bell, Volume2, VolumeX,
   Filter, Search, LogOut, Utensils, CheckSquare, Square, ShoppingBag,
   Sparkles, RefreshCw, Layers, XCircle, ShieldCheck, Eye, Award, TrendingUp,
-  User, Check, ChevronRight, ChevronDown, X, Menu, BarChart3, Settings, Table2
+  User, Check, ChevronRight, ChevronDown, X, Menu, BarChart3, Settings, Table2,
+  Moon, Sun
 } from 'lucide-react';
 import { api } from '../../services/api';
 import PowerOffSlide from '../PowerOffSlide';
@@ -1144,6 +1145,81 @@ export default function ChefLayout({ setActivePage }) {
           </div>
 
           <div className="admin-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {/* Glassmorphism Orb Duty Toggle Switch */}
+            <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={handleToggleChefDuty}
+                title={chefDutyStatus === 'LOGGED_IN' ? 'Click to Check OUT' : 'Click to Check IN'}
+                style={{
+                  position: 'relative',
+                  width: '94px',
+                  height: '32px',
+                  borderRadius: '20px',
+                  background: chefDutyStatus === 'LOGGED_IN'
+                    ? 'linear-gradient(135deg, #059669 0%, #10B981 50%, #06B6D4 100%)'
+                    : 'linear-gradient(135deg, #4C1D95 0%, #7C3AED 50%, #C084FC 100%)',
+                  border: '1px solid ' + (chefDutyStatus === 'LOGGED_IN' ? 'rgba(52, 211, 153, 0.6)' : 'rgba(192, 132, 252, 0.6)'),
+                  boxShadow: chefDutyStatus === 'LOGGED_IN'
+                    ? '0 4px 16px rgba(16, 185, 129, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.35)'
+                    : '0 4px 16px rgba(124, 58, 237, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.35)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  outline: 'none',
+                  transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                  userSelect: 'none'
+                }}
+              >
+                {/* Label Text Inside Track */}
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    left: chefDutyStatus === 'LOGGED_IN' ? '12px' : '36px',
+                    color: '#FFFFFF',
+                    fontSize: '0.74rem',
+                    fontWeight: 800,
+                    fontFamily: 'var(--font-heading, sans-serif)',
+                    letterSpacing: '0.02em',
+                    textShadow: '0 1px 3px rgba(0, 0, 0, 0.4)',
+                    transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
+                  }}
+                >
+                  {chefDutyStatus === 'LOGGED_IN' ? 'WORK' : 'REST'}
+                </span>
+
+                {/* 3D Translucent Glass Orb Knob */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    left: chefDutyStatus === 'LOGGED_IN' ? 'calc(100% - 35px)' : '-3px',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.18) 55%, rgba(255, 255, 255, 0.08) 100%)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255, 255, 255, 0.55)',
+                    boxShadow: '0 6px 14px rgba(0, 0, 0, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.8), inset 0 -2px 4px rgba(0, 0, 0, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                    zIndex: 2
+                  }}
+                >
+                  {chefDutyStatus === 'LOGGED_IN' ? (
+                    <Sun size={16} color="#FFFFFF" style={{ filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))' }} />
+                  ) : (
+                    <Moon size={16} color="#FFFFFF" style={{ filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))' }} />
+                  )}
+                </div>
+              </button>
+            </div>
+
             {/* 24-Hour Navbar Clock */}
             {(() => {
               const timeStr = currentTime.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1161,6 +1237,8 @@ export default function ChefLayout({ setActivePage }) {
                     border: '1.5px solid #E2E8F0',
                     borderRadius: '12px',
                     padding: '0.35rem 0.75rem',
+                    height: '36px',
+                    boxSizing: 'border-box',
                     boxShadow: '0 2px 8px rgba(15, 42, 29, 0.04), 0 1px 2px rgba(0,0,0,0.02)'
                   }}
                 >
@@ -1175,6 +1253,24 @@ export default function ChefLayout({ setActivePage }) {
                 </div>
               );
             })()}
+
+            {/* Notifications Button */}
+            <div className="admin-header-icon-btn-wrapper" style={{ position: 'relative' }}>
+              <button 
+                type="button"
+                className="admin-header-icon-btn" 
+                aria-label="Notifications"
+                onClick={() => showToast('🔔 Kitchen Order Notifications Active')}
+                style={{ position: 'relative' }}
+              >
+                <Bell size={19} color="#1E4636" />
+                {ordersList.filter(o => o.status === 'Placed' || o.chefStatus === 'PREPARING').length > 0 && (
+                  <span className="admin-notif-dot" style={{ backgroundColor: '#EF4444', color: '#FFFFFF', fontSize: '0.65rem', fontWeight: 900, padding: '0.1rem 0.35rem', borderRadius: '9999px', position: 'absolute', top: '-4px', right: '-4px' }}>
+                    {ordersList.filter(o => o.status === 'Placed' || o.chefStatus === 'PREPARING').length}
+                  </span>
+                )}
+              </button>
+            </div>
 
             {/* Chef User Profile Card */}
             <div className="admin-user-profile-wrapper" ref={profileMenuRef} style={{ position: 'relative' }}>

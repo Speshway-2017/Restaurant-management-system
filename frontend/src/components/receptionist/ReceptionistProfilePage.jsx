@@ -406,8 +406,8 @@ export default function ReceptionistProfilePage() {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>Phone Number</label>
-              <input type="text" required value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '0.85rem', outline: 'none' }} />
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>Phone Number (10 Digits)</label>
+              <input type="tel" maxLength={10} placeholder="Enter 10-digit mobile number" required value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '0.85rem', outline: 'none' }} />
             </div>
           </div>
 

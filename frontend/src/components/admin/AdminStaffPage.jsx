@@ -86,6 +86,34 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
             }
           }
 
+          const shiftText = stf.scheduledShift || stf.shift || '10:00 AM - 07:00 PM';
+          const calcHours = ((shiftStr, fallback) => {
+            if (!shiftStr) return fallback || '9h 00m';
+            const matches = shiftStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/gi);
+            if (matches && matches.length >= 2) {
+              try {
+                const parseTime = (str) => {
+                  const match = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                  if (!match) return 0;
+                  let h = parseInt(match[1], 10);
+                  const m = parseInt(match[2], 10);
+                  const p = match[3].toUpperCase();
+                  if (p === 'PM' && h < 12) h += 12;
+                  if (p === 'AM' && h === 12) h = 0;
+                  return h * 60 + m;
+                };
+                const startMins = parseTime(matches[0]);
+                let endMins = parseTime(matches[1]);
+                if (endMins < startMins) endMins += 24 * 60;
+                const diff = endMins - startMins;
+                const hours = Math.floor(diff / 60);
+                const mins = diff % 60;
+                return `${hours}h ${mins > 0 ? String(mins).padStart(2, '0') + 'm' : '00m'}`;
+              } catch (e) {}
+            }
+            return fallback || '9h 00m';
+          })(shiftText, stf.hoursLogged);
+
           return {
             id: formattedId,
             dbId: stf._id || stf.id,
@@ -99,8 +127,8 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
             rating: '4.9 ★',
             checkInTime: stf.checkInTime || '09:45 AM',
             checkOutTime: stf.checkOutTime || '07:15 PM',
-            scheduledShift: stf.scheduledShift || '10:00 AM - 07:00 PM',
-            hoursLogged: stf.hoursLogged || '9h 30m',
+            scheduledShift: shiftText,
+            hoursLogged: calcHours,
             attendanceStatus: stf.attendanceStatus || 'On Time'
           };
         }));
