@@ -394,11 +394,13 @@ export default function WaiterProfilePage() {
           </div>
 
           <div style={{ marginBottom: '1.25rem' }}>
-            <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.4rem' }}>Phone Number</label>
+            <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.4rem' }}>Phone Number (10 Digits)</label>
             <input
-              type="text"
+              type="tel"
+              maxLength={10}
+              placeholder="Enter 10-digit mobile number"
               value={profile.phone}
-              onChange={e => setProfile({ ...profile, phone: e.target.value })}
+              onChange={e => setProfile({ ...profile, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
               style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 700, outline: 'none' }}
             />
           </div>
