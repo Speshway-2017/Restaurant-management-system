@@ -6,6 +6,7 @@ import '../../providers/tables_provider.dart';
 import '../../providers/orders_provider.dart';
 import '../../models/order_model.dart';
 import '../../widgets/user_avatar_widget.dart';
+import '../../widgets/check_in_toggle_widget.dart';
 import '../orders/order_detail_screen.dart';
 import '../orders/waiter_orders_screen.dart';
 import '../settings/waiter_settings_screen.dart';
@@ -56,9 +57,14 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
       ordersProvider.clearLatestNewOrder();
     }
 
-    final unhandledOrders = ordersProvider.orders.where((o) =>
-      !o.isPaid && !_notifiedOrderIds.contains(o.id) && (o.status == 'Placed' || o.isReadyToServe || o.waiterStatus == 'PENDING')
-    ).toList();
+    final unhandledOrders = ordersProvider.orders
+        .where((o) =>
+            !o.isPaid &&
+            !_notifiedOrderIds.contains(o.id) &&
+            (o.status == 'Placed' ||
+                o.isReadyToServe ||
+                o.waiterStatus == 'PENDING'))
+        .toList();
 
     for (var o in unhandledOrders) {
       _notifiedOrderIds.add(o.id);
@@ -86,137 +92,161 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     final waiterName = user?.name ?? '';
     final assignedTables = user?.assignedTables ?? [];
 
-    final myTables = tablesProvider.getMyTables(waiterId, waiterName, assignedTables);
-    final totalTablesCount = tablesProvider.tables.isNotEmpty ? tablesProvider.tables.length : 20;
+    final myTables =
+        tablesProvider.getMyTables(waiterId, waiterName, assignedTables);
+    final totalTablesCount = tablesProvider.tables.length;
     final occupiedTablesCount = myTables.isNotEmpty
         ? myTables.where((t) => t.isOccupied).length
         : tablesProvider.tables.where((t) => t.isOccupied).length;
 
-    final myOrders = ordersProvider.getMyOrders(waiterId, waiterName, assignedTables);
-    final activeOrders = myOrders.where((o) => !o.isPaid && o.status != 'SERVED').toList();
-    final completedOrders = myOrders.where((o) => o.status == 'SERVED' || o.isPaid).toList();
-    final pendingAcceptanceOrders = myOrders.where((o) =>
-      !o.isPaid && !o.isAcceptedByWaiter && (o.isReadyToServe || o.status.toLowerCase() == 'placed' || o.waiterStatus.toUpperCase() == 'PENDING')
-    ).toList();
-    final acceptedOrders = myOrders.where((o) =>
-      !o.isPaid && o.isAcceptedByWaiter && o.status != 'SERVED'
-    ).toList();
+    final myOrders =
+        ordersProvider.getMyOrders(waiterId, waiterName, assignedTables);
+    final activeOrders =
+        myOrders.where((o) => !o.isPaid && o.status != 'SERVED').toList();
+    final completedOrders =
+        myOrders.where((o) => o.status == 'SERVED' || o.isPaid).toList();
+    final pendingAcceptanceOrders = myOrders
+        .where((o) =>
+            !o.isPaid &&
+            !o.isAcceptedByWaiter &&
+            (o.isReadyToServe ||
+                o.status.toLowerCase() == 'placed' ||
+                o.waiterStatus.toUpperCase() == 'PENDING'))
+        .toList();
+    final acceptedOrders = myOrders
+        .where((o) => !o.isPaid && o.isAcceptedByWaiter && o.status != 'SERVED')
+        .toList();
 
     if (_selectedActiveOrderIndex >= acceptedOrders.length) {
       _selectedActiveOrderIndex = 0;
     }
 
-    final firstName = (user?.name ?? 'Kiran').split(' ')[0];
-    final empIdDisplay = user?.empId.isNotEmpty == true ? user!.empId : 'WTR-1024';
+    final firstName = (user?.name ?? 'Waiter').split(' ')[0];
+    final empIdVal = user?.empId ?? '';
+    final userIdVal = user?.id ?? '';
+    final empIdDisplay = empIdVal.isNotEmpty
+        ? empIdVal
+        : (userIdVal.length >= 4
+            ? 'RMSW-${userIdVal.substring(userIdVal.length - 4).toUpperCase()}'
+            : 'N/A');
 
     return Scaffold(
-      backgroundColor: const Color(0xFF2B150E), // Dark Chocolate Header Background
+      backgroundColor: Colors.white,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
             // 1. Top Header Bar (Dark Background)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        // Flavora Monogram Logo Box
-                        Container(
-                          width: 44,
-                          height: 44,
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Image.asset(
-                            'assets/images/logo.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.restaurant_menu, color: Color(0xFFE87524), size: 24),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${_getGreeting()}, $firstName 👋',
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${user?.role ?? "Waiter"} • ID: $empIdDisplay',
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.white.withValues(alpha: 0.75),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // User Avatar with Online Status Indicator
-                  GestureDetector(
-                    onTap: () => _showProfilePopup(context),
-                    child: Stack(
-                      children: [
-                        UserAvatarWidget(
-                          avatarUrl: user?.avatarUrl,
-                          name: firstName,
-                          radius: 22,
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
-                        ),
-                        Positioned(
-                          right: 1,
-                          bottom: 1,
-                          child: Container(
-                            width: 12,
-                            height: 12,
+            Container(
+              color: const Color(0xFF0F2A1D),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          // Flavora Monogram Logo Box
+                          Container(
+                            width: 44,
+                            height: 44,
+                            padding: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF10B981), // Online Green
-                              shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFF2B150E), width: 2),
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.restaurant_menu,
+                                  color: Color(0xFFE87524),
+                                  size: 24),
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${_getGreeting()}, $firstName 👋',
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${user?.role ?? "Waiter"} • ID: $empIdDisplay',
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white.withValues(alpha: 0.75),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    // User Avatar with Online Status Indicator
+                    GestureDetector(
+                      onTap: () => _showProfilePopup(context),
+                      child: Stack(
+                        children: [
+                          UserAvatarWidget(
+                            avatarUrl: user?.avatarUrl,
+                            name: firstName,
+                            radius: 22,
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 1.5),
+                          ),
+                          Positioned(
+                            right: 1,
+                            bottom: 1,
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981), // Online Green
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: const Color(0xFF2B150E), width: 2),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 
-            // 2. Main Sheet Content (Warm Cream Background with Top Curved Corners)
+            // 2. Main Sheet Content (Pure White Background with Top Curved Corners)
             Expanded(
               child: Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFF8F4EC), // Warm Cream
+                  color: Colors.white, // Pure White
                   borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
                 child: RefreshIndicator(
@@ -233,7 +263,12 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                       children: [
                         // 3. Hero Card (Pending Acceptance Card if order pending, else Active Accepted Order Card, else Floor Duty Monitor)
                         if (pendingAcceptanceOrders.isNotEmpty) ...[
-                          _buildPendingAcceptanceHeroCard(context, pendingAcceptanceOrders.first, waiterId, waiterName, ordersProvider),
+                          _buildPendingAcceptanceHeroCard(
+                              context,
+                              pendingAcceptanceOrders.first,
+                              waiterId,
+                              waiterName,
+                              ordersProvider),
                         ] else if (acceptedOrders.isNotEmpty) ...[
                           _buildActiveOrderHeroCard(
                             context,
@@ -248,7 +283,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                         ] else ...[
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 20, horizontal: 20),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [Color(0xFF4A2318), Color(0xFF2B150E)],
@@ -258,7 +294,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               borderRadius: BorderRadius.circular(22),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF2B150E).withValues(alpha: 0.25),
+                                  color: const Color(0xFF2B150E)
+                                      .withValues(alpha: 0.25),
                                   blurRadius: 12,
                                   offset: const Offset(0, 6),
                                 ),
@@ -272,11 +309,14 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                   decoration: BoxDecoration(
                                     color: Colors.white.withValues(alpha: 0.12),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                    border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.2)),
                                   ),
                                   child: const Icon(
                                     Icons.room_service_rounded,
-                                    color: Color(0xFFFFB800), // Rich Golden Yellow
+                                    color:
+                                        Color(0xFFFFB800), // Rich Golden Yellow
                                     size: 28,
                                   ),
                                 ),
@@ -303,7 +343,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${user?.branch.isNotEmpty == true ? user!.branch : "Jubilee Hills Main Branch"} • Active Shift',
+                                  '${user?.branch.isNotEmpty == true ? user!.branch : "Main Branch"} • Active Shift',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 12,
@@ -316,7 +356,6 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                         ],
                         const SizedBox(height: 24),
 
-                        
                         // 4. Dashboard Overview Section
                         const Text(
                           'Dashboard Overview',
@@ -330,7 +369,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
 
                         // Unified White Card with 4 Metrics
                         Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 16, horizontal: 8),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(18),
@@ -346,31 +386,38 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                           child: Row(
                             children: [
                               _buildOverviewMetricItem(
-                                icon: Icons.restaurant_rounded,
+                                icon: Icons.receipt_long_rounded,
                                 iconColor: const Color(0xFF10B981),
                                 iconBg: const Color(0xFFECFDF5),
-                                value: activeOrders.length.toString().padLeft(2, '0'),
+                                value: activeOrders.length
+                                    .toString()
+                                    .padLeft(2, '0'),
                                 label: 'Active Orders',
                               ),
                               _buildDivider(),
                               _buildOverviewMetricItem(
-                                icon: Icons.table_restaurant_rounded,
+                                icon: Icons.grid_view_rounded,
                                 iconColor: const Color(0xFF3B82F6),
                                 iconBg: const Color(0xFFEFF6FF),
-                                value: occupiedTablesCount.toString().padLeft(2, '0'),
+                                value: occupiedTablesCount
+                                    .toString()
+                                    .padLeft(2, '0'),
                                 label: 'Occupied Tables',
                               ),
                               _buildOverviewMetricItem(
                                 icon: Icons.check_circle_outline_rounded,
                                 iconColor: const Color(0xFFF59E0B),
                                 iconBg: const Color(0xFFFEF3C7),
-                                value: completedOrders.length.toString().padLeft(2, '0'),
+                                value: completedOrders.length
+                                    .toString()
+                                    .padLeft(2, '0'),
                                 label: 'Completed Orders',
                                 onTap: () {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => const WaiterOrdersScreen(initialTabIndex: 0),
+                                      builder: (_) => const WaiterOrdersScreen(
+                                          initialTabIndex: 0),
                                     ),
                                   );
                                 },
@@ -380,14 +427,14 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                 icon: Icons.groups_outlined,
                                 iconColor: const Color(0xFF8B5CF6),
                                 iconBg: const Color(0xFFF3E8FF),
-                                value: totalTablesCount.toString().padLeft(2, '0'),
+                                value:
+                                    totalTablesCount.toString().padLeft(2, '0'),
                                 label: 'Total Tables',
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 24),
-
 
                         // 5. Quick Actions Section Title
                         const Text(
@@ -406,10 +453,12 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                           children: [
                             _buildQuickActionTile(
                               context,
-                              icon: Icons.table_restaurant_rounded,
+                              icon: Icons.grid_view_rounded,
                               label: 'Tables',
                               onTap: () {
-                                if (widget.onNavigateTab != null) widget.onNavigateTab!(1); // Tables
+                                if (widget.onNavigateTab != null) {
+                                  widget.onNavigateTab!(1); // Tables
+                                }
                               },
                             ),
                             _buildQuickActionTile(
@@ -417,7 +466,9 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               icon: Icons.receipt_long_rounded,
                               label: 'Orders',
                               onTap: () {
-                                if (widget.onNavigateTab != null) widget.onNavigateTab!(2); // Orders
+                                if (widget.onNavigateTab != null) {
+                                  widget.onNavigateTab!(2); // Orders
+                                }
                               },
                             ),
                             _buildQuickActionTile(
@@ -425,7 +476,9 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               icon: Icons.person_outline_rounded,
                               label: 'Profile',
                               onTap: () {
-                                if (widget.onNavigateTab != null) widget.onNavigateTab!(4); // Profile
+                                if (widget.onNavigateTab != null) {
+                                  widget.onNavigateTab!(4); // Profile
+                                }
                               },
                             ),
                             _buildQuickActionTile(
@@ -435,7 +488,9 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               onTap: () {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (_) => const WaiterSettingsScreen()),
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const WaiterSettingsScreen()),
                                 );
                               },
                             ),
@@ -457,7 +512,9 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                             ),
                             GestureDetector(
                               onTap: () {
-                                if (widget.onNavigateTab != null) widget.onNavigateTab!(2); // Go to Orders
+                                if (widget.onNavigateTab != null) {
+                                  widget.onNavigateTab!(2); // Go to Orders
+                                }
                               },
                               child: const Row(
                                 children: [
@@ -469,7 +526,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                       color: Color(0xFFE87524),
                                     ),
                                   ),
-                                  Icon(Icons.chevron_right, size: 18, color: Color(0xFFE87524)),
+                                  Icon(Icons.chevron_right,
+                                      size: 18, color: Color(0xFFE87524)),
                                 ],
                               ),
                             ),
@@ -479,10 +537,38 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
 
                         // Recent Orders List Cards
                         if (myOrders.isEmpty) ...[
-                          _buildSampleOrderCard(context, 'Table T - 07', '2 Items • ₹320', '11:45 AM', 'Preparing', const Color(0xFFE6F4ED), const Color(0xFF0F3526), Icons.soup_kitchen_rounded, const Color(0xFFFFF4ED)),
-                          _buildSampleOrderCard(context, 'Table T - 04', '3 Items • ₹450', '11:32 AM', 'Served', const Color(0xFFFEF3C7), const Color(0xFFD97706), Icons.local_drink_rounded, const Color(0xFFFCE7F3)),
-                          _buildSampleOrderCard(context, 'Table T - 12', '1 Item • ₹180', '11:20 AM', 'New Order', const Color(0xFFEFF6FF), const Color(0xFF2563EB), Icons.ramen_dining_rounded, const Color(0xFFE6F4ED)),
-                          _buildSampleOrderCard(context, 'Table T - 03', '4 Items • ₹620', '10:58 AM', 'Completed', const Color(0xFFE6FFFA), const Color(0xFF059669), Icons.dinner_dining_rounded, const Color(0xFFEEF2FF)),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 24, horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border:
+                                  Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: const Column(
+                              children: [
+                                Icon(Icons.inbox_outlined,
+                                    size: 36, color: Color(0xFF94A3B8)),
+                                SizedBox(height: 8),
+                                Text(
+                                  'No Recent Orders',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF2C140E)),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Orders placed at your assigned tables will appear here in real time.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontSize: 12, color: Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          ),
                         ] else ...[
                           Column(
                             children: myOrders.take(6).map((ord) {
@@ -623,106 +709,6 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     );
   }
 
-  // Sample Order Card
-  Widget _buildSampleOrderCard(
-    BuildContext context,
-    String tableNum,
-    String details,
-    String time,
-    String status,
-    Color badgeBg,
-    Color badgeTextColor,
-    IconData icon,
-    Color iconBg,
-  ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: badgeTextColor, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tableNum,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2C140E),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    details,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF64748B),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                time,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF94A3B8),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: badgeBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: badgeTextColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   // Real Order Card from Database
   Widget _buildRealOrderCard(BuildContext context, OrderModel ord) {
     Color badgeBg = const Color(0xFFFEF3C7);
@@ -785,7 +771,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                     color: Color(0xFFFFF4ED),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.soup_kitchen_rounded, color: badgeText, size: 22),
+                  child: Icon(Icons.receipt_long_rounded,
+                      color: badgeText, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Column(
@@ -825,7 +812,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                 ),
                 const SizedBox(height: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: badgeBg,
                     borderRadius: BorderRadius.circular(12),
@@ -854,7 +842,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     int selectedIndex,
     Function(int) onSelectIndex,
   ) {
-    final order = acceptedOrders[selectedIndex < acceptedOrders.length ? selectedIndex : 0];
+    final order = acceptedOrders[
+        selectedIndex < acceptedOrders.length ? selectedIndex : 0];
     final itemsSummary = order.items.isNotEmpty
         ? order.items.map((i) => '${i.quantity}x ${i.name}').join(', ')
         : 'Table Order Items';
@@ -868,7 +857,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1E36), // Deep Navy Slate (Matching Reference Screenshot)
+        color: const Color(
+            0xFF0F1E36), // Deep Navy Slate (Matching Reference Screenshot)
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -919,7 +909,9 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            order.orderId.startsWith('#') ? order.orderId : '#${order.orderId}',
+                            order.orderId.startsWith('#')
+                                ? order.orderId
+                                : '#${order.orderId}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
@@ -931,7 +923,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFE87524),
                                   borderRadius: BorderRadius.circular(6),
@@ -962,7 +955,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                     ),
                     // Progress percentage box on right
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
                         color: const Color(0xFF192A45),
                         borderRadius: BorderRadius.circular(14),
@@ -1011,7 +1005,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                 height: 14,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFF3B82F6), width: 3),
+                                  border: Border.all(
+                                      color: const Color(0xFF3B82F6), width: 3),
                                 ),
                               ),
                               Container(
@@ -1084,14 +1079,18 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                         backgroundColor: const Color(0xFFE87524),
                         foregroundColor: Colors.white,
                         elevation: 4,
-                        shadowColor: const Color(0xFFE87524).withValues(alpha: 0.4),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shadowColor:
+                            const Color(0xFFE87524).withValues(alpha: 0.4),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                       ),
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)),
+                          MaterialPageRoute(
+                              builder: (_) => OrderDetailScreen(order: order)),
                         );
                       },
                       child: const Row(
@@ -1106,7 +1105,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                             ),
                           ),
                           SizedBox(width: 4),
-                          Icon(Icons.chevron_right_rounded, size: 16, color: Colors.white),
+                          Icon(Icons.chevron_right_rounded,
+                              size: 16, color: Colors.white),
                         ],
                       ),
                     ),
@@ -1117,7 +1117,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                 // Bottom Item summary row
                 Row(
                   children: [
-                    const Icon(Icons.restaurant_outlined, color: Color(0xFF64748B), size: 16),
+                    const Icon(Icons.restaurant_outlined,
+                        color: Color(0xFF64748B), size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1144,8 +1145,10 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: const BoxDecoration(
                 color: Color(0xFF142642), // Slightly lighter navy for footer
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-                border: Border(top: BorderSide(color: Color(0xFF1E2D4A), width: 1)),
+                borderRadius:
+                    BorderRadius.vertical(bottom: Radius.circular(24)),
+                border:
+                    Border(top: BorderSide(color: Color(0xFF1E2D4A), width: 1)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1153,13 +1156,15 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFE87524),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFE87524).withValues(alpha: 0.3),
+                              color: const Color(0xFFE87524)
+                                  .withValues(alpha: 0.3),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -1187,12 +1192,14 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                   ),
                   InkWell(
                     onTap: () {
-                      final nextIndex = (selectedIndex + 1) % acceptedOrders.length;
+                      final nextIndex =
+                          (selectedIndex + 1) % acceptedOrders.length;
                       onSelectIndex(nextIndex);
                     },
                     borderRadius: BorderRadius.circular(8),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       child: Row(
                         children: [
                           Text(
@@ -1204,7 +1211,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(Icons.arrow_forward_rounded, color: Color(0xFFE87524), size: 14),
+                          const Icon(Icons.arrow_forward_rounded,
+                              color: Color(0xFFE87524), size: 14),
                         ],
                       ),
                     ),
@@ -1230,7 +1238,9 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
         ? order.items.map((i) => '${i.quantity}x ${i.name}').join(', ')
         : 'Table Order Items';
     final formattedTime = order.createdAt.isNotEmpty
-        ? (order.createdAt.length >= 16 ? order.createdAt.substring(0, 16).replaceAll('T', ' ') : order.createdAt)
+        ? (order.createdAt.length >= 16
+            ? order.createdAt.substring(0, 16).replaceAll('T', ' ')
+            : order.createdAt)
         : DateTime.now().toString().substring(0, 16);
 
     return Container(
@@ -1256,15 +1266,18 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFF2C2415),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFD97706), width: 1.5),
+                  border:
+                      Border.all(color: const Color(0xFFD97706), width: 1.5),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.access_time_filled, color: Color(0xFFF59E0B), size: 14),
+                    Icon(Icons.access_time_filled,
+                        color: Color(0xFFF59E0B), size: 14),
                     SizedBox(width: 6),
                     Text(
                       'Pending Acceptance',
@@ -1293,7 +1306,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
           // Order Time Row
           Row(
             children: [
-              const Icon(Icons.calendar_today_outlined, color: Color(0xFFE87524), size: 14),
+              const Icon(Icons.calendar_today_outlined,
+                  color: Color(0xFFE87524), size: 14),
               const SizedBox(width: 8),
               Text(
                 'Order Time: $formattedTime',
@@ -1331,7 +1345,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                   ),
                 ),
               ),
-              const Icon(Icons.arrow_forward, color: Color(0xFF64748B), size: 16),
+              const Icon(Icons.arrow_forward,
+                  color: Color(0xFF64748B), size: 16),
               const SizedBox(width: 8),
               // Kitchen Target
               Container(
@@ -1358,7 +1373,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
           // Items summary & Amount
           Row(
             children: [
-              const Icon(Icons.restaurant_menu_outlined, color: Color(0xFF94A3B8), size: 16),
+              const Icon(Icons.restaurant_menu_outlined,
+                  color: Color(0xFF94A3B8), size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1394,12 +1410,15 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFEF4444),
-                      side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      side: const BorderSide(
+                          color: Color(0xFFEF4444), width: 1.5),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                       backgroundColor: Colors.red.withValues(alpha: 0.08),
                     ),
                     onPressed: () async {
-                      await ordersProvider.rejectOrder(order.id, waiterId, waiterName);
+                      await ordersProvider.rejectOrder(
+                          order.id, waiterId, waiterName);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -1409,7 +1428,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                         );
                       }
                     },
-                    icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFFEF4444)),
+                    icon: const Icon(Icons.close_rounded,
+                        size: 18, color: Color(0xFFEF4444)),
                     label: const Text(
                       'Reject',
                       style: TextStyle(
@@ -1428,24 +1448,30 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                   height: 46,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981), // Bright Vibrant Green
+                      backgroundColor:
+                          const Color(0xFF10B981), // Bright Vibrant Green
                       foregroundColor: const Color(0xFF0F2A1D),
                       elevation: 4,
-                      shadowColor: const Color(0xFF10B981).withValues(alpha: 0.4),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shadowColor:
+                          const Color(0xFF10B981).withValues(alpha: 0.4),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: () async {
-                      await ordersProvider.acceptOrder(order.id, waiterId, waiterName);
+                      await ordersProvider.acceptOrder(
+                          order.id, waiterId, waiterName);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Order #${order.orderId} accepted! Moved to serving.'),
+                            content: Text(
+                                'Order #${order.orderId} accepted! Moved to serving.'),
                             backgroundColor: const Color(0xFF10B981),
                           ),
                         );
                       }
                     },
-                    icon: const Icon(Icons.check_circle_rounded, size: 20, color: Color(0xFF0F2A1D)),
+                    icon: const Icon(Icons.check_circle_rounded,
+                        size: 20, color: Color(0xFF0F2A1D)),
                     label: const Text(
                       'Accept',
                       style: TextStyle(
@@ -1483,10 +1509,17 @@ class _ProfilePopupModal extends StatefulWidget {
 }
 
 class _ProfilePopupModalState extends State<_ProfilePopupModal> {
+  bool _isUpdatingShift = false;
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
+    final isCheckedIn = user?.isCheckedIn ?? true;
+    final checkInTime =
+        user?.checkInTime.isNotEmpty == true ? user!.checkInTime : '09:00 AM';
+    final checkOutTime =
+        user?.checkOutTime.isNotEmpty == true ? user!.checkOutTime : '';
 
     return Dialog(
       alignment: Alignment.topRight,
@@ -1495,7 +1528,7 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
       backgroundColor: Colors.white,
       elevation: 12,
       child: Container(
-        width: 250,
+        width: 265,
         padding: const EdgeInsets.all(18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1508,7 +1541,8 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                   avatarUrl: user?.avatarUrl,
                   name: user?.name ?? 'Waiter',
                   radius: 20,
-                  border: Border.all(color: const Color(0xFFE87524), width: 1.5),
+                  border:
+                      Border.all(color: const Color(0xFFE87524), width: 1.5),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1526,9 +1560,10 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        user?.role ?? 'Waiter',
+                        '${user?.role ?? "Waiter"} • ${user?.branch.isNotEmpty == true ? user!.branch : "Main Branch"}',
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: Color(0xFF64748B),
                           fontWeight: FontWeight.w500,
                         ),
@@ -1538,9 +1573,130 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+
+            // Live Attendance / Shift Status Pill
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isCheckedIn
+                    ? const Color(0xFFECFDF5)
+                    : const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isCheckedIn
+                      ? const Color(0xFFA7F3D0)
+                      : const Color(0xFFFCA5A5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isCheckedIn
+                        ? Icons.check_circle_rounded
+                        : Icons.pause_circle_filled_rounded,
+                    size: 14,
+                    color: isCheckedIn
+                        ? const Color(0xFF059669)
+                        : const Color(0xFFDC2626),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      isCheckedIn
+                          ? 'Checked In ($checkInTime)'
+                          : (checkOutTime.isNotEmpty
+                              ? 'Checked Out ($checkOutTime)'
+                              : 'Checked Out'),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isCheckedIn
+                            ? const Color(0xFF047857)
+                            : const Color(0xFFB91C1C),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
             const Divider(height: 1, color: Color(0xFFE2E8F0)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
+
+            // Tactile Sliding Availability Toggle Row
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Row(
+                      children: [
+                        Icon(Icons.toggle_on_outlined,
+                            size: 20, color: Color(0xFF334155)),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Availability',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CheckInToggleWidget(
+                    isCheckedIn: isCheckedIn,
+                    isLoading: _isUpdatingShift,
+                    width: 50,
+                    height: 24,
+                    showAvailabilityLabel: false,
+                    onToggle: (newVal) async {
+                      setState(() => _isUpdatingShift = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      bool success;
+                      if (!newVal) {
+                        success = await authProvider.checkOut();
+                        if (mounted && success) {
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('✓ Checked Out of Shift successfully'),
+                              backgroundColor: Color(0xFFD97706),
+                            ),
+                          );
+                        }
+                      } else {
+                        success = await authProvider.checkIn();
+                        if (mounted && success) {
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('✓ Checked In for Shift successfully'),
+                              backgroundColor: Color(0xFF0F2A1D),
+                            ),
+                          );
+                        }
+                      }
+                      if (mounted) {
+                        setState(() => _isUpdatingShift = false);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 6),
 
             // My Profile Option
             InkWell(
@@ -1551,7 +1707,8 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                 } else {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const WaiterProfileScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const WaiterProfileScreen()),
                   );
                 }
               },
@@ -1560,7 +1717,8 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                 padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Row(
                   children: [
-                    Icon(Icons.person_outline_rounded, size: 20, color: Color(0xFF334155)),
+                    Icon(Icons.person_outline_rounded,
+                        size: 20, color: Color(0xFF334155)),
                     SizedBox(width: 12),
                     Text(
                       'My Profile',
@@ -1574,9 +1732,43 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                 ),
               ),
             ),
-            const SizedBox(height: 10),
+
+            const SizedBox(height: 6),
+
+            // Settings Option
+            InkWell(
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const WaiterSettingsScreen()),
+                );
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.settings_outlined,
+                        size: 20, color: Color(0xFF334155)),
+                    SizedBox(width: 12),
+                    Text(
+                      'App Settings',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
             const Divider(height: 1, color: Color(0xFFE2E8F0)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
             // Logout Option
             InkWell(
@@ -1589,7 +1781,8 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                 padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Row(
                   children: [
-                    Icon(Icons.logout_rounded, size: 20, color: Color(0xFFEF4444)),
+                    Icon(Icons.logout_rounded,
+                        size: 20, color: Color(0xFFEF4444)),
                     SizedBox(width: 12),
                     Text(
                       'Logout',

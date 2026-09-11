@@ -12,8 +12,8 @@ class AppColors {
   static const Color amberBadgeText = Color(0xFF92400E);
   static const Color amberBorder = Color(0xFFFDE68A);
 
-  static const Color background = Color(0xFFF8FAFC);
-  static const Color cardBg = Color(0xFFFFFFFF);
+  static const Color background = Color(0xFFFFFFFF);
+  static const Color cardBg = Color(0xFFF8FAFC);
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF64748B);
   static const Color border = Color(0xFFE2E8F0);
