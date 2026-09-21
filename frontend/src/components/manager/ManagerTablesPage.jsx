@@ -3,6 +3,7 @@ import { Table2, Plus, QrCode, Eye, EyeOff, CheckCircle2, Users, Clock, RefreshC
 import { api } from '../../services/api';
 import { getTableMenuUrl, compositeQrWithLogo } from '../../utils/qrUrlHelper';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
+import { onSocketEvent } from '../../services/socket';
 
 export default function ManagerTablesPage() {
   const { brandLogo, brandName } = useRestaurantBranding ? useRestaurantBranding() : { brandLogo: '/logo.png', brandName: 'Flavora Kitchen' };
@@ -199,6 +200,7 @@ export default function ManagerTablesPage() {
               };
             }
 
+            const resvGuest = dbT.reservedDinerName || dbT.guestName || (dbT.reservation ? dbT.reservation.guestName : '-');
             return {
               id: dbT._id || dbT.id,
               num: dbT.number || dbT.name || `T-${cleanT}`,
@@ -207,8 +209,9 @@ export default function ManagerTablesPage() {
               status: dbT.status || 'Available',
               cleaningUntil: dbT.cleaningUntil ? new Date(dbT.cleaningUntil).getTime() : null,
               orderId: null,
-              customer: '-',
-              guest: '-',
+              customer: resvGuest,
+              guest: resvGuest,
+              reservation: dbT.reservation || null,
               amount: '-',
               elapsed: '-',
               qrPlaced: isQrPlaced,
@@ -230,8 +233,15 @@ export default function ManagerTablesPage() {
     window.addEventListener('flavora_tables_updated', handleSync);
     window.addEventListener('storage', handleSync);
 
+    const unsubResv = onSocketEvent('reservation_created', handleSync);
+    const unsubTbl = onSocketEvent('table_updated', handleSync);
+    const unsubSess = onSocketEvent('table_session_updated', handleSync);
+
     return () => {
       clearInterval(interval);
+      if (typeof unsubResv === 'function') unsubResv();
+      if (typeof unsubTbl === 'function') unsubTbl();
+      if (typeof unsubSess === 'function') unsubSess();
       window.removeEventListener('flavora_tables_updated', handleSync);
       window.removeEventListener('storage', handleSync);
     };
@@ -1124,6 +1134,45 @@ export default function ManagerTablesPage() {
                     <span className="ticket-guest-name">{tbl.customer && tbl.customer !== '-' ? tbl.customer : (tbl.guest && tbl.guest !== '-' ? tbl.guest : 'Guest Diner')}</span>
                     <span className="ticket-price-tag">{tbl.amount && tbl.amount !== '-' ? tbl.amount : '₹0'}</span>
                   </div>
+                </div>
+              )}
+
+              {/* Reserved Diner Ticket */}
+              {tbl.status === 'Reserved' && (
+                <div
+                  style={{
+                    backgroundColor: '#FEFCE8',
+                    borderRadius: '12px',
+                    padding: '0.65rem 0.85rem',
+                    border: '1.5px solid #FDE047',
+                    marginTop: '0.65rem'
+                  }}
+                >
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#854D0E', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    👤 Reserved Diner
+                  </div>
+                  <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0F2A1D', marginTop: '0.15rem' }}>
+                    {(() => {
+                      const isGen = (n) => !n || ['valued guest', 'guest diner', 'guest', '-', 'n/a'].includes(String(n).trim().toLowerCase());
+                      const candidates = [
+                        tbl.reservedDinerName,
+                        tbl.reservation?.guestName,
+                        tbl.activeSession?.guestName,
+                        tbl.guestName,
+                        tbl.guest,
+                        tbl.customer
+                      ];
+                      for (const c of candidates) {
+                        if (c && !isGen(c)) return String(c).trim();
+                      }
+                      return 'Valued Guest';
+                    })()}
+                  </div>
+                  {tbl.reservation?.timeSlot && (
+                    <div style={{ fontSize: '0.74rem', color: '#A16207', fontWeight: 700, marginTop: '0.15rem' }}>
+                      🕒 {tbl.reservation.timeSlot} {tbl.reservation.guests ? `• ${tbl.reservation.guests} Guests` : ''}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

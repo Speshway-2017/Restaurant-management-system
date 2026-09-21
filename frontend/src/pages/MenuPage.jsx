@@ -252,11 +252,15 @@ export default function MenuPage({ onOpenDemoModal }) {
           setActiveTableSession(activeSess);
           const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
           const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeSess.sessionToken}`);
-          
-          if (selfName && selfName.trim()) {
-            setGuestName(selfName.trim());
-          } else if (activeSess.isReceptionistAssigned && activeSess.guestName && activeSess.guestName !== 'Guest Diner' && activeSess.guestName !== 'Guest' && activeSess.guestName.trim()) {
-            setGuestName(activeSess.guestName.trim());
+
+          const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined'].includes(String(n).trim().toLowerCase());
+
+          const sessName = activeSess.guestName && !isGeneric(activeSess.guestName) ? activeSess.guestName.trim() : '';
+          const resvName = sessRes?.reservation?.guestName && !isGeneric(sessRes.reservation.guestName) ? sessRes.reservation.guestName.trim() : '';
+          const bestName = selfName && selfName.trim() ? selfName.trim() : (sessName || resvName);
+
+          if (bestName) {
+            setGuestName(bestName);
           } else {
             setGuestName('');
           }
@@ -477,11 +481,11 @@ export default function MenuPage({ onOpenDemoModal }) {
   const isTableBillGenerated = Boolean(
     currentTableStatus === 'Bill Generated' ||
     tableOccupiedInfo?.isBillGenerated ||
-    placedTableOrders.some(o => 
-      o.isBillGenerated || 
-      o.status === 'Bill Generated' || 
-      o.status === 'Billing' || 
-      o.payment === 'Awaiting Payment' || 
+    placedTableOrders.some(o =>
+      o.isBillGenerated ||
+      o.status === 'Bill Generated' ||
+      o.status === 'Billing' ||
+      o.payment === 'Awaiting Payment' ||
       o.paymentStatus === 'Awaiting Payment'
     )
   );
@@ -496,10 +500,29 @@ export default function MenuPage({ onOpenDemoModal }) {
   const addDisabledReason = !tableNum
     ? 'Scan QR to Order'
     : currentTableStatus === 'Cleaning'
-    ? 'Table Unavailable • Cleaning in Progress'
-    : (isTableBillGenerated || currentTableStatus === 'Bill Generated')
-    ? 'Bill Generated • Ordering Closed'
-    : '';
+      ? 'Table Unavailable • Cleaning in Progress'
+      : (isTableBillGenerated || currentTableStatus === 'Bill Generated')
+        ? 'Bill Generated • Ordering Closed'
+        : '';
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlTableParam = urlParams.get('table');
+        const nextTable = urlTableParam && urlTableParam.trim() ? urlTableParam.trim().toUpperCase() : '';
+        if (nextTable !== tableNum) {
+          setTableNum(nextTable);
+          setActiveTableSession(null);
+          setGuestName('');
+          setCart({});
+        }
+      } catch (e) { }
+    };
+    handleUrlChange();
+    window.addEventListener('popstate', handleUrlChange);
+    return () => window.removeEventListener('popstate', handleUrlChange);
+  }, [tableNum]);
 
   const confirmedDinerName = React.useMemo(() => {
     if (!activeTableSession) return '';
@@ -508,15 +531,14 @@ export default function MenuPage({ onOpenDemoModal }) {
     if (selfName && selfName.trim()) {
       return selfName.trim();
     }
-    if (activeTableSession.isReceptionistAssigned && activeTableSession.guestName && activeTableSession.guestName !== 'Guest Diner' && activeTableSession.guestName !== 'Guest' && activeTableSession.guestName.trim()) {
+    const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined'].includes(String(n).trim().toLowerCase());
+
+    if (activeTableSession.guestName && !isGeneric(activeTableSession.guestName)) {
       return activeTableSession.guestName.trim();
     }
     const cleanGuest = (guestName || '').trim();
-    if (cleanGuest && cleanGuest !== 'Guest Diner' && cleanGuest !== 'Guest') {
-      const submitted = sessionStorage.getItem(`flavora_order_submitted_${cleanTbl}_${activeTableSession.sessionToken}`);
-      if (submitted || selfName) {
-        return cleanGuest;
-      }
+    if (cleanGuest && !isGeneric(cleanGuest)) {
+      return cleanGuest;
     }
     return '';
   }, [activeTableSession, placedTableOrders, guestName, tableNum]);
@@ -815,7 +837,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       if (!groupsMap[normCat]) {
         groupsMap[normCat] = [];
       }
-              groupsMap[normCat].push(item);
+      groupsMap[normCat].push(item);
     });
 
     return Object.keys(groupsMap).map(catName => ({
@@ -1367,7 +1389,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                         fontWeight: 600
                       }}
                     />
-                    
+
                   </div>
                 )}
 
@@ -2168,10 +2190,10 @@ export default function MenuPage({ onOpenDemoModal }) {
                                   currentTableStatus === 'Cleaning'
                                     ? `Table ${tableNum} is currently unavailable due to cleaning & sanitization.`
                                     : currentTableStatus === 'Order in Progress'
-                                    ? `Table ${tableNum} currently has an order in progress.`
-                                    : isTableBillGenerated || currentTableStatus === 'Bill Generated'
-                                    ? `Bill has already been generated for Table ${tableNum}. Additional items cannot be added.`
-                                    : 'Table is currently unavailable.'
+                                      ? `Table ${tableNum} currently has an order in progress.`
+                                      : isTableBillGenerated || currentTableStatus === 'Bill Generated'
+                                        ? `Bill has already been generated for Table ${tableNum}. Additional items cannot be added.`
+                                        : 'Table is currently unavailable.'
                                 }
                                 style={{
                                   backgroundColor: '#F1F5F9',
@@ -2189,10 +2211,10 @@ export default function MenuPage({ onOpenDemoModal }) {
                                   {currentTableStatus === 'Cleaning'
                                     ? 'CLEANING'
                                     : currentTableStatus === 'Order in Progress'
-                                    ? 'IN PROGRESS'
-                                    : isTableBillGenerated || currentTableStatus === 'Bill Generated'
-                                    ? 'BILL GEN'
-                                    : 'LOCKED'}
+                                      ? 'IN PROGRESS'
+                                      : isTableBillGenerated || currentTableStatus === 'Bill Generated'
+                                        ? 'BILL GEN'
+                                        : 'LOCKED'}
                                 </span>
                               </button>
                             ) : qty > 0 ? (

@@ -68,9 +68,9 @@ const getFloorPlan = async (req, res) => {
 
     const mappedTables = tables.map(tbl => {
       // 1. Resolve active session ONLY if table status is not Available/Cleaning AND has an ACTIVE session
-      const activeSession = (tbl.status !== 'Available' && tbl.status !== 'Cleaning') ? activeSessions.find(s => 
-        s.tableNum === tbl.number || 
-        (Array.isArray(s.mergedTableNums) && s.mergedTableNums.includes(tbl.number)) || 
+      const activeSession = (tbl.status !== 'Available' && tbl.status !== 'Cleaning') ? activeSessions.find(s =>
+        s.tableNum === tbl.number ||
+        (Array.isArray(s.mergedTableNums) && s.mergedTableNums.includes(tbl.number)) ||
         (tbl.activeSessionId && s._id.toString() === tbl.activeSessionId)
       ) : null;
 
@@ -118,7 +118,7 @@ const seatWalkIn = async (req, res) => {
     const { tableNum, mergedTableNums, partySize, guestName, phone, specialOccasion, notes } = req.body;
 
     const primaryNum = String(tableNum || '').trim();
-    const secondaryNums = Array.isArray(mergedTableNums) 
+    const secondaryNums = Array.isArray(mergedTableNums)
       ? mergedTableNums.map(n => String(n).trim()).filter(n => n && n !== primaryNum)
       : [];
     const allTableNums = Array.from(new Set([primaryNum, ...secondaryNums]));
@@ -136,9 +136,9 @@ const seatWalkIn = async (req, res) => {
     const unavailableTables = tables.filter(t => t.status !== 'Available');
     if (unavailableTables.length > 0) {
       const busyList = unavailableTables.map(t => `${t.number} (${t.status})`).join(', ');
-      return res.status(400).json({ 
-        success: false, 
-        message: `One or more selected tables are no longer available: ${busyList}. Please refresh and try again.` 
+      return res.status(400).json({
+        success: false,
+        message: `One or more selected tables are no longer available: ${busyList}. Please refresh and try again.`
       });
     }
 
@@ -149,20 +149,19 @@ const seatWalkIn = async (req, res) => {
     const sessionToken = `SESS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const mergeGroupId = allTableNums.length > 1 ? `MG-${Date.now()}` : '';
 
-    const isReceptionistAssigned = Boolean(guestName && String(guestName).trim() !== 'Guest Diner' && String(guestName).trim() !== 'Guest');
     const newSession = await TableSession.create({
       tableNum: primaryNum,
       mergedTableNums: secondaryNums,
       mergeGroupId,
       sessionToken,
-      guestName: isReceptionistAssigned ? String(guestName).trim() : '',
+      guestName: String(guestName || '').trim() || 'Valued Guest',
       phone: phone || '',
       partySize: Number(partySize) || 2,
       specialOccasion: specialOccasion || 'None',
       notes: notes || '',
       status: 'ACTIVE',
       isWalkIn: false,
-      isReceptionistAssigned,
+      isReceptionistAssigned: true,
       seatedAt: new Date()
     });
 
@@ -197,15 +196,15 @@ const seatWalkIn = async (req, res) => {
         });
         io.emit('table_updated', { tableNum: primaryNum, status: 'Occupied' });
       }
-    } catch (sockErr) {}
+    } catch (sockErr) { }
 
-    res.status(201).json({ 
-      success: true, 
-      message: allTableNums.length > 1 
+    res.status(201).json({
+      success: true,
+      message: allTableNums.length > 1
         ? `Merged tables ${allTableNums.join(' + ')} seated for ${guestName || 'Guest'}!`
-        : `Guest seated at ${primaryNum} successfully!`, 
-      session: newSession, 
-      mergedTables: allTableNums 
+        : `Guest seated at ${primaryNum} successfully!`,
+      session: newSession,
+      mergedTables: allTableNums
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -260,9 +259,9 @@ const mergeTables = async (req, res) => {
     if (!primaryTable) return res.status(404).json({ success: false, message: 'Primary table not found.' });
 
     // Check if an active session exists on ANY of the merged tables
-    const activeSession = await TableSession.findOne({ 
-      $or: [{ tableNum: { $in: allTableNums } }, { mergedTableNums: { $in: allTableNums } }], 
-      status: 'ACTIVE' 
+    const activeSession = await TableSession.findOne({
+      $or: [{ tableNum: { $in: allTableNums } }, { mergedTableNums: { $in: allTableNums } }],
+      status: 'ACTIVE'
     });
 
     const mergeGroupId = `MG-${Date.now()}`;
@@ -306,9 +305,9 @@ const splitTables = async (req, res) => {
     const mergedList = table.mergedWith || [];
     const allTableNums = [tableNum, ...mergedList];
 
-    const activeSession = await TableSession.findOne({ 
-      $or: [{ tableNum: { $in: allTableNums } }, { mergedTableNums: { $in: allTableNums } }], 
-      status: 'ACTIVE' 
+    const activeSession = await TableSession.findOne({
+      $or: [{ tableNum: { $in: allTableNums } }, { mergedTableNums: { $in: allTableNums } }],
+      status: 'ACTIVE'
     });
 
     for (let tNum of allTableNums) {
@@ -471,20 +470,19 @@ const seatWaitlistToken = async (req, res) => {
       const tables = await Table.find({ number: { $in: allTableNums } });
       const mergeGroupId = allTableNums.length > 1 ? `MG-${Date.now()}` : '';
 
-      const isReceptionistAssigned = Boolean(token.guestName && String(token.guestName).trim() !== 'Guest Diner' && String(token.guestName).trim() !== 'Guest');
       const newSession = await TableSession.create({
         tableNum: primaryNum,
         mergedTableNums: secondaryNums,
         mergeGroupId,
         sessionToken: `SESS-${Date.now()}`,
-        guestName: isReceptionistAssigned ? String(token.guestName).trim() : '',
+        guestName: String(token.guestName || '').trim() || 'Waitlist Guest',
         phone: token.phone || '',
         partySize: token.partySize || 2,
         specialOccasion: token.specialOccasion || 'None',
         notes: token.notes || '',
         status: 'ACTIVE',
         isWalkIn: false,
-        isReceptionistAssigned,
+        isReceptionistAssigned: true,
         seatedAt: new Date()
       });
 
@@ -513,7 +511,7 @@ const seatWaitlistToken = async (req, res) => {
           });
           io.emit('table_updated', { tableNum: primaryNum, status: 'Occupied' });
         }
-      } catch (sockErr) {}
+      } catch (sockErr) { }
     }
 
     res.json({ success: true, message: `Token ${token.tokenNum} marked as SEATED!`, data: token });
@@ -594,7 +592,33 @@ const checkInReservation = async (req, res) => {
     await resv.save();
 
     if (tableNo) {
-      await Table.findOneAndUpdate({ number: tableNo }, { status: 'Reserved' });
+      const primaryNum = String(tableNo).trim();
+      let activeSession = await TableSession.findOne({ tableNum: primaryNum, status: 'ACTIVE' });
+      if (!activeSession) {
+        activeSession = await TableSession.create({
+          tableNum: primaryNum,
+          sessionToken: `SESS-${Date.now()}`,
+          guestName: resv.guestName || 'Reserved Guest',
+          phone: resv.phone || '',
+          partySize: resv.guests || 2,
+          specialOccasion: resv.specialOccasion || 'None',
+          notes: resv.notes || '',
+          status: 'ACTIVE',
+          seatedAt: new Date()
+        });
+      } else {
+        activeSession.guestName = resv.guestName || activeSession.guestName || 'Reserved Guest';
+        if (resv.phone) activeSession.phone = resv.phone;
+        if (resv.guests) activeSession.partySize = resv.guests;
+        if (resv.specialOccasion) activeSession.specialOccasion = resv.specialOccasion;
+        if (resv.notes) activeSession.notes = resv.notes;
+        await activeSession.save();
+      }
+
+      await Table.findOneAndUpdate({ number: primaryNum }, {
+        status: 'Reserved',
+        activeSessionId: activeSession._id.toString()
+      });
     }
 
     res.json({ success: true, message: `Reservation ${resv.bookingId} checked in!`, data: resv });
@@ -711,8 +735,36 @@ const getActiveTableSession = async (req, res) => {
         message: 'Table Unavailable — Cleaning'
       });
     }
+    // 2. CHECK FOR ACTIVE RESERVATION OR RESERVED TABLE STATUS
+    const todayStr = new Date().toISOString().split('T')[0];
+    const activeResv = await Reservation.findOne({
+      $or: [
+        { tableNo: { $in: uniqueNums } },
+        { tableNo: exactRegex }
+      ],
+      date: todayStr,
+      status: { $in: ['Confirmed', 'Checked_In', 'Seated', 'Pending'] }
+    }).sort({ updatedAt: -1, date: -1 });
 
-    // 2. QUERY EXISTING ACTIVE SESSION FIRST (Single Source of Truth)
+    const isGenericName = (n) => !n || ['valued guest', 'guest diner', 'guest', '-', 'n/a', 'null', 'undefined'].includes(String(n).trim().toLowerCase());
+    const getBestName = (...list) => {
+      for (const item of list) {
+        if (item && !isGenericName(item)) return String(item).trim();
+      }
+      for (const item of list) {
+        if (item && String(item).trim()) return String(item).trim();
+      }
+      return '';
+    };
+
+    const reservedGuestName = getBestName(
+      activeResv?.guestName,
+      table?.guestName,
+      table?.reservedBy,
+      table?.customer
+    );
+
+    // 3. QUERY EXISTING ACTIVE SESSION FIRST (Single Source of Truth)
     let activeSession = await TableSession.findOne({
       $or: [
         { tableNum: { $in: uniqueNums } },
@@ -721,14 +773,27 @@ const getActiveTableSession = async (req, res) => {
       status: 'ACTIVE'
     });
 
-    // 3. IF AN ACTIVE SESSION ALREADY EXISTS: REUSE IT (Do NOT close or recreate!)
+    // 4. IF AN ACTIVE SESSION ALREADY EXISTS: REUSE IT (Do NOT close or recreate!)
     if (activeSession) {
+      // If table is reserved or has a reservation, sync the reserved diner's details into the active session
+      if (reservedGuestName && (isGenericName(activeSession.guestName) || !activeSession.isReceptionistAssigned)) {
+        activeSession.guestName = reservedGuestName;
+        if (activeResv?.phone) activeSession.phone = activeResv.phone;
+        if (activeResv?.guests) activeSession.partySize = activeResv.guests;
+        if (activeResv?.specialOccasion) activeSession.specialOccasion = activeResv.specialOccasion;
+        if (activeResv?.notes) activeSession.notes = activeResv.notes;
+        activeSession.isReceptionistAssigned = true;
+        activeSession.isWalkIn = false;
+        await activeSession.save();
+      }
+
+      const resolvedGuestName = getBestName(activeSession.guestName, reservedGuestName);
+
       const isReceptionistAssigned = Boolean(
         activeSession.isReceptionistAssigned ||
-        (table && table.status === 'Occupied' && activeSession.guestName && activeSession.guestName !== 'Guest Diner' && activeSession.guestName !== 'Guest')
+        Boolean(resolvedGuestName) ||
+        (table && table.status === 'Occupied' && !isGenericName(resolvedGuestName))
       );
-
-      const resolvedGuestName = activeSession.guestName || '';
 
       return res.json({
         success: true,
@@ -738,54 +803,56 @@ const getActiveTableSession = async (req, res) => {
           mergedTableNums: activeSession.mergedTableNums || [],
           sessionToken: activeSession.sessionToken,
           guestName: resolvedGuestName,
-          phone: activeSession.phone || '',
-          partySize: activeSession.partySize || 2,
-          specialOccasion: activeSession.specialOccasion || 'None',
-          notes: activeSession.notes || '',
+          phone: activeSession.phone || (activeResv?.phone || ''),
+          partySize: activeSession.partySize || (activeResv?.guests || 2),
+          specialOccasion: activeSession.specialOccasion || (activeResv?.specialOccasion || 'None'),
+          notes: activeSession.notes || (activeResv?.notes || ''),
           seatedAt: activeSession.seatedAt,
           isReceptionistAssigned,
           isWalkIn: Boolean(activeSession.isWalkIn)
         },
-        tableStatus: table ? table.status : (activeSession.guestName ? 'Occupied' : 'Available'),
-        isOccupied: table ? (table.status === 'Occupied') : Boolean(activeSession.guestName)
+        reservation: activeResv || null,
+        tableStatus: table ? table.status : (resolvedGuestName ? 'Reserved' : 'Available'),
+        isOccupied: table ? (table.status === 'Occupied' || table.status === 'Reserved') : Boolean(resolvedGuestName)
       });
     }
 
-    // 4. IF NO ACTIVE SESSION EXISTS AT ALL (Fresh QR scan after previous session was closed):
-    // Start a new walk-in session with empty guest name
+    // 5. IF NO ACTIVE SESSION EXISTS AT ALL (Fresh QR scan):
+    // If table is Reserved, populate session with reserved diner details; otherwise start fresh walk-in session
     const sessionToken = `SESS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const freshWalkInSession = await TableSession.create({
+    const freshSession = await TableSession.create({
       tableNum: formattedNum,
       sessionToken,
-      guestName: '',
-      phone: '',
-      partySize: 2,
-      specialOccasion: 'None',
-      notes: '',
+      guestName: reservedGuestName,
+      phone: activeResv?.phone || table?.phone || '',
+      partySize: activeResv?.guests || table?.seats || 2,
+      specialOccasion: activeResv?.specialOccasion || 'None',
+      notes: activeResv?.notes || '',
       status: 'ACTIVE',
-      isWalkIn: true,
-      isReceptionistAssigned: false,
+      isWalkIn: !Boolean(reservedGuestName),
+      isReceptionistAssigned: Boolean(reservedGuestName),
       seatedAt: new Date()
     });
 
     return res.json({
       success: true,
       data: {
-        _id: freshWalkInSession._id,
-        tableNum: freshWalkInSession.tableNum,
+        _id: freshSession._id,
+        tableNum: freshSession.tableNum,
         mergedTableNums: [],
-        sessionToken: freshWalkInSession.sessionToken,
-        guestName: '',
-        phone: '',
-        partySize: 2,
-        specialOccasion: 'None',
-        notes: '',
-        seatedAt: freshWalkInSession.seatedAt,
-        isReceptionistAssigned: false,
-        isWalkIn: true
+        sessionToken: freshSession.sessionToken,
+        guestName: freshSession.guestName || reservedGuestName || '',
+        phone: freshSession.phone,
+        partySize: freshSession.partySize,
+        specialOccasion: freshSession.specialOccasion,
+        notes: freshSession.notes,
+        seatedAt: freshSession.seatedAt,
+        isReceptionistAssigned: freshSession.isReceptionistAssigned,
+        isWalkIn: freshSession.isWalkIn
       },
-      tableStatus: table ? table.status : 'Available',
-      isOccupied: false
+      reservation: activeResv || null,
+      tableStatus: table ? table.status : (reservedGuestName ? 'Reserved' : 'Available'),
+      isOccupied: Boolean(reservedGuestName)
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

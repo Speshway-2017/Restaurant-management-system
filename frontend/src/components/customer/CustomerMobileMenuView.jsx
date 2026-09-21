@@ -71,6 +71,12 @@ export default function CustomerMobileMenuView({
                 : `Table ${tableNum}`}
             </span>
 
+            {Boolean((confirmedDinerName && confirmedDinerName !== 'Valued Guest' && confirmedDinerName !== 'Guest Diner') || (activeTableSession?.guestName && !['Guest Diner', 'Guest', 'Valued Guest', '-'].includes(activeTableSession.guestName))) && (
+              <span style={{ backgroundColor: '#1E4636', color: '#F2C14E', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #F2C14E' }}>
+                👤 Diner: {confirmedDinerName || activeTableSession?.guestName}
+              </span>
+            )}
+
             {/* Real-Time Table Status Pill */}
             {currentTableStatus === 'Cleaning' || tableCleaningInfo?.isCleaning ? (
               <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #FCD34D' }}>

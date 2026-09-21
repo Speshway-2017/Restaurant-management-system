@@ -1,6 +1,7 @@
 const Reservation = require('../models/Reservation');
 const Guest = require('../models/Guest');
-const { notifyReservationCreated } = require('../socket');
+const Table = require('../models/Table');
+const { notifyReservationCreated, notifyTableUpdated } = require('../socket');
 
 // Helper to auto-update guest profile with full customer details & notes
 const createOrUpdateGuestProfile = async ({ name, phone, specialOccasion, notes, section }) => {
@@ -74,6 +75,19 @@ const createReservation = async (req, res) => {
         notes: bookingData.notes,
         section: bookingData.section
       });
+    }
+
+    if (bookingData.tableNo && bookingData.tableNo !== 'Unassigned') {
+      const cleanDigits = String(bookingData.tableNo).replace(/[^0-9]/g, '');
+      const exactRegex = cleanDigits ? new RegExp(`^(T-|Table\\s*)?0*${cleanDigits}$`, 'i') : new RegExp(bookingData.tableNo, 'i');
+      const targetTable = await Table.findOneAndUpdate(
+        { $or: [{ number: exactRegex }, { name: exactRegex }, { number: bookingData.tableNo }] },
+        { status: 'Reserved' },
+        { new: true }
+      );
+      if (targetTable && typeof notifyTableUpdated === 'function') {
+        notifyTableUpdated(targetTable);
+      }
     }
 
     try {

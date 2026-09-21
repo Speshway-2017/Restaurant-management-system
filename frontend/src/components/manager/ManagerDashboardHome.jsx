@@ -339,12 +339,13 @@ export default function ManagerDashboardHome({ setActiveTab }) {
             };
           }
 
+          const resvGuest = dbT.reservedDinerName || dbT.guestName || (dbT.reservation ? dbT.reservation.guestName : '-');
           return {
             num: dbT.number || dbT.name || `T-${cleanT}`,
             cap: dbT.seats || 4,
             status: dbT.status || 'Available',
-            guest: '-',
-            customer: '-',
+            guest: resvGuest,
+            customer: resvGuest,
             amount: '-',
             orderId: null,
             zone: dbT.section || 'Main Dining'
@@ -653,6 +654,12 @@ export default function ManagerDashboardHome({ setActiveTab }) {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.15rem', fontSize: '0.7rem', color: '#7F1D1D', fontWeight: 800 }}>
                           <span>{tbl.orderId || 'ORD-ACTIVE'}</span>
                           <span style={{ color: '#991B1B', fontWeight: 900 }}>{tbl.amount && tbl.amount !== '-' ? tbl.amount : ''}</span>
+                        </div>
+                      </div>
+                    ) : isReserved ? (
+                      <div style={{ marginTop: '0.3rem', paddingTop: '0.3rem', borderTop: '1px dashed #FDE047' }}>
+                        <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#854D0E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          👤 {tbl.customer && tbl.customer !== '-' ? tbl.customer : (tbl.guest && tbl.guest !== '-' ? tbl.guest : 'Reserved Guest')}
                         </div>
                       </div>
                     ) : (
