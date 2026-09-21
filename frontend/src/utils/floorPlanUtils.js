@@ -112,3 +112,23 @@ export function groupTablesForFloorPlan(rawTables = []) {
 
   return displayItems;
 }
+
+/**
+ * Filter tables for table assignment according to:
+ * 1. Must NOT be occupied/reserved/billing (status must be 'Available')
+ * 2. Capacity must NOT be less than guest count (capacity >= partySize)
+ * 3. Shows merged table combos if receptionist has merged tables and their combined capacity >= partySize
+ */
+export function getSuitableAvailableTables(rawTables = [], partySize = 1) {
+  const grouped = groupTablesForFloorPlan(rawTables);
+  const minGuests = Number(partySize) || 1;
+  return grouped.filter(t => {
+    // Exclude occupied, reserved, billing, cleaning tables
+    if (t.status !== 'Available') return false;
+    // Exclude tables where capacity is less than guest party size
+    const cap = Number(t.seats || t.capacity || 0);
+    if (cap < minGuests) return false;
+    return true;
+  });
+}
+

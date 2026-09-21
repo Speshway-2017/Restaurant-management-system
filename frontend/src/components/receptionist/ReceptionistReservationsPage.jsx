@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { onSocketEvent } from '../../services/socket';
+import { getSuitableAvailableTables } from '../../utils/floorPlanUtils';
 
 export default function ReceptionistReservationsPage() {
   const [reservations, setReservations] = useState([]);
@@ -158,16 +159,31 @@ export default function ReceptionistReservationsPage() {
     }
   };
 
+  const handleDirectCheckIn = async (resv) => {
+    if (!resv || !resv._id || resv.tableNo === 'Unassigned') return;
+    try {
+      const res = await api.checkInReservation(resv._id, resv.tableNo);
+      if (res.success || res.data) {
+        showToast(`✅ Checked-in ${resv.guestName} at Table ${resv.tableNo}!`);
+        fetchReservationsData();
+        window.dispatchEvent(new Event('flavora_tables_updated'));
+      }
+    } catch (err) {
+      alert(`Check-in error: ${err.message}`);
+    }
+  };
+
   const handleCheckInSubmit = async (e) => {
     e.preventDefault();
     if (!selectedCheckInResv) return;
     try {
-      const res = await api.checkInReservation(selectedCheckInResv._id, checkInTableNo);
+      const res = await api.checkInReservation(selectedCheckInResv._id, checkInTableNo || selectedCheckInResv.tableNo);
       if (res.success) {
         showToast(`🟢 Guest ${selectedCheckInResv.guestName} checked in at ${checkInTableNo || selectedCheckInResv.tableNo}!`);
         setSelectedCheckInResv(null);
         setCheckInTableNo('');
         fetchReservationsData();
+        window.dispatchEvent(new Event('flavora_tables_updated'));
       }
     } catch (err) {
       alert(err.message);
@@ -179,9 +195,9 @@ export default function ReceptionistReservationsPage() {
     if (!assignTableResv || !selectedAssignTable || isAssigningTable) return;
     setIsAssigningTable(true);
     try {
-      const res = await api.updateReservationStatus(assignTableResv._id, assignTableResv.status, selectedAssignTable);
-      if (res.success) {
-        const resvNum = res.data?.bookingId || assignTableResv.bookingId || assignTableResv._id;
+      const res = await api.updateReservationStatus(assignTableResv._id, assignTableResv.status || 'Confirmed', selectedAssignTable);
+      if (res) {
+        const resvNum = res.bookingId || assignTableResv.bookingId || assignTableResv._id;
         showToast(`Confirmed Table ${selectedAssignTable} for reservation number ${resvNum}`);
         setAssignTableResv(null);
         setSelectedAssignTable('');
@@ -192,6 +208,7 @@ export default function ReceptionistReservationsPage() {
       alert(`Could not assign table: ${err.message}`);
     } finally {
       setIsAssigningTable(false);
+      setAssignTableResv(null);
     }
   };
 
@@ -881,13 +898,10 @@ export default function ReceptionistReservationsPage() {
                       <span>Send SMS / WA</span>
                     </button>
 
-                    {/* Check-In Guest */}
-                    {resv.status === 'Confirmed' && (
+                    {/* Check-In Guest - ONLY shown AFTER a table has been assigned */}
+                    {!isUnassigned && (resv.status === 'Confirmed' || resv.status === 'CONFIRMED') && (
                       <button
-                        onClick={() => {
-                          setSelectedCheckInResv(resv);
-                          setCheckInTableNo(resv.tableNo !== 'Unassigned' ? resv.tableNo : '');
-                        }}
+                        onClick={() => handleDirectCheckIn(resv)}
                         style={{
                           backgroundColor: '#0F2A1D',
                           color: '#FFFFFF',
@@ -906,6 +920,27 @@ export default function ReceptionistReservationsPage() {
                         <CheckCircle2 size={14} color="#86EFAC" />
                         <span>Check-In Guest</span>
                       </button>
+                    )}
+
+                    {/* Checked-In Badge */}
+                    {(resv.status === 'Checked_In' || resv.status === 'CHECKED_IN' || resv.status === 'Checked-In' || resv.status === 'Seated') && (
+                      <span
+                        style={{
+                          backgroundColor: '#DCFCE7',
+                          color: '#15803D',
+                          border: '1px solid #86EFAC',
+                          padding: '0.45rem 0.85rem',
+                          borderRadius: '10px',
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
+                        }}
+                      >
+                        <CheckCircle2 size={14} color="#15803D" />
+                        <span>Checked-In</span>
+                      </span>
                     )}
 
                     {/* Cancel Booking */}
@@ -1091,15 +1126,12 @@ export default function ReceptionistReservationsPage() {
                   onChange={e => setSelectedAssignTable(e.target.value)}
                   style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', outline: 'none' }}
                 >
-                  <option value="">-- Choose Table from Floor Plan --</option>
-                  {tables.map(t => {
-                    const fits = t.seats >= assignTableResv.guests;
-                    return (
-                      <option key={t.number} value={t.number}>
-                        {t.number} ({t.seats} seats - {t.section}) {fits ? '✓ Fits Party' : '(Smaller than party)'} [{t.status}]
-                      </option>
-                    );
-                  })}
+                  <option value="">-- Choose Available Table ({assignTableResv.guests}+ Seats) --</option>
+                  {getSuitableAvailableTables(tables, assignTableResv.guests).map(t => (
+                    <option key={t._id || t.number} value={t.primaryTableNumber || t.number}>
+                      {t.isMergedGroup ? `Merged Combo: ${t.displayNumber}` : `Table ${t.displayNumber}`} ({t.seats} seats - {t.section})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1236,8 +1268,12 @@ export default function ReceptionistReservationsPage() {
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>Assign Seating Table</label>
                 <select required value={checkInTableNo} onChange={e => setCheckInTableNo(e.target.value)} style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }}>
-                  <option value="">-- Select Table --</option>
-                  {tables.map(t => <option key={t.number} value={t.number}>{t.number} ({t.seats} seats - {t.section} - {t.status})</option>)}
+                  <option value="">-- Choose Available Table ({(selectedCheckInResv?.guests || 1)}+ Seats) --</option>
+                  {getSuitableAvailableTables(tables, selectedCheckInResv?.guests || 1).map(t => (
+                    <option key={t._id || t.number} value={t.primaryTableNumber || t.number}>
+                      {t.isMergedGroup ? `Merged Combo: ${t.displayNumber}` : `Table ${t.displayNumber}`} ({t.seats} seats - {t.section})
+                    </option>
+                  ))}
                 </select>
               </div>
 

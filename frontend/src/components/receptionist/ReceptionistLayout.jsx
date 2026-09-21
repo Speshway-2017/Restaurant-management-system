@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, Table2, Clock, CalendarDays, Users, Tv, Bell,
   Settings, ChevronDown, LogOut, Menu, X, ArrowLeft, UserCheck, Search, ShieldCheck, User,
-  Home, ChevronRight, Moon, Sun
+  Home, ChevronRight, Moon, Sun, Monitor
 } from 'lucide-react';
 import PowerOffSlide from '../PowerOffSlide';
 
 import ReceptionistDashboardHome from './ReceptionistDashboardHome';
+import ReceptionistDesktopDashboard from './ReceptionistDesktopDashboard';
 import ReceptionistFloorPlanPage from './ReceptionistFloorPlanPage';
 import ReceptionistWaitlistPage from './ReceptionistWaitlistPage';
 import ReceptionistReservationsPage from './ReceptionistReservationsPage';
@@ -23,6 +24,7 @@ const RECEPTIONIST_PATH_TO_TAB = {
   '/receptionist': 'receptionist-dashboard',
   '/receptionist/': 'receptionist-dashboard',
   '/receptionist/dashboard': 'receptionist-dashboard',
+  '/receptionist/desktop': 'receptionist-desktop',
   '/receptionist/floor-plan': 'receptionist-floor-plan',
   '/receptionist/waitlist': 'receptionist-waitlist',
   '/receptionist/reservations': 'receptionist-reservations',
@@ -35,6 +37,7 @@ const RECEPTIONIST_PATH_TO_TAB = {
 
 const RECEPTIONIST_TAB_TO_PATH = {
   'receptionist-dashboard': '/receptionist/dashboard',
+  'receptionist-desktop': '/receptionist/desktop',
   'receptionist-floor-plan': '/receptionist/floor-plan',
   'receptionist-waitlist': '/receptionist/waitlist',
   'receptionist-reservations': '/receptionist/reservations',
@@ -47,6 +50,8 @@ const RECEPTIONIST_TAB_TO_PATH = {
 
 const getBreadcrumbLabel = (tab) => {
   switch (tab) {
+    case 'receptionist-desktop':
+      return 'Desktop Command Center';
     case 'receptionist-dashboard':
       return 'Dashboard Overview';
     case 'receptionist-floor-plan':
@@ -93,6 +98,41 @@ export default function ReceptionistLayout({ setActivePage }) {
   const [powerModalOpen, setPowerModalOpen] = useState(false);
   const [activeBookingsBadge, setActiveBookingsBadge] = useState(0);
 
+  // Live Notifications State
+  const [notificationsList, setNotificationsList] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
+  const notifMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notifMenuRef.current && !notifMenuRef.current.contains(e.target)) {
+        setIsNotifDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const markAllNotificationsAsRead = () => {
+    setNotificationsList(prev => prev.map(n => ({ ...n, read: true })));
+    setUnreadCount(0);
+  };
+
+  const clearAllNotifications = () => {
+    setNotificationsList([]);
+    setUnreadCount(0);
+  };
+
+  const handleNotificationClick = (item) => {
+    setNotificationsList(prev => prev.map(n => n.id === item.id ? { ...n, read: true } : n));
+    setUnreadCount(prev => Math.max(0, prev - (item.read ? 0 : 1)));
+    setIsNotifDropdownOpen(false);
+    if (item.link) {
+      handleTabChange(item.link);
+    }
+  };
+
   useEffect(() => {
     const fetchResvCount = () => {
       api.getReceptionistReservations().then(res => {
@@ -100,17 +140,51 @@ export default function ReceptionistLayout({ setActivePage }) {
         const today = new Date().toISOString().split('T')[0];
         const active = list.filter(r => r.date >= today && r.status === 'Confirmed');
         setActiveBookingsBadge(active.length);
+
+        // Populate notifications if list is empty
+        setNotificationsList(prev => {
+          if (prev.length > 0) return prev;
+          const notifs = active.slice(0, 10).map(r => ({
+            id: `RESV-${r._id}`,
+            type: 'RESERVATION',
+            title: `🎉 New Reservation: ${r.guestName}`,
+            desc: `${r.guestName} booked ${r.tableNo && r.tableNo !== 'Unassigned' ? `Table ${r.tableNo}` : 'a table'} for ${r.guests || 2} guests at ${r.timeSlot || 'Scheduled Time'}.`,
+            time: r.timeSlot || 'Today',
+            read: false,
+            link: 'receptionist-reservations'
+          }));
+          setUnreadCount(notifs.length);
+          return notifs;
+        });
       }).catch(() => {});
     };
 
     fetchResvCount();
     const interval = setInterval(fetchResvCount, 5000);
 
-    const unsub = onSocketEvent('reservation_created', () => {
+    const handleNewReservationNotif = (resvData) => {
       fetchResvCount();
-    });
+      const resv = resvData?.data || resvData;
+      if (resv && resv.guestName) {
+        const notifItem = {
+          id: `RESV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'RESERVATION',
+          title: `🎉 New Reservation: ${resv.guestName}`,
+          desc: `${resv.guestName} booked ${resv.tableNo && resv.tableNo !== 'Unassigned' ? `Table ${resv.tableNo}` : 'a table'} for ${resv.guests || 2} guests at ${resv.timeSlot || 'Scheduled Time'}.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: false,
+          link: 'receptionist-reservations'
+        };
+        setNotificationsList(prev => [notifItem, ...prev]);
+        setUnreadCount(prev => prev + 1);
+      }
+    };
 
-    const handleWin = () => fetchResvCount();
+    const unsub = onSocketEvent('reservation_created', handleNewReservationNotif);
+
+    const handleWin = (e) => {
+      handleNewReservationNotif(e?.detail || {});
+    };
     window.addEventListener('flavora_reservation_created', handleWin);
 
     return () => {
@@ -302,13 +376,13 @@ export default function ReceptionistLayout({ setActivePage }) {
   };
 
   const navItems = [
+    { id: 'receptionist-desktop', label: 'Desktop Mode', icon: Monitor },
     { id: 'receptionist-dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'receptionist-floor-plan', label: 'Floor Plan', icon: Table2 },
     { id: 'receptionist-waitlist', label: 'Waitlist Queue', icon: Clock },
     { id: 'receptionist-reservations', label: 'Reservations', icon: CalendarDays, badge: activeBookingsBadge },
     { id: 'receptionist-guests', label: 'Guests', icon: Users },
     { id: 'receptionist-queue-display', label: 'Queue Display', icon: Tv },
-    { id: 'receptionist-notifications', label: 'Notifications', icon: Bell },
     { id: 'receptionist-settings', label: 'Settings', icon: Settings }
   ];
 
@@ -545,20 +619,130 @@ export default function ReceptionistLayout({ setActivePage }) {
               );
             })()}
 
-            {/* Notifications Button */}
-            <div className="admin-header-icon-btn-wrapper" style={{ position: 'relative' }}>
+            {/* Notifications Button & Interactive Dropdown Menu */}
+            <div className="admin-header-icon-btn-wrapper" ref={notifMenuRef} style={{ position: 'relative' }}>
               <button 
                 type="button"
                 className="admin-header-icon-btn" 
                 aria-label="Notifications"
-                onClick={() => handleTabChange('receptionist-notifications')}
-                style={{ position: 'relative' }}
+                onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
+                style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer' }}
               >
                 <Bell size={19} color="#1E4636" />
-                <span className="admin-notif-dot" style={{ backgroundColor: '#EF4444', color: '#FFFFFF', fontSize: '0.65rem', fontWeight: 900, padding: '0.1rem 0.35rem', borderRadius: '9999px', position: 'absolute', top: '-4px', right: '-4px' }}>
-                  3
-                </span>
+                {unreadCount > 0 && (
+                  <span className="admin-notif-dot" style={{ backgroundColor: '#EF4444', color: '#FFFFFF', fontSize: '0.65rem', fontWeight: 900, padding: '0.1rem 0.35rem', borderRadius: '9999px', position: 'absolute', top: '-4px', right: '-4px' }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
+
+              {/* Live Notifications Dropdown Menu */}
+              {isNotifDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '46px',
+                  right: 0,
+                  width: '360px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  boxShadow: '0 15px 35px rgba(0,0,0,0.18)',
+                  border: '1px solid #E2E8F0',
+                  zIndex: 99999,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}>
+                  {/* Dropdown Header */}
+                  <div style={{
+                    padding: '0.85rem 1rem',
+                    backgroundColor: '#0F2A1D',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid #1E4636'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Bell size={16} color="#E07A3C" />
+                      <span style={{ fontWeight: 900, fontSize: '0.9rem' }}>Notifications</span>
+                      {unreadCount > 0 && (
+                        <span style={{ backgroundColor: '#EF4444', color: '#FFF', fontSize: '0.68rem', fontWeight: 800, padding: '0.1rem 0.45rem', borderRadius: '9999px' }}>
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllNotificationsAsRead}
+                        style={{ backgroundColor: 'transparent', border: 'none', color: '#A3C2B3', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Notifications Items List */}
+                  <div style={{ maxHeight: '340px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                    {notificationsList.length === 0 ? (
+                      <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748B', fontSize: '0.82rem' }}>
+                        <Bell size={28} color="#CBD5E1" style={{ margin: '0 auto 0.5rem auto', display: 'block' }} />
+                        No new notifications yet.
+                      </div>
+                    ) : (
+                      notificationsList.map(n => (
+                        <div
+                          key={n.id}
+                          onClick={() => handleNotificationClick(n)}
+                          style={{
+                            padding: '0.75rem 1rem',
+                            borderBottom: '1px solid #F1F5F9',
+                            backgroundColor: n.read ? '#FFFFFF' : '#F0FDF4',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.15s ease',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '0.65rem'
+                          }}
+                        >
+                          <div style={{ padding: '0.4rem', borderRadius: '8px', backgroundColor: n.type === 'RESERVATION' ? '#FEF3C7' : '#EFF6FF', flexShrink: 0, marginTop: '0.1rem' }}>
+                            {n.type === 'RESERVATION' ? <CalendarDays size={16} color="#D97706" /> : <Bell size={16} color="#2563EB" />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {n.title}
+                              </span>
+                              <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 600, flexShrink: 0 }}>
+                                {n.time}
+                              </span>
+                            </div>
+                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.76rem', color: '#475569', lineHeight: 1.3 }}>
+                              {n.desc}
+                            </p>
+                          </div>
+                          {!n.read && (
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563EB', flexShrink: 0, marginTop: '0.4rem' }} />
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  {notificationsList.length > 0 && (
+                    <div style={{ padding: '0.6rem 1rem', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={clearAllNotifications}
+                        style={{ backgroundColor: 'transparent', border: 'none', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Receptionist User Profile Card */}
@@ -644,13 +828,13 @@ export default function ReceptionistLayout({ setActivePage }) {
             <span className="crumb-current">{getBreadcrumbLabel(activeTab)}</span>
           </div>
 
+          {activeTab === 'receptionist-desktop' && <ReceptionistDesktopDashboard onNavigate={handleTabChange} />}
           {activeTab === 'receptionist-dashboard' && <ReceptionistDashboardHome onNavigate={handleTabChange} />}
           {activeTab === 'receptionist-floor-plan' && <ReceptionistFloorPlanPage />}
           {activeTab === 'receptionist-waitlist' && <ReceptionistWaitlistPage />}
           {activeTab === 'receptionist-reservations' && <ReceptionistReservationsPage />}
           {activeTab === 'receptionist-guests' && <ReceptionistGuestsPage />}
           {activeTab === 'receptionist-queue-display' && <ReceptionistQueueDisplayPage />}
-          {activeTab === 'receptionist-notifications' && <ReceptionistNotificationsPage />}
           {activeTab === 'receptionist-settings' && <ReceptionistSettingsPage />}
           {activeTab === 'receptionist-profile' && <ReceptionistProfilePage />}
         </main>

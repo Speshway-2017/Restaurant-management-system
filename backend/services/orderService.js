@@ -40,9 +40,23 @@ class OrderService {
       throw new Error(`The bill has already been generated for Table ${formattedTable}. Additional items cannot be placed.`);
     }
 
-    // 0. Resolve current ACTIVE session as single source of truth for customer name
+    // 0. Resolve current ACTIVE session and active reservation as single source of truth for customer name
     const TableSession = require('../models/TableSession');
+    const Reservation = require('../models/Reservation');
+    const todayStr = new Date().toISOString().split('T')[0];
     const searchNums = [formattedTable, cleanNum, `T-${cleanNum.padStart(2, '0')}`];
+
+    const activeResv = await Reservation.findOne({
+      $or: [
+        { tableNo: { $in: searchNums } },
+        { tableNo: exactRegex }
+      ],
+      date: todayStr,
+      status: { $in: ['Confirmed', 'Checked_In', 'Seated', 'Pending'] }
+    }).sort({ updatedAt: -1, date: -1 });
+
+    const reservedGuestName = (activeResv && activeResv.guestName) ? String(activeResv.guestName).trim() : '';
+
     let activeSession = await TableSession.findOne({
       $or: [
         { tableNum: { $in: searchNums } },
@@ -56,19 +70,27 @@ class OrderService {
       activeSession = await TableSession.create({
         tableNum: formattedTable,
         sessionToken,
-        guestName: (data.customer && data.customer !== 'Guest Diner' && data.customer !== 'Guest') ? String(data.customer).trim() : '',
-        phone: data.phone || '',
-        partySize: 2,
-        specialOccasion: 'None',
-        notes: '',
+        guestName: reservedGuestName || ((data.customer && data.customer !== 'Guest Diner' && data.customer !== 'Guest') ? String(data.customer).trim() : ''),
+        phone: activeResv?.phone || data.phone || '',
+        partySize: activeResv?.guests || 2,
+        specialOccasion: activeResv?.specialOccasion || 'None',
+        notes: activeResv?.notes || '',
         status: 'ACTIVE',
-        isWalkIn: true,
-        isReceptionistAssigned: false,
+        isWalkIn: !Boolean(reservedGuestName),
+        isReceptionistAssigned: Boolean(reservedGuestName),
         seatedAt: new Date()
       });
+    } else if (reservedGuestName && (!activeSession.guestName || activeSession.guestName === 'Guest Diner' || activeSession.guestName === 'Guest')) {
+      activeSession.guestName = reservedGuestName;
+      if (activeResv?.phone) activeSession.phone = activeResv.phone;
+      if (activeResv?.guests) activeSession.partySize = activeResv.guests;
+      if (activeResv?.specialOccasion) activeSession.specialOccasion = activeResv.specialOccasion;
+      activeSession.isReceptionistAssigned = true;
+      activeSession.isWalkIn = false;
+      await activeSession.save();
     }
 
-    let verifiedCustomerName = 'Guest Diner';
+    let verifiedCustomerName = reservedGuestName || 'Guest Diner';
     // STRICT IMMUTABILITY: Once a diner name is established for this session, it is locked and cannot be changed until order/session completes
     if (activeSession.guestName && activeSession.guestName !== 'Guest Diner' && activeSession.guestName !== 'Guest' && String(activeSession.guestName).trim()) {
       verifiedCustomerName = String(activeSession.guestName).trim();
@@ -76,18 +98,6 @@ class OrderService {
       verifiedCustomerName = String(data.customer).trim();
       activeSession.guestName = verifiedCustomerName;
       await activeSession.save();
-      try {
-        const { getIO } = require('../socket');
-        const io = getIO();
-        if (io) {
-          io.emit('table_session_updated', {
-            tableNum: formattedTable,
-            guestName: verifiedCustomerName,
-            sessionToken: activeSession.sessionToken,
-            status: 'ACTIVE'
-          });
-        }
-      } catch (e) { }
     }
 
     // 1. Check if an ACTIVE (open/unpaid) order already exists for this table
@@ -530,11 +540,11 @@ class OrderService {
         const cleanTarget = String(target || '').trim().toLowerCase();
         if (!cleanTarget) return false;
         return cleanTarget === itemIdStr.toLowerCase() ||
-               cleanTarget === String(idx) ||
-               cleanTarget === itemNameStr ||
-               cleanTarget === String(itemObj._id || '').toLowerCase() ||
-               cleanTarget === String(itemObj.id || '').toLowerCase() ||
-               cleanTarget === String(itemObj.itemId || '').toLowerCase();
+          cleanTarget === String(idx) ||
+          cleanTarget === itemNameStr ||
+          cleanTarget === String(itemObj._id || '').toLowerCase() ||
+          cleanTarget === String(itemObj.id || '').toLowerCase() ||
+          cleanTarget === String(itemObj.itemId || '').toLowerCase();
       });
 
       if (isTarget) {

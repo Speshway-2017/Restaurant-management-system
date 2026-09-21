@@ -215,7 +215,7 @@ export default function ReceptionistFloorPlanPage() {
       {/* ==================== LIVE FLOOR PLAN GRID ==================== */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
         gap: '1.1rem'
       }}>
         {displayCardItems.map(item => {
@@ -270,13 +270,59 @@ export default function ReceptionistFloorPlanPage() {
                 </div>
               )}
 
-              {/* Active Session Info (Shown ONCE!) */}
-              {item.status !== 'Available' && item.activeSession ? (
-                <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', padding: '0.5rem', border: '1px solid #CBD5E1', fontSize: '0.74rem' }}>
-                  <div style={{ fontWeight: 800, color: '#0F2A1D' }}>👤 {item.activeSession.guestName}</div>
-                  <div style={{ color: '#64748B', marginTop: '0.1rem' }}>🎉 {item.activeSession.specialOccasion || 'Standard'}</div>
-                </div>
-              ) : (
+              {/* Active Session / Reserved Diner Info */}
+              {item.status !== 'Available' ? (() => {
+                const dinerName = item.reservation?.guestName 
+                  || item.activeSession?.guestName 
+                  || item.guestName 
+                  || item.originalTable?.reservation?.guestName 
+                  || item.originalTable?.activeSession?.guestName 
+                  || item.originalTable?.guestName 
+                  || item.reservedBy;
+
+                const dinerPhone = item.reservation?.phone 
+                  || item.activeSession?.phone 
+                  || item.phone 
+                  || item.originalTable?.reservation?.phone 
+                  || item.originalTable?.activeSession?.phone 
+                  || item.originalTable?.phone;
+
+                const occasion = item.reservation?.specialOccasion 
+                  || item.activeSession?.specialOccasion 
+                  || item.specialOccasion 
+                  || item.originalTable?.reservation?.specialOccasion 
+                  || item.originalTable?.activeSession?.specialOccasion;
+
+                const timeSlot = item.reservation?.timeSlot 
+                  || item.activeSession?.timeSlot 
+                  || item.timeSlot 
+                  || item.originalTable?.reservation?.timeSlot;
+
+                const displayName = dinerName || 'Valued Guest';
+
+                return (
+                  <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', padding: '0.45rem 0.6rem', border: '1px solid #CBD5E1', fontSize: '0.74rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <div style={{ fontWeight: 800, color: '#0F2A1D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      👤 {displayName}
+                    </div>
+                    {dinerPhone && (
+                      <div style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 600 }}>
+                        📞 {dinerPhone}
+                      </div>
+                    )}
+                    {timeSlot && (
+                      <div style={{ fontSize: '0.7rem', color: '#92400E', fontWeight: 700 }}>
+                        🕒 {timeSlot}
+                      </div>
+                    )}
+                    {occasion && occasion !== 'None' && (
+                      <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>
+                        🎉 {occasion}
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
                 <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700 }}>
                   No guest assigned
                 </div>
@@ -339,21 +385,32 @@ export default function ReceptionistFloorPlanPage() {
 
               {selectedTable.activeSession ? (
                 <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1rem', borderRadius: '14px' }}>
-                  <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase' }}>ACTIVE DINING SESSION</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#065F46', marginTop: '0.2rem' }}>{selectedTable.activeSession.guestName}</div>
-                  <div style={{ fontSize: '0.78rem', color: '#047857', marginTop: '0.2rem' }}>
-                    📞 {selectedTable.activeSession.phone || 'No phone'} • 👥 {selectedTable.activeSession.partySize} Guests
+                  <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase' }}>
+                    {selectedTable.status === 'Reserved' ? 'RESERVED PERSON DETAILS' : 'ACTIVE DINING SESSION'}
+                  </div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#065F46', marginTop: '0.2rem' }}>
+                    👤 {selectedTable.activeSession.guestName || selectedTable.reservation?.guestName || selectedTable.guestName || 'Valued Guest'}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: '#047857', marginTop: '0.2rem' }}>
-                    🎉 Occasion: {selectedTable.activeSession.specialOccasion || 'Standard Dining'}
+                    📞 {selectedTable.activeSession.phone || selectedTable.reservation?.phone || selectedTable.phone || 'No phone'} • 👥 {selectedTable.activeSession.partySize || selectedTable.reservation?.guests || selectedTable.seats} Guests
                   </div>
+                  <div style={{ fontSize: '0.78rem', color: '#047857', marginTop: '0.2rem' }}>
+                    🎉 Occasion: {selectedTable.activeSession.specialOccasion || selectedTable.reservation?.specialOccasion || 'Standard Dining'}
+                  </div>
+                  {(selectedTable.activeSession.notes || selectedTable.reservation?.notes) && (
+                    <div style={{ fontSize: '0.76rem', color: '#065F46', backgroundColor: '#D1FAE5', padding: '0.35rem 0.55rem', borderRadius: '6px', marginTop: '0.35rem', fontWeight: 600 }}>
+                      📝 Customer Request: "{selectedTable.activeSession.notes || selectedTable.reservation?.notes}"
+                    </div>
+                  )}
                 </div>
               ) : selectedTable.reservation ? (
                 <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #93C5FD', padding: '1rem', borderRadius: '14px' }}>
                   <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#1E40AF', textTransform: 'uppercase' }}>CONFIRMED TABLE RESERVATION</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#1E3A8A', marginTop: '0.2rem' }}>{selectedTable.reservation.guestName}</div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#1E3A8A', marginTop: '0.2rem' }}>
+                    👤 {selectedTable.reservation.guestName || selectedTable.guestName || 'Valued Guest'}
+                  </div>
                   <div style={{ fontSize: '0.78rem', color: '#1E40AF', marginTop: '0.2rem' }}>
-                    📞 {selectedTable.reservation.phone} • 👥 {selectedTable.reservation.guests} Guests • 🕒 {selectedTable.reservation.timeSlot}
+                    📞 {selectedTable.reservation.phone || 'No phone'} • 👥 {selectedTable.reservation.guests || selectedTable.seats} Guests • 🕒 {selectedTable.reservation.timeSlot || 'Scheduled'}
                   </div>
                   {selectedTable.reservation.specialOccasion && selectedTable.reservation.specialOccasion !== 'None' && (
                     <div style={{ fontSize: '0.78rem', color: '#DC2626', fontWeight: 800, marginTop: '0.2rem' }}>
@@ -365,6 +422,18 @@ export default function ReceptionistFloorPlanPage() {
                       📝 Customer Request: "{selectedTable.reservation.notes}"
                     </div>
                   )}
+                </div>
+              ) : (selectedTable.status === 'Reserved' || selectedTable.status === 'Occupied' || selectedTable.guestName) ? (
+                <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #93C5FD', padding: '1rem', borderRadius: '14px' }}>
+                  <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#1E40AF', textTransform: 'uppercase' }}>
+                    {selectedTable.status === 'Reserved' ? 'RESERVED PERSON DETAILS' : 'ACTIVE GUEST DETAILS'}
+                  </div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#1E3A8A', marginTop: '0.2rem' }}>
+                    👤 {selectedTable.guestName || selectedTable.reservedBy || 'Valued Guest'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#1E40AF', marginTop: '0.2rem' }}>
+                    📞 {selectedTable.phone || 'No phone'} • 👥 {selectedTable.seats || selectedTable.capacity || 2} Guests
+                  </div>
                 </div>
               ) : (
                 <div style={{ backgroundColor: '#F8FAFC', border: '1px dashed #CBD5E1', padding: '1rem', borderRadius: '14px', textAlign: 'center', color: '#64748B', fontSize: '0.84rem' }}>

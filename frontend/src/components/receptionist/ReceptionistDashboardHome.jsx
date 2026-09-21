@@ -5,7 +5,7 @@ import {
   UtensilsCrossed, Zap, Bell, Check, Bookmark, Layers, Filter
 } from 'lucide-react';
 import { api } from '../../services/api';
-import { groupTablesForFloorPlan } from '../../utils/floorPlanUtils';
+import { groupTablesForFloorPlan, getSuitableAvailableTables } from '../../utils/floorPlanUtils';
 import { onSocketEvent } from '../../services/socket';
 
 export default function ReceptionistDashboardHome({ onNavigate }) {
@@ -299,6 +299,51 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
           <span>{toastMessage}</span>
         </div>
       )}
+
+      {/* Desktop Mode Mode Switcher Banner */}
+      <div style={{
+        backgroundColor: '#0F2A1D',
+        color: '#FFFFFF',
+        borderRadius: '16px',
+        padding: '1rem 1.25rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '1rem',
+        boxShadow: '0 4px 15px rgba(15,42,29,0.1)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ backgroundColor: '#E07A3C', padding: '0.5rem', borderRadius: '10px' }}>
+            <Table2 size={20} color="#FFFFFF" />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#FFFFFF' }}>Receptionist Desktop Mode</div>
+            <div style={{ fontSize: '0.75rem', color: '#A3B899' }}>Switch to high-density multi-pane Floor Plan & Live Token Command Center</div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onNavigate && onNavigate('receptionist-desktop')}
+          style={{
+            backgroundColor: '#E07A3C',
+            color: '#FFFFFF',
+            fontWeight: 800,
+            fontSize: '0.8rem',
+            padding: '0.5rem 1.1rem',
+            borderRadius: '10px',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            boxShadow: '0 4px 12px rgba(224,122,60,0.3)'
+          }}
+        >
+          <span>Open Desktop Mode</span>
+          <ArrowRight size={14} />
+        </button>
+      </div>
 
       {/* ==================== 2. KPI STATS CARDS GRID ==================== */}
       <div style={{
@@ -813,9 +858,11 @@ export default function ReceptionistDashboardHome({ onNavigate }) {
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#0F2A1D', marginBottom: '0.35rem' }}>Select Available Table</label>
                   <select required value={walkInForm.selectedTableNum} onChange={e => setWalkInForm({ ...walkInForm, selectedTableNum: e.target.value })} style={{ width: '100%', padding: '0.65rem', borderRadius: '10px', border: '1px solid #CBD5E1', outline: 'none', backgroundColor: '#FFFFFF' }}>
-                    <option value="">-- Choose Available Table --</option>
-                    {suitableAvailableTables.map(t => (
-                      <option key={t.number} value={t.number}>Table {t.number} ({t.seats} Seats - {t.section || 'Main'})</option>
+                    <option value="">-- Choose Available Table ({walkInForm.partySize}+ Seats) --</option>
+                    {getSuitableAvailableTables(floorPlanTables, walkInForm.partySize).map(t => (
+                      <option key={t._id || t.number} value={t.primaryTableNumber || t.number}>
+                        {t.isMergedGroup ? `Merged Combo: ${t.displayNumber}` : `Table ${t.displayNumber}`} ({t.seats} Seats - {t.section || 'Main'})
+                      </option>
                     ))}
                   </select>
                 </div>

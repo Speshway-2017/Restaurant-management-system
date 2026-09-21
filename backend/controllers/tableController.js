@@ -16,6 +16,25 @@ const defaultTablesList = [
   { number: 'T-12', name: 'T-12', section: 'Patio Outdoor', seats: 4, status: 'Available', currentOrder: '' }
 ];
 
+const Reservation = require('../models/Reservation');
+const TableSession = require('../models/TableSession');
+
+const isGenericDinerName = (name) => {
+  if (!name || typeof name !== 'string') return true;
+  const lower = name.trim().toLowerCase();
+  return !lower || lower === 'valued guest' || lower === 'guest diner' || lower === 'guest' || lower === '-' || lower === 'n/a' || lower === 'null' || lower === 'undefined';
+};
+
+const getBestDinerName = (...candidates) => {
+  for (const c of candidates) {
+    if (!isGenericDinerName(c)) return c.trim();
+  }
+  for (const c of candidates) {
+    if (c && typeof c === 'string' && c.trim()) return c.trim();
+  }
+  return '';
+};
+
 const getTables = async (req, res) => {
   try {
     let tables = await Table.find({}).sort({ number: 1 });
@@ -35,7 +54,64 @@ const getTables = async (req, res) => {
       }
     }
 
-    res.json(tables);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayReservations = await Reservation.find({
+      date: todayStr,
+      status: { $in: ['Confirmed', 'Checked_In', 'Seated', 'Pending'] }
+    }).sort({ updatedAt: -1 });
+
+    const activeSessions = await TableSession.find({ status: 'ACTIVE' });
+
+    const formattedTables = await Promise.all(tables.map(async (tbl) => {
+      const cleanDigits = String(tbl.number || tbl.name || '').replace(/[^0-9]/g, '');
+      const searchNums = [tbl.number, tbl.name];
+      if (cleanDigits) {
+        searchNums.push(`T-${cleanDigits.padStart(2, '0')}`);
+        searchNums.push(`T-${cleanDigits}`);
+        searchNums.push(cleanDigits);
+        searchNums.push(String(parseInt(cleanDigits, 10)));
+      }
+
+      const activeResv = todayReservations.find(r => {
+        if (!r.tableNo || r.tableNo === 'Unassigned') return false;
+        const resvCleanDigits = String(r.tableNo).replace(/[^0-9]/g, '');
+        if (searchNums.includes(r.tableNo)) return true;
+        return Boolean(resvCleanDigits && cleanDigits && String(parseInt(resvCleanDigits, 10)) === String(parseInt(cleanDigits, 10)));
+      });
+
+      const activeSess = activeSessions.find(s => {
+        const sessCleanDigits = String(s.tableNum).replace(/[^0-9]/g, '');
+        if (searchNums.includes(s.tableNum)) return true;
+        if (Array.isArray(s.mergedTableNums) && s.mergedTableNums.some(m => searchNums.includes(m))) return true;
+        return Boolean(sessCleanDigits && cleanDigits && String(parseInt(sessCleanDigits, 10)) === String(parseInt(cleanDigits, 10)));
+      });
+
+      let currentStatus = tbl.status;
+      if (activeResv && currentStatus === 'Available') {
+        currentStatus = 'Reserved';
+        tbl.status = 'Reserved';
+        await tbl.save().catch(() => { });
+      }
+
+      const reservedDinerName = getBestDinerName(
+        activeResv?.guestName,
+        activeSess?.guestName,
+        tbl?.guestName,
+        tbl?.reservedBy,
+        tbl?.customer
+      );
+
+      const tblObj = tbl.toObject ? tbl.toObject() : { ...tbl };
+      tblObj.status = currentStatus;
+      tblObj.reservation = activeResv || null;
+      tblObj.reservedDinerName = reservedDinerName || (activeResv ? 'Valued Guest' : '');
+      tblObj.guestName = reservedDinerName || (activeResv ? 'Valued Guest' : '');
+      tblObj.customer = reservedDinerName || (activeResv ? 'Valued Guest' : '-');
+      tblObj.guest = reservedDinerName || (activeResv ? 'Valued Guest' : '-');
+      return tblObj;
+    }));
+
+    res.json(formattedTables);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -209,7 +285,7 @@ const generateTableQr = async (req, res) => {
     frontendBase = frontendBase.trim().replace(/\/+$/, '');
 
     const targetUrl = req.body?.targetUrl || `${frontendBase}/?table=${encodeURIComponent(tableNum)}`;
-    
+
     // Generate base64 Data URL for table QR code
     const qrDataUrl = await QRCode.toDataURL(targetUrl, {
       color: {
