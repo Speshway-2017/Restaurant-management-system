@@ -13,6 +13,7 @@ class OrdersProvider with ChangeNotifier {
   String? _error;
   OrderModel? _latestNewOrder;
   final Set<String> _knownOrderIds = {};
+  final Set<String> _locallyRejectedOrderIds = {};
 
   List<OrderModel> get orders => _orders;
   List<AssistanceModel> get assistanceRequests => _assistanceRequests;
@@ -36,7 +37,7 @@ class OrdersProvider with ChangeNotifier {
   }
 
   // Return floor orders: unassigned/pending orders OR orders accepted by/assigned to this specific waiter
-  List<OrderModel> getMyOrders(String waiterId, String waiterName, List<String> assignedTables) {
+  List<OrderModel> getMyOrders(String waiterId, String waiterName, List<String> assignedTables, {bool isCheckedIn = true}) {
     final cleanId = waiterId.trim().toLowerCase();
     final cleanName = waiterName.trim().toLowerCase();
 
@@ -44,10 +45,10 @@ class OrdersProvider with ChangeNotifier {
       final ordId = ord.waiterId.trim().toLowerCase();
       final ordName = ord.waiterName.trim().toLowerCase();
 
-      final isClaimed = ord.isAcceptedByWaiter || ordId.isNotEmpty || ordName.isNotEmpty;
+      final isAccepted = ord.isAcceptedByWaiter;
 
-      if (isClaimed) {
-        // If order has been accepted by/assigned to a waiter, check if it matches current waiter
+      if (isAccepted) {
+        // Order was accepted by this waiter - visible in history/active for both IN and OUT
         bool belongsToMe = false;
         if (cleanId.isNotEmpty && ordId.isNotEmpty && ordId == cleanId) {
           belongsToMe = true;
@@ -58,14 +59,49 @@ class OrdersProvider with ChangeNotifier {
         return belongsToMe;
       }
 
-      // Unclaimed / pending orders remain visible so any waiter on floor can view and accept
+      return false;
+    }).toList();
+  }
+
+  // Return ALL currently unaccepted pending orders in the shared pool (only for IN waiters)
+  List<OrderModel> getPendingOrders(String waiterId, String waiterName, {bool isCheckedIn = true}) {
+    if (!isCheckedIn) return [];
+    final cleanId = waiterId.trim().toLowerCase();
+    final cleanName = waiterName.trim().toLowerCase();
+
+    return _orders.where((ord) {
+      if (ord.isPaid || ord.status.toLowerCase() == 'cancelled' || ord.status.toLowerCase() == 'completed') {
+        return false;
+      }
+      // Must not be claimed/accepted by any waiter yet
+      if (ord.isAcceptedByWaiter || ord.waiterStatus.toUpperCase() != 'PENDING') {
+        return false;
+      }
+
+      // Must not have been rejected locally during this session
+      final ordId = ord.id.trim().toLowerCase();
+      final ordNum = ord.orderId.trim().toLowerCase();
+      final ordNumClean = ordNum.replaceAll('#', '').trim();
+
+      if (_locallyRejectedOrderIds.contains(ordId) ||
+          _locallyRejectedOrderIds.contains(ordNum) ||
+          _locallyRejectedOrderIds.contains(ordNumClean) ||
+          _locallyRejectedOrderIds.contains('#$ordNumClean')) {
+        return false;
+      }
+
+      // Must not have been rejected by this specific waiter in DB
+      final rejections = ord.rejectedByWaiters.map((r) => r.trim().toLowerCase()).toList();
+      if (cleanId.isNotEmpty && rejections.contains(cleanId)) return false;
+      if (cleanName.isNotEmpty && rejections.contains(cleanName)) return false;
+
       return true;
     }).toList();
   }
 
   // Filter ready orders belonging to this waiter (or unassigned ready orders)
-  List<OrderModel> getReadyOrders(String waiterId, String waiterName, List<String> assignedTables) {
-    final myOrds = getMyOrders(waiterId, waiterName, assignedTables);
+  List<OrderModel> getReadyOrders(String waiterId, String waiterName, List<String> assignedTables, {bool isCheckedIn = true}) {
+    final myOrds = getMyOrders(waiterId, waiterName, assignedTables, isCheckedIn: isCheckedIn);
     return myOrds.where((ord) => ord.isReadyToServe && !ord.isServed).toList();
   }
 
@@ -73,7 +109,7 @@ class OrdersProvider with ChangeNotifier {
   double get gstRate => _gstRate;
   double get gstPercentageDisplay => _gstRate * 100;
 
-  Future<void> fetchOrders({bool silent = false}) async {
+  Future<void> fetchOrders({bool silent = false, bool isCheckedIn = true}) async {
     if (!silent) {
       _isLoading = true;
       _error = null;
@@ -97,15 +133,23 @@ class OrdersProvider with ChangeNotifier {
       if (res is List) {
         final fetchedOrders = res.map((e) => OrderModel.fromJson(e as Map<String, dynamic>)).toList();
 
-        // Check for new orders if already initialized
-        if (_knownOrderIds.isNotEmpty) {
+        // Check for new orders if already initialized - ONLY if Waiter is IN
+        if (_knownOrderIds.isNotEmpty && isCheckedIn) {
           for (var ord in fetchedOrders) {
-            if (!_knownOrderIds.contains(ord.id) && ord.id.isNotEmpty && !ord.isPaid) {
+            final ordId = ord.id.trim().toLowerCase();
+            final ordNumClean = ord.orderId.replaceAll('#', '').trim().toLowerCase();
+            final wasRejected = _locallyRejectedOrderIds.contains(ordId) ||
+                _locallyRejectedOrderIds.contains(ord.orderId.toLowerCase()) ||
+                _locallyRejectedOrderIds.contains(ordNumClean);
+
+            if (!_knownOrderIds.contains(ord.id) && ord.id.isNotEmpty && !ord.isPaid && ord.waiterStatus == 'PENDING' && !wasRejected) {
               _latestNewOrder = ord;
               _playNewOrderAlert();
               break;
             }
           }
+        } else if (!isCheckedIn) {
+          _latestNewOrder = null;
         }
 
         // Update known order IDs
@@ -133,65 +177,72 @@ class OrdersProvider with ChangeNotifier {
     }
   }
 
-  // 1. Waiter Accept Order
-  Future<bool> acceptOrder(String orderId, String waiterId, String waiterName) async {
+  // 1. Waiter Accept Order (Atomic First-Accept-Wins with Claimed Check)
+  Future<Map<String, dynamic>> acceptOrder(String orderId, String waiterId, String waiterName) async {
     try {
-      // Optimistically update local order in list for immediate UI transition
-      for (int i = 0; i < _orders.length; i++) {
-        if (_orders[i].id == orderId || _orders[i].orderId == orderId) {
-          final old = _orders[i];
-          _orders[i] = OrderModel(
-            id: old.id,
-            orderId: old.orderId,
-            table: old.table,
-            customer: old.customer,
-            sessionId: old.sessionId,
-            sessionToken: old.sessionToken,
-            status: (old.status.toLowerCase() == 'placed' || old.status.toLowerCase() == 'pending') ? 'Accepted' : old.status,
-            chefStatus: old.chefStatus,
-            waiterStatus: 'ACCEPTED',
-            servingStatus: old.servingStatus,
-            waiterId: waiterId,
-            waiterName: waiterName,
-            items: old.items,
-            totalAmount: old.totalAmount,
-            paymentStatus: old.paymentStatus,
-            paymentMethod: old.paymentMethod,
-            tipAmount: old.tipAmount,
-            discountAmount: old.discountAmount,
-            couponCode: old.couponCode,
-            notes: old.notes,
-            createdAt: old.createdAt,
-          );
-        }
-      }
-      notifyListeners();
-
       await ApiClient.patch(
         ApiConstants.waiterAcceptOrder(orderId),
         body: {'waiterId': waiterId, 'waiterName': waiterName},
       );
-      await fetchOrders();
-      return true;
+      await fetchOrders(silent: true);
+      return {'success': true, 'message': 'Order accepted successfully'};
     } catch (e) {
-      _error = e.toString().replaceAll('Exception: ', '');
+      final errStr = e.toString().replaceAll('Exception: ', '');
+      await fetchOrders(silent: true);
+      if (errStr.contains('already been accepted') || errStr.contains('ORDER_ALREADY_CLAIMED') || errStr.contains('409')) {
+        return {
+          'success': false,
+          'alreadyClaimed': true,
+          'message': 'Order has already been accepted by another waiter.',
+        };
+      }
+      _error = errStr;
       notifyListeners();
-      return false;
+      return {'success': false, 'alreadyClaimed': false, 'message': errStr};
     }
   }
 
   // 1b. Waiter Reject Order
   Future<bool> rejectOrder(String orderId, String waiterId, String waiterName) async {
     try {
+      final clean = orderId.replaceAll('#', '').trim().toLowerCase();
+      _locallyRejectedOrderIds.add(orderId.toLowerCase());
+      if (clean.isNotEmpty) {
+        _locallyRejectedOrderIds.add(clean);
+        _locallyRejectedOrderIds.add('#$clean');
+      }
+
+      // Find any matching orders in local list to also grab their id and orderId
+      final matches = _orders.where((o) =>
+          o.id.toLowerCase() == orderId.toLowerCase() ||
+          o.orderId.toLowerCase() == orderId.toLowerCase() ||
+          o.orderId.toLowerCase().replaceAll('#', '').trim() == clean).toList();
+
+      for (var o in matches) {
+        if (o.id.isNotEmpty) _locallyRejectedOrderIds.add(o.id.toLowerCase());
+        if (o.orderId.isNotEmpty) {
+          final oClean = o.orderId.replaceAll('#', '').trim().toLowerCase();
+          _locallyRejectedOrderIds.add(o.orderId.toLowerCase());
+          _locallyRejectedOrderIds.add(oClean);
+          _locallyRejectedOrderIds.add('#$oClean');
+        }
+      }
+
+      // Optimistically remove from local list for this waiter
+      _orders.removeWhere((o) =>
+          o.id.toLowerCase() == orderId.toLowerCase() ||
+          o.orderId.toLowerCase() == orderId.toLowerCase() ||
+          o.orderId.toLowerCase().replaceAll('#', '').trim() == clean);
+      notifyListeners();
+
       await ApiClient.patch(
-        ApiConstants.updateOrderStatus(orderId),
+        ApiConstants.waiterRejectOrder(orderId),
         body: {
-          'status': 'Cancelled',
-          'waiterStatus': 'REJECTED',
-          'rejectedBy': waiterName,
+          'waiterId': waiterId,
+          'waiterName': waiterName,
         },
       );
-      await fetchOrders();
+      await fetchOrders(silent: true);
       return true;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');

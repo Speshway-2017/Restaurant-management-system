@@ -19,26 +19,9 @@ class WaiterOrdersScreen extends StatefulWidget {
   State<WaiterOrdersScreen> createState() => _WaiterOrdersScreenState();
 }
 
-class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> {
   String _selectedActionOrderId = '';
   String _searchQuery = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(
-      length: 5,
-      vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 4),
-    );
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   List<OrderModel> _filterBySearch(List<OrderModel> list) {
     if (_searchQuery.trim().isEmpty) return list;
@@ -59,87 +42,105 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
     final waiterId = user?.id ?? '';
     final waiterName = user?.name ?? '';
     final assignedTables = user?.assignedTables ?? [];
+    final isCheckedIn = user?.isCheckedIn ?? true;
 
-    final myOrders = ordersProvider.getMyOrders(waiterId, waiterName, assignedTables);
+    // Shared Pending Orders Pool (unaccepted orders visible to all eligible IN waiters)
+    final pendingOrders = isCheckedIn
+        ? ordersProvider.getPendingOrders(waiterId, waiterName, isCheckedIn: isCheckedIn)
+        : <OrderModel>[];
 
+    // Logged-in Waiter's claimed & active orders
+    final myOrders = ordersProvider.getMyOrders(waiterId, waiterName, assignedTables, isCheckedIn: isCheckedIn);
+
+    final activeOrders = myOrders.where((o) => !o.isPaid && o.status != 'SERVED').toList();
     final readyOrders = myOrders.where((o) => o.isReadyToServe && !o.isServed).toList();
     final servingOrders = myOrders.where((o) => o.isServingInTransit).toList();
     final servedOrders = myOrders.where((o) => o.isServed && !o.isPaid).toList();
-    final activeOrders = myOrders.where((o) => !o.isPaid && o.status != 'SERVED').toList();
     final completedOrders = myOrders.where((o) => o.isPaid || o.status.toLowerCase() == 'completed' || o.status.toLowerCase() == 'paid').toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Waiter Orders & History'),
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: [
-            Tab(text: 'History (${completedOrders.length})'),
-            Tab(text: 'Active (${activeOrders.length})'),
-            Tab(text: 'Ready (${readyOrders.length})'),
-            Tab(text: 'Serving (${servingOrders.length})'),
-            Tab(text: 'Served (${servedOrders.length})'),
-          ],
+    return DefaultTabController(
+      length: 6,
+      initialIndex: widget.initialTabIndex.clamp(0, 5),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Waiter Orders & History'),
+          bottom: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            indicatorColor: Colors.white,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            tabs: [
+              Tab(text: 'Pending (${pendingOrders.length})'),
+              Tab(text: 'Active (${activeOrders.length})'),
+              Tab(text: 'Ready (${readyOrders.length})'),
+              Tab(text: 'Serving (${servingOrders.length})'),
+              Tab(text: 'Served (${servedOrders.length})'),
+              Tab(text: 'History (${completedOrders.length})'),
+            ],
+          ),
         ),
-      ),
-      body: Column(
-        children: [
-          // Search Input Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.white,
-            child: TextField(
-              onChanged: (val) {
-                setState(() {
-                  _searchQuery = val;
-                });
-              },
-              decoration: InputDecoration(
-                hintText: 'Search by Table (T-01), Order ID, or Customer...',
-                prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () => setState(() => _searchQuery = ''),
-                      )
-                    : null,
-                filled: true,
-                fillColor: const Color(0xFFF1F5F9),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+        body: Column(
+          children: [
+            // Search Input Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.white,
+              child: TextField(
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search by Table (T-01), Order ID, or Customer...',
+                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () => setState(() => _searchQuery = ''),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFFF1F5F9),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ),
-          ),
-          const Divider(height: 1),
+            const Divider(height: 1),
 
-          // Main Tabs Content
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildOrdersList(_filterBySearch(completedOrders), waiterId, waiterName, ordersProvider, isHistory: true),
-                _buildOrdersList(_filterBySearch(activeOrders), waiterId, waiterName, ordersProvider, isHistory: false),
-                _buildOrdersList(_filterBySearch(readyOrders), waiterId, waiterName, ordersProvider, isHistory: false),
-                _buildOrdersList(_filterBySearch(servingOrders), waiterId, waiterName, ordersProvider, isHistory: false),
-                _buildOrdersList(_filterBySearch(servedOrders), waiterId, waiterName, ordersProvider, isHistory: false),
-              ],
+            // Main Tabs Content
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildOrdersList(_filterBySearch(pendingOrders), waiterId, waiterName, ordersProvider, isHistory: false, isPending: true),
+                  _buildOrdersList(_filterBySearch(activeOrders), waiterId, waiterName, ordersProvider, isHistory: false),
+                  _buildOrdersList(_filterBySearch(readyOrders), waiterId, waiterName, ordersProvider, isHistory: false),
+                  _buildOrdersList(_filterBySearch(servingOrders), waiterId, waiterName, ordersProvider, isHistory: false),
+                  _buildOrdersList(_filterBySearch(servedOrders), waiterId, waiterName, ordersProvider, isHistory: false),
+                  _buildOrdersList(_filterBySearch(completedOrders), waiterId, waiterName, ordersProvider, isHistory: true),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildOrdersList(List<OrderModel> list, String waiterId, String waiterName, OrdersProvider provider, {required bool isHistory}) {
+  Widget _buildOrdersList(
+    List<OrderModel> list,
+    String waiterId,
+    String waiterName,
+    OrdersProvider provider, {
+    required bool isHistory,
+    bool isPending = false,
+  }) {
     Widget listWidget;
 
     if (list.isEmpty) {
@@ -153,20 +154,26 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                isHistory ? Icons.history_toggle_off_rounded : Icons.assignment_turned_in_outlined,
+                isPending
+                    ? Icons.hourglass_empty_rounded
+                    : (isHistory ? Icons.history_toggle_off_rounded : Icons.assignment_turned_in_outlined),
                 size: 56,
                 color: AppColors.textSecondary,
               ),
               const SizedBox(height: 12),
               Text(
-                isHistory ? 'No Order History Found' : 'No Active Orders in this Status',
+                isPending
+                    ? 'No Pending Orders'
+                    : (isHistory ? 'No Order History Found' : 'No Active Orders in this Status'),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
               ),
               const SizedBox(height: 6),
               Text(
-                isHistory
-                    ? 'Completed and paid orders across tables will appear here.'
-                    : 'Orders requiring waiter action will show up automatically.',
+                isPending
+                    ? 'All new incoming orders requiring waiter acceptance will show up here.'
+                    : (isHistory
+                        ? 'Completed and paid orders across tables will appear here.'
+                        : 'Orders requiring waiter action will show up automatically.'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
@@ -192,9 +199,45 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
               );
             },
             onAcceptOrder: () async {
-              setState(() => _selectedActionOrderId = ord.id);
-              await provider.acceptOrder(ord.id, waiterId, waiterName);
-              if (mounted) setState(() => _selectedActionOrderId = '');
+              final messenger = ScaffoldMessenger.of(context);
+              final targetDocId = ord.id.isNotEmpty ? ord.id : ord.orderId;
+              setState(() => _selectedActionOrderId = targetDocId);
+              final res = await provider.acceptOrder(targetDocId, waiterId, waiterName);
+              if (mounted) {
+                setState(() => _selectedActionOrderId = '');
+                if (res['success'] == true) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('✓ Order #${ord.orderId} accepted! Moved to Active.'),
+                      backgroundColor: AppColors.accentGreen,
+                    ),
+                  );
+                } else {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(res['message'] ?? 'Failed to accept order.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            onRejectOrder: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final targetDocId = ord.id.isNotEmpty ? ord.id : ord.orderId;
+              setState(() => _selectedActionOrderId = targetDocId);
+              final success = await provider.rejectOrder(targetDocId, waiterId, waiterName);
+              if (mounted) {
+                setState(() => _selectedActionOrderId = '');
+                if (success) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Order #${ord.orderId} rejected.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
             },
             onStartServing: () async {
               setState(() => _selectedActionOrderId = ord.id);

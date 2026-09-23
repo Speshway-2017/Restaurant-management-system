@@ -47,9 +47,16 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
 
   void _checkNewOrders() async {
     final ordersProvider = Provider.of<OrdersProvider>(context, listen: false);
-    await ordersProvider.fetchOrders(silent: true);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final isCheckedIn = authProvider.user?.isCheckedIn ?? true;
+    await ordersProvider.fetchOrders(silent: true, isCheckedIn: isCheckedIn);
 
     if (!mounted) return;
+
+    if (!isCheckedIn) {
+      ordersProvider.clearLatestNewOrder();
+      return;
+    }
 
     final latestOrder = ordersProvider.latestNewOrder;
     if (latestOrder != null) {
@@ -91,6 +98,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     final waiterId = user?.id ?? '';
     final waiterName = user?.name ?? '';
     final assignedTables = user?.assignedTables ?? [];
+    final isCheckedIn = user?.isCheckedIn ?? true;
 
     final myTables =
         tablesProvider.getMyTables(waiterId, waiterName, assignedTables);
@@ -100,19 +108,14 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
         : tablesProvider.tables.where((t) => t.isOccupied).length;
 
     final myOrders =
-        ordersProvider.getMyOrders(waiterId, waiterName, assignedTables);
+        ordersProvider.getMyOrders(waiterId, waiterName, assignedTables, isCheckedIn: isCheckedIn);
+    final pendingAcceptanceOrders = isCheckedIn
+        ? ordersProvider.getPendingOrders(waiterId, waiterName, isCheckedIn: isCheckedIn)
+        : <OrderModel>[];
     final activeOrders =
         myOrders.where((o) => !o.isPaid && o.status != 'SERVED').toList();
     final completedOrders =
         myOrders.where((o) => o.status == 'SERVED' || o.isPaid).toList();
-    final pendingAcceptanceOrders = myOrders
-        .where((o) =>
-            !o.isPaid &&
-            !o.isAcceptedByWaiter &&
-            (o.isReadyToServe ||
-                o.status.toLowerCase() == 'placed' ||
-                o.waiterStatus.toUpperCase() == 'PENDING'))
-        .toList();
     final acceptedOrders = myOrders
         .where((o) => !o.isPaid && o.isAcceptedByWaiter && o.status != 'SERVED')
         .toList();
@@ -268,7 +271,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               pendingAcceptanceOrders.first,
                               waiterId,
                               waiterName,
-                              ordersProvider),
+                              ordersProvider,
+                              pendingCount: pendingAcceptanceOrders.length),
                         ] else if (acceptedOrders.isNotEmpty) ...[
                           _buildActiveOrderHeroCard(
                             context,
@@ -417,7 +421,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => const WaiterOrdersScreen(
-                                          initialTabIndex: 0),
+                                          initialTabIndex: 5),
                                     ),
                                   );
                                 },
@@ -502,12 +506,15 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Recent Orders',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF2C140E),
+                            const Expanded(
+                              child: Text(
+                                'Recent Orders',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2C140E),
+                                ),
                               ),
                             ),
                             GestureDetector(
@@ -517,6 +524,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                 }
                               },
                               child: const Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     'View All',
@@ -762,45 +770,53 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFF4ED),
-                    shape: BoxShape.circle,
+            Expanded(
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFF4ED),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.receipt_long_rounded,
+                        color: badgeText, size: 22),
                   ),
-                  child: Icon(Icons.receipt_long_rounded,
-                      color: badgeText, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Table T - ${ord.tableNum}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2C140E),
-                      ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Table T - ${ord.tableNum}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2C140E),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${ord.items.length} Items • ₹${ord.totalAmount.toStringAsFixed(0)}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${ord.items.length} Items • ₹${ord.totalAmount.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   timeStr,
@@ -1232,8 +1248,9 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     OrderModel order,
     String waiterId,
     String waiterName,
-    OrdersProvider ordersProvider,
-  ) {
+    OrdersProvider ordersProvider, {
+    int pendingCount = 1,
+  }) {
     final itemsSummary = order.items.isNotEmpty
         ? order.items.map((i) => '${i.quantity}x ${i.name}').join(', ')
         : 'Table Order Items';
@@ -1274,14 +1291,16 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                   border:
                       Border.all(color: const Color(0xFFD97706), width: 1.5),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.access_time_filled,
+                    const Icon(Icons.access_time_filled,
                         color: Color(0xFFF59E0B), size: 14),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Text(
-                      'Pending Acceptance',
-                      style: TextStyle(
+                      pendingCount > 1
+                          ? 'Pending (1 of $pendingCount)'
+                          : 'Pending Acceptance',
+                      style: const TextStyle(
                         color: Color(0xFFF59E0B),
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
@@ -1358,12 +1377,15 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                 ),
               ),
               const SizedBox(width: 6),
-              const Text(
-                'Kitchen Pickup',
-                style: TextStyle(
-                  color: Color(0xFF10B981),
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+              const Flexible(
+                child: Text(
+                  'Kitchen Pickup',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -1417,8 +1439,9 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                       backgroundColor: Colors.red.withValues(alpha: 0.08),
                     ),
                     onPressed: () async {
+                      final targetDocId = order.id.isNotEmpty ? order.id : order.orderId;
                       await ordersProvider.rejectOrder(
-                          order.id, waiterId, waiterName);
+                          targetDocId, waiterId, waiterName);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -1458,16 +1481,27 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                           borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: () async {
-                      await ordersProvider.acceptOrder(
-                          order.id, waiterId, waiterName);
+                      final targetDocId = order.id.isNotEmpty ? order.id : order.orderId;
+                      final res = await ordersProvider.acceptOrder(
+                          targetDocId, waiterId, waiterName);
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                                'Order #${order.orderId} accepted! Moved to serving.'),
-                            backgroundColor: const Color(0xFF10B981),
-                          ),
-                        );
+                        if (res['success'] == true) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Order #${order.orderId} accepted! Moved to active orders.'),
+                              backgroundColor: const Color(0xFF10B981),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  res['message'] ?? 'Failed to accept order.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
                     },
                     icon: const Icon(Icons.check_circle_rounded,
@@ -1484,6 +1518,45 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                 ),
               ),
             ],
+          ),
+
+          // "View More Orders" shared pending pool navigation
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const WaiterOrdersScreen(initialTabIndex: 0),
+                ),
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: const Color(0xFFE87524).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    pendingCount > 1
+                        ? 'View More Orders ($pendingCount Pending) >'
+                        : 'View More Orders >',
+                    style: const TextStyle(
+                      color: Color(0xFFF59E0B),
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -1663,10 +1736,12 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                     onToggle: (newVal) async {
                       setState(() => _isUpdatingShift = true);
                       final messenger = ScaffoldMessenger.of(context);
+                      final ordersProv = Provider.of<OrdersProvider>(context, listen: false);
                       bool success;
                       if (!newVal) {
                         success = await authProvider.checkOut();
                         if (mounted && success) {
+                          await ordersProv.fetchOrders(silent: true);
                           messenger.showSnackBar(
                             const SnackBar(
                               content:
@@ -1678,6 +1753,7 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                       } else {
                         success = await authProvider.checkIn();
                         if (mounted && success) {
+                          await ordersProv.fetchOrders(silent: true);
                           messenger.showSnackBar(
                             const SnackBar(
                               content:

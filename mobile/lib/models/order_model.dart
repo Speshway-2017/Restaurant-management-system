@@ -57,6 +57,7 @@ class OrderModel {
   final String couponCode;
   final String notes;
   final String createdAt;
+  final List<String> rejectedByWaiters;
 
   OrderModel({
     required this.id,
@@ -80,6 +81,7 @@ class OrderModel {
     this.couponCode = '',
     this.notes = '',
     this.createdAt = '',
+    this.rejectedByWaiters = const [],
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
@@ -88,6 +90,11 @@ class OrderModel {
       itemList = (json['items'] as List)
           .map((e) => OrderItemModel.fromJson(e as Map<String, dynamic>))
           .toList();
+    }
+
+    List<String> rejections = [];
+    if (json['rejectedByWaiters'] != null && json['rejectedByWaiters'] is List) {
+      rejections = (json['rejectedByWaiters'] as List).map((e) => e.toString()).toList();
     }
 
     return OrderModel(
@@ -112,6 +119,7 @@ class OrderModel {
       couponCode: json['couponCode']?.toString() ?? json['coupon']?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
       createdAt: json['createdAt']?.toString() ?? json['date']?.toString() ?? '',
+      rejectedByWaiters: rejections,
     );
   }
 
@@ -120,6 +128,11 @@ class OrderModel {
     return clean.isNotEmpty ? clean : table;
   }
 
+  bool get isPendingUnaccepted =>
+      !isAcceptedByWaiter &&
+      (waiterStatus.toUpperCase() == 'PENDING' || status.toLowerCase() == 'placed') &&
+      !isPaid &&
+      status.toLowerCase() != 'cancelled';
   bool get isReadyToServe => chefStatus == 'READY' || status == 'Ready' || readyItemsCount > 0;
   bool get isAcceptedByWaiter => waiterStatus == 'ACCEPTED' || waiterStatus == 'SERVING' || waiterStatus == 'SERVED';
   bool get isServingInTransit => waiterStatus == 'SERVING' || servingStatus == 'IN_TRANSIT';
