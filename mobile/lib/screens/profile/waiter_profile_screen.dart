@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/orders_provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/device_image_picker.dart';
 import '../../widgets/user_avatar_widget.dart';
@@ -50,19 +51,27 @@ class WaiterProfileScreen extends StatelessWidget {
             icon: const Icon(Icons.more_vert),
             tooltip: 'Shift Actions Dropdown',
             onSelected: (val) async {
+              final ordersProv = Provider.of<OrdersProvider>(context, listen: false);
+              final messenger = ScaffoldMessenger.of(context);
               if (val == 'checkin') {
                 final success = await authProvider.checkIn();
-                if (context.mounted && success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✓ Checked In for Shift successfully'), backgroundColor: AppColors.darkGreen),
-                  );
+                if (success) {
+                  await ordersProv.fetchOrders(silent: true);
+                  if (context.mounted) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('✓ Checked In for Shift successfully'), backgroundColor: AppColors.darkGreen),
+                    );
+                  }
                 }
               } else if (val == 'checkout') {
                 final success = await authProvider.checkOut();
-                if (context.mounted && success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✓ Checked Out of Shift successfully'), backgroundColor: Colors.amber),
-                  );
+                if (success) {
+                  await ordersProv.fetchOrders(silent: true);
+                  if (context.mounted) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('✓ Checked Out of Shift successfully'), backgroundColor: Colors.amber),
+                    );
+                  }
                 }
               } else if (val == 'settings') {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const WaiterSettingsScreen()));

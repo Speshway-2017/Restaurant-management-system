@@ -71,14 +71,61 @@ const emitToRoleAndManager = (managerId, chefRoom, waiterRoom, event, payload) =
   io.emit(event, payload);
 };
 
-const notifyOrderCreated = (order) => {
+const notifyOrderCreated = async (order) => {
   if (!io || !order) return;
   const managerId = order.managerId;
-  const chefRoom = managerId ? `chef_${managerId}` : null;
-  emitToRoleAndManager(managerId, chefRoom, null, 'order_created', {
+  const payload = {
     order,
     message: `New order #${order.orderId || order._id} placed for ${order.table || 'Table'}`
-  });
+  };
+
+  try {
+    // 1. Notify Managers
+    if (managerId) {
+      io.to(`manager_${managerId}`).emit('order_created', payload);
+    } else {
+      io.emit('order_created_manager', payload);
+    }
+
+    // 2. Notify Chefs
+    if (managerId) {
+      io.to(`chef_${managerId}`).emit('order_created', payload);
+    } else {
+      io.emit('order_created_chef', payload);
+    }
+
+    // 3. Notify Waiters ONLY if currently IN (attendanceStatus === 'Present')
+    const User = require('./models/User');
+    if (order.waiterId) {
+      const waiterDoc = await User.findById(order.waiterId).select('attendanceStatus');
+      const statusLower = String((waiterDoc && waiterDoc.attendanceStatus) || 'Present').toLowerCase().trim();
+      const isWaiterIn = !['checked out', 'absent', 'off duty', 'out'].includes(statusLower);
+      if (isWaiterIn) {
+        io.to(`waiter_${order.waiterId}`).emit('order_created', payload);
+        io.to(`user_${order.waiterId}`).emit('order_created', payload);
+      }
+    } else {
+      // Unassigned order: Only emit to available (IN) waiters
+      const waiterQuery = {
+        role: { $regex: /waiter/i },
+        attendanceStatus: { $nin: ['Checked Out', 'Absent', 'Off Duty', 'out', 'OUT', 'CheckedOut', 'checked out'] }
+      };
+      if (managerId) {
+        waiterQuery.$or = [
+          { managerId: managerId },
+          { _id: managerId },
+          { managerId: { $in: ['', null, undefined] } }
+        ];
+      }
+      const availableWaiters = await User.find(waiterQuery).select('_id attendanceStatus');
+      availableWaiters.forEach(w => {
+        io.to(`waiter_${w._id}`).emit('order_created', payload);
+        io.to(`user_${w._id}`).emit('order_created', payload);
+      });
+    }
+  } catch (err) {
+    console.warn('Socket notifyOrderCreated error:', err.message);
+  }
 };
 
 const notifyChefAccepted = (order) => {
@@ -152,13 +199,15 @@ const notifyWaiterAccepted = (order) => {
   const managerId = order.managerId;
   const waiterId = order.waiterId;
   const waiterRoom = waiterId ? `waiter_${waiterId}` : null;
-  emitToRoleAndManager(managerId, null, waiterRoom, 'waiter_accepted', {
+  const payload = {
     order,
     orderId: order.orderId || order._id,
     waiterId: order.waiterId,
     waiterName: order.waiterName,
     message: `Order #${order.orderId || order._id} accepted by Waiter ${order.waiterName || ''}`
-  });
+  };
+  emitToRoleAndManager(managerId, null, waiterRoom, 'waiter_accepted', payload);
+  io.emit('order_updated', order);
 };
 
 const notifyWaiterServing = (order) => {

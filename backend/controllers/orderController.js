@@ -12,6 +12,39 @@ const {
   notifyWaiterServed
 } = require('../socket');
 
+const isWaiterIn = (user) => {
+  if (!user) return true;
+  const statusLower = String(user.attendanceStatus || 'Present').toLowerCase().trim();
+  if (statusLower === 'checked out' || statusLower === 'absent' || statusLower === 'off duty' || statusLower === 'out') {
+    return false;
+  }
+  return true;
+};
+
+const buildOrderQueryOr = (id) => {
+  if (!id) return [];
+  const idStr = String(id || '').trim();
+  const cleanId = idStr.replace(/^#/i, '').trim();
+  const cleanNum = idStr.replace(/[^0-9]/g, '');
+
+  const queryOr = [
+    { orderId: idStr },
+    { orderId: `#${idStr}` },
+    { orderId: cleanId },
+    { orderId: `#${cleanId}` },
+    { id: idStr },
+    { id: cleanId }
+  ];
+  if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
+    queryOr.push({ _id: cleanId });
+  }
+  if (cleanNum) {
+    const matchRegex = new RegExp(`^(#)?(ORD-)?0*${cleanNum}$`, 'i');
+    queryOr.push({ orderId: matchRegex }, { id: matchRegex });
+  }
+  return queryOr;
+};
+
 const getOrders = async (req, res) => {
   try {
     let query = {};
@@ -23,7 +56,87 @@ const getOrders = async (req, res) => {
           { managerId: { $in: ['', null, undefined] } },
           { managerId: { $exists: false } }
         ];
-      } else if (userRole.includes('waiter') || userRole.includes('chef') || userRole.includes('receptionist')) {
+      } else if (userRole.includes('waiter')) {
+        const managerCondition = req.user.managerId ? {
+          $or: [
+            { managerId: req.user.managerId.toString() },
+            { managerId: { $in: ['', null, undefined] } },
+            { managerId: { $exists: false } }
+          ]
+        } : null;
+
+        const isAvailable = isWaiterIn(req.user);
+        if (!isAvailable) {
+          // Waiter Mobile Status is OUT: Unavailable for new orders.
+          // Must NOT receive or view any NEW / UNCLAIMED / PENDING orders.
+          // Only return orders that were already ACCEPTED / SERVING / SERVED by this specific waiter.
+          const waiterIdStr = req.user._id ? req.user._id.toString() : '';
+          const waiterNameStr = req.user.name ? req.user.name.trim() : '';
+
+          const assignedCondition = {
+            $and: [
+              {
+                $or: [
+                  { waiterId: waiterIdStr },
+                  ...(waiterNameStr ? [{ waiterName: waiterNameStr }] : [])
+                ]
+              },
+              {
+                waiterStatus: { $in: ['ACCEPTED', 'SERVING', 'SERVED'] }
+              }
+            ]
+          };
+
+          if (managerCondition) {
+            query.$and = [managerCondition, assignedCondition];
+          } else {
+            Object.assign(query, assignedCondition);
+          }
+        } else {
+          // Waiter Mobile Status is IN:
+          // Can see:
+          // 1) Shared pending-order pool (waiterStatus: 'PENDING', not cancelled/completed/paid)
+          // 2) Orders claimed by/assigned to THIS specific waiter (waiterId === myId or waiterName === myName)
+          const waiterIdStr = req.user._id ? req.user._id.toString() : '';
+          const waiterNameStr = req.user.name ? req.user.name.trim() : '';
+          const waiterEmpIdStr = req.user.empId ? req.user.empId.trim() : '';
+
+          const waiterTokens = [
+            ...(waiterIdStr ? [waiterIdStr, waiterIdStr.toLowerCase()] : []),
+            ...(waiterNameStr ? [waiterNameStr, waiterNameStr.toLowerCase()] : []),
+            ...(waiterEmpIdStr ? [waiterEmpIdStr, waiterEmpIdStr.toLowerCase()] : [])
+          ];
+
+          const visibleCondition = {
+            $and: [
+              {
+                $or: [
+                  // Shared pending pool: unaccepted orders
+                  {
+                    waiterStatus: 'PENDING',
+                    status: { $nin: ['Cancelled', 'CANCELLED', 'Completed', 'Paid'] }
+                  },
+                  // Orders accepted/claimed by THIS waiter
+                  { waiterId: waiterIdStr },
+                  ...(waiterNameStr ? [{ waiterName: waiterNameStr }] : [])
+                ]
+              },
+              // Exclude orders rejected by this specific waiter
+              {
+                rejectedByWaiters: {
+                  $nin: waiterTokens
+                }
+              }
+            ]
+          };
+
+          if (managerCondition) {
+            query.$and = [managerCondition, visibleCondition];
+          } else {
+            Object.assign(query, visibleCondition);
+          }
+        }
+      } else if (userRole.includes('chef') || userRole.includes('receptionist')) {
         if (req.user.managerId) {
           query.$or = [
             { managerId: req.user.managerId.toString() },
@@ -482,43 +595,102 @@ const chefUpdateStatus = async (req, res) => {
 const waiterAcceptOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const cleanId = String(id || '').replace(/^#/i, '').trim();
-    const queryOr = [
-      { orderId: id },
-      { orderId: `#${cleanId}` },
-      { orderId: cleanId }
-    ];
-    if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
-      queryOr.push({ _id: cleanId });
-    }
+    const queryOr = buildOrderQueryOr(id);
 
-    const order = await Order.findOne({ $or: queryOr });
-    if (!order) {
-      return errorResponse(res, 'Order not found', 404);
-    }
-
-    if (order.waiterStatus === 'SERVED') {
-      return errorResponse(res, 'Order has already been served.', 400);
+    if (req.user && !isWaiterIn(req.user)) {
+      return errorResponse(res, 'You are currently Checked Out / OUT. Please check in to accept orders.', 403);
     }
 
     const waiterIdVal = req.user ? req.user._id.toString() : (req.body.waiterId || '');
     const waiterNameVal = req.user ? req.user.name : (req.body.waiterName || 'Waiter');
 
-    order.waiterId = waiterIdVal;
-    order.waiterName = waiterNameVal;
-    order.waiterStatus = 'ACCEPTED';
-    if (order.status === 'Placed' || order.status === 'NEW' || order.status === 'Pending') {
-      order.status = 'Accepted';
+    // Atomic claim with race-condition protection (First Accept Wins!)
+    const updated = await Order.findOneAndUpdate(
+      {
+        $and: [
+          { $or: queryOr },
+          {
+            $or: [
+              { waiterStatus: 'PENDING' },
+              { waiterStatus: { $exists: false } },
+              { waiterId: null },
+              { waiterId: '' },
+              { waiterId: waiterIdVal } // Idempotent re-accept by same waiter
+            ]
+          },
+          {
+            status: { $nin: ['Cancelled', 'CANCELLED', 'Completed', 'Paid', 'SERVED'] }
+          }
+        ]
+      },
+      {
+        $set: {
+          waiterId: waiterIdVal,
+          waiterName: waiterNameVal,
+          waiterStatus: 'ACCEPTED',
+          status: 'Accepted',
+          waiterAcceptedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      const existing = await Order.findOne({ $or: queryOr });
+      if (!existing) {
+        return errorResponse(res, 'Order not found', 404);
+      }
+      return res.status(409).json({
+        success: false,
+        code: 'ORDER_ALREADY_CLAIMED',
+        message: `Order #${existing.orderId || id} has already been accepted by Waiter ${existing.waiterName || 'another waiter'}.`,
+        order: existing
+      });
     }
-    order.waiterAcceptedAt = new Date();
-    await order.save();
 
     try {
-      notifyWaiterAccepted(order);
+      notifyWaiterAccepted(updated);
     } catch (e) {
       console.warn('Socket emit error on waiter accept:', e.message);
     }
-    return successResponse(res, order, 'Order accepted for service by Waiter');
+    return successResponse(res, updated, 'Order accepted for service by Waiter');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+const waiterRejectOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const queryOr = buildOrderQueryOr(id);
+
+    const waiterIdVal = req.user ? req.user._id.toString() : (req.body.waiterId || '');
+    const waiterNameVal = req.user ? req.user.name : (req.body.waiterName || 'Waiter');
+    const waiterEmpIdVal = req.user ? (req.user.empId || '') : (req.body.empId || '');
+
+    const tokens = [
+      ...(waiterIdVal ? [waiterIdVal, waiterIdVal.toLowerCase()] : []),
+      ...(waiterNameVal ? [waiterNameVal, waiterNameVal.toLowerCase(), waiterNameVal.trim()] : []),
+      ...(waiterEmpIdVal ? [waiterEmpIdVal, waiterEmpIdVal.toLowerCase()] : [])
+    ];
+
+    const updated = await Order.findOneAndUpdate(
+      { $or: queryOr },
+      {
+        $addToSet: {
+          rejectedByWaiters: {
+            $each: tokens
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return errorResponse(res, 'Order not found', 404);
+    }
+
+    return successResponse(res, updated, `Order #${updated.orderId} rejected by ${waiterNameVal}`);
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -532,15 +704,7 @@ const waiterUpdateStatus = async (req, res) => {
       return errorResponse(res, 'Authentication required', 401);
     }
 
-    const cleanId = String(id || '').replace(/^#/i, '').trim();
-    const queryOr = [
-      { orderId: id },
-      { orderId: `#${cleanId}` },
-      { orderId: cleanId }
-    ];
-    if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
-      queryOr.push({ _id: cleanId });
-    }
+    const queryOr = buildOrderQueryOr(id);
 
     const order = await Order.findOne({ $or: queryOr });
     if (!order) {
@@ -606,6 +770,7 @@ module.exports = {
   chefAcceptOrder,
   chefUpdateStatus,
   waiterAcceptOrder,
+  waiterRejectOrder,
   waiterUpdateStatus,
   updateOrderItemStatus,
   clearAllOrders,

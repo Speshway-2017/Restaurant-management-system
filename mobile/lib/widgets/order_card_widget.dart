@@ -8,6 +8,7 @@ class OrderCardWidget extends StatelessWidget {
   final OrderModel order;
   final VoidCallback onTap;
   final VoidCallback? onAcceptOrder;
+  final VoidCallback? onRejectOrder;
   final VoidCallback? onStartServing;
   final VoidCallback? onMarkServed;
   final VoidCallback? onBillingPayment;
@@ -18,6 +19,7 @@ class OrderCardWidget extends StatelessWidget {
     required this.order,
     required this.onTap,
     this.onAcceptOrder,
+    this.onRejectOrder,
     this.onStartServing,
     this.onMarkServed,
     this.onBillingPayment,
@@ -179,16 +181,36 @@ class OrderCardWidget extends StatelessWidget {
 
               // Dynamic Waiter Action Button
               if (!order.isAcceptedByWaiter && !order.isServed && !order.isPaid) ...[
-                // STEP 1: ACCEPT ORDER
-                SizedBox(
-                  width: double.infinity,
-                  child: CustomButton(
-                    text: 'Accept Order',
-                    icon: Icons.check_circle_outline,
-                    isLoading: isActionLoading,
-                    backgroundColor: AppColors.accentGreen,
-                    onPressed: onAcceptOrder,
-                  ),
+                // STEP 1: ACCEPT OR REJECT PENDING ORDER
+                Row(
+                  children: [
+                    if (onRejectOrder != null) ...[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFEF4444),
+                            side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            backgroundColor: Colors.red.withValues(alpha: 0.06),
+                          ),
+                          onPressed: isActionLoading ? null : onRejectOrder,
+                          icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFFEF4444)),
+                          label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: CustomButton(
+                        text: 'Accept Order',
+                        icon: Icons.check_circle_outline,
+                        isLoading: isActionLoading,
+                        backgroundColor: AppColors.accentGreen,
+                        onPressed: onAcceptOrder,
+                      ),
+                    ),
+                  ],
                 ),
               ] else if (order.canGenerateBill) ...[
                 // STEP 2: ALL DISHES SERVED -> GENERATE BILL UNLOCKED
