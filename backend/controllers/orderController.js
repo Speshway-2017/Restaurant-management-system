@@ -85,6 +85,26 @@ const updateOrderStatus = async (req, res) => {
       }
     }
     const updated = await orderService.updateOrderStatus(req.params.id, req.body.status, updateData);
+
+    try {
+      const socket = require('../socket');
+      const isBill = req.body.status === 'Bill Generated' || updated?.status === 'Bill Generated' || updated?.isBillGenerated;
+      if (isBill) {
+        socket.notifyBillGenerated(updated);
+      } else {
+        const io = socket.getIO();
+        if (io) {
+          io.emit('order_status_updated', { order: updated, status: req.body.status });
+          io.emit('order_updated', { order: updated });
+          if (updated?.table) {
+            io.emit('table_updated', { table: updated.table, status: updated.status });
+          }
+        }
+      }
+    } catch (sErr) {
+      console.warn('Socket emission error in updateOrderStatus:', sErr.message);
+    }
+
     return successResponse(res, updated, 'Order status updated');
   } catch (error) {
     return errorResponse(res, error.message, 400);
@@ -548,8 +568,22 @@ const waiterUpdateStatus = async (req, res) => {
     }
 
     const targetStatus = String(status || '').toUpperCase();
+    if (targetStatus.includes('BILL')) {
+      const updated = await orderService.updateOrderStatus(order._id || id, 'Bill Generated', {
+        status: 'Bill Generated',
+        payment: 'Awaiting Payment',
+        paymentStatus: 'Awaiting Payment',
+        ...req.body
+      });
+      try {
+        const socket = require('../socket');
+        socket.notifyBillGenerated(updated);
+      } catch (sErr) {}
+      return successResponse(res, updated, 'Bill generated successfully for table');
+    }
+
     if (!['SERVING', 'SERVED'].includes(targetStatus)) {
-      return errorResponse(res, 'Invalid waiter status. Allowed values: SERVING, SERVED', 400);
+      return errorResponse(res, 'Invalid waiter status. Allowed values: SERVING, SERVED, Bill Generated', 400);
     }
 
     if (targetStatus === 'SERVING') {

@@ -67,6 +67,7 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [isCustomerOrdersModalOpen, setIsCustomerOrdersModalOpen] = useState(false);
   const [isCategoryDrawerOpen, setIsCategoryDrawerOpen] = useState(false);
   const [guestName, setGuestName] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
   const [chefNotes, setChefNotes] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderSuccessMsg, setOrderSuccessMsg] = useState(null);
@@ -77,6 +78,7 @@ export default function MenuPage({ onOpenDemoModal }) {
   const [selectedDishForDetail, setSelectedDishForDetail] = useState(null);
   const [isOrderTrackingOpen, setIsOrderTrackingOpen] = useState(false);
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
+  const autoPoppedBillRef = React.useRef(false);
   const [isEngagementModalOpen, setIsEngagementModalOpen] = useState(false);
   const [engagementTab, setEngagementTab] = useState('rating');
   const [currentLanguage, setCurrentLanguage] = useState('en');
@@ -253,7 +255,7 @@ export default function MenuPage({ onOpenDemoModal }) {
           const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
           const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeSess.sessionToken}`);
 
-          const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined'].includes(String(n).trim().toLowerCase());
+          const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
 
           const sessName = activeSess.guestName && !isGeneric(activeSess.guestName) ? activeSess.guestName.trim() : '';
           const resvName = sessRes?.reservation?.guestName && !isGeneric(sessRes.reservation.guestName) ? sessRes.reservation.guestName.trim() : '';
@@ -318,9 +320,10 @@ export default function MenuPage({ onOpenDemoModal }) {
         }
 
         if (activeBackendOrders.length > 0) {
-          const ordWithCustomer = activeBackendOrders.find(o => o.customer && o.customer !== 'Guest Diner' && o.customer !== 'Guest' && o.customer.trim());
+          const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
+          const ordWithCustomer = activeBackendOrders.find(o => o.customer && !isGeneric(o.customer));
           if (ordWithCustomer && ordWithCustomer.customer) {
-            setGuestName(prev => (prev && prev !== 'Guest Diner' && prev !== 'Guest') ? prev : ordWithCustomer.customer.trim());
+            setGuestName(prev => (prev && !isGeneric(prev)) ? prev : ordWithCustomer.customer.trim());
           }
         }
 
@@ -411,12 +414,19 @@ export default function MenuPage({ onOpenDemoModal }) {
           setTableCleaningInfo(null);
           if (isBillGen || (matchedTbl && matchedTbl.status === 'Billing')) {
             resolvedStatus = 'Bill Generated';
-          } else if (activeBackendOrders.length > 0 || (matchedTbl && matchedTbl.status === 'Occupied')) {
-            resolvedStatus = 'Order in Progress';
-          } else if (matchedTbl && matchedTbl.status === 'Reserved') {
-            resolvedStatus = 'Reserved';
+            if (!autoPoppedBillRef.current) {
+              autoPoppedBillRef.current = true;
+              setIsBillModalOpen(true);
+            }
           } else {
-            resolvedStatus = 'Available';
+            autoPoppedBillRef.current = false;
+            if (activeBackendOrders.length > 0 || (matchedTbl && matchedTbl.status === 'Occupied')) {
+              resolvedStatus = 'Order in Progress';
+            } else if (matchedTbl && matchedTbl.status === 'Reserved') {
+              resolvedStatus = 'Reserved';
+            } else {
+              resolvedStatus = 'Available';
+            }
           }
         }
 
@@ -437,6 +447,14 @@ export default function MenuPage({ onOpenDemoModal }) {
     });
     const unsubOrder = onSocketEvent('order_status_updated', () => checkTableStatus());
     const unsubOrderCreated = onSocketEvent('order_created', () => checkTableStatus());
+    const unsubBillGen = onSocketEvent('bill_generated', (data) => {
+      checkTableStatus();
+      const cleanCurrentT = String(tableNum || '').replace(/[^0-9]/g, '');
+      const eventT = String(data?.table || data?.order?.table || '').replace(/[^0-9]/g, '');
+      if (!cleanCurrentT || (eventT && cleanCurrentT === eventT)) {
+        setIsBillModalOpen(true);
+      }
+    });
 
     window.addEventListener('flavora_orders_updated', checkTableStatus);
     window.addEventListener('flavora_tables_updated', checkTableStatus);
@@ -447,6 +465,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       if (typeof unsubTable === 'function') unsubTable();
       if (typeof unsubOrder === 'function') unsubOrder();
       if (typeof unsubOrderCreated === 'function') unsubOrderCreated();
+      if (typeof unsubBillGen === 'function') unsubBillGen();
       window.removeEventListener('flavora_orders_updated', checkTableStatus);
       window.removeEventListener('flavora_tables_updated', checkTableStatus);
       window.removeEventListener('storage', checkTableStatus);
@@ -527,17 +546,19 @@ export default function MenuPage({ onOpenDemoModal }) {
   const confirmedDinerName = React.useMemo(() => {
     if (!activeTableSession) return '';
     const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
     const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeTableSession.sessionToken}`);
-    if (selfName && selfName.trim()) {
+    if (selfName && selfName.trim() && !isGeneric(selfName)) {
       return selfName.trim();
     }
-    const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined'].includes(String(n).trim().toLowerCase());
 
-    if (activeTableSession.guestName && !isGeneric(activeTableSession.guestName)) {
+    const hasSubmittedOnThisDevice = sessionStorage.getItem(`flavora_order_submitted_${cleanTbl}_${activeTableSession.sessionToken}`) === 'true';
+
+    if (hasSubmittedOnThisDevice && activeTableSession.guestName && !isGeneric(activeTableSession.guestName)) {
       return activeTableSession.guestName.trim();
     }
     const cleanGuest = (guestName || '').trim();
-    if (cleanGuest && !isGeneric(cleanGuest)) {
+    if (hasSubmittedOnThisDevice && cleanGuest && !isGeneric(cleanGuest)) {
       return cleanGuest;
     }
     return '';
@@ -913,6 +934,7 @@ export default function MenuPage({ onOpenDemoModal }) {
           sessionStorage.setItem(`flavora_order_submitted_${cleanTbl}_${sessTok}`, 'true');
         } catch (e) { }
         setActiveTableSession(prev => prev ? { ...prev, guestName: guestName.trim() } : prev);
+        setIsEditingName(false);
       }
       setChefNotes('');
 
@@ -1022,6 +1044,7 @@ export default function MenuPage({ onOpenDemoModal }) {
           disabledReason={addDisabledReason}
           confirmedDinerName={confirmedDinerName}
           setIsOrderTrackingOpen={setIsOrderTrackingOpen}
+          onViewBill={() => setIsBillModalOpen(true)}
         />
 
         {/* Category Drawer Modal */}
@@ -1324,17 +1347,21 @@ export default function MenuPage({ onOpenDemoModal }) {
                   )}
                 </div>
 
-                {/* CONFIRMED DINER — READ ONLY (Persists for the entire session once entered or assigned) */}
-                {confirmedDinerName ? (
+                {/* DINER NAME INPUT / CONFIRMED CARD */}
+                {confirmedDinerName && !isEditingName ? (
                   <div className="admin-form-group mb-3">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                       <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0 }}>
                         <UserCheck size={16} color="#15803D" />
-                        <span>Diner Name (Locked)</span>
+                        <span>Diner Name</span>
                       </label>
-                      <span style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 800, backgroundColor: '#DCFCE7', padding: '0.15rem 0.5rem', borderRadius: '6px' }}>
-                        🔒 Cannot be changed
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingName(true)}
+                        style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 800, backgroundColor: '#DCFCE7', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                      >
+                        ✏️ Edit Name
+                      </button>
                     </div>
                     <div style={{
                       backgroundColor: '#F0FDF4',
@@ -1352,7 +1379,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                               {confirmedDinerName}
                             </div>
                             <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <span>🔒 Name locked for Table {tableNum || ''} until order is completed</span>
+                              <span>✅ Confirmed for Table {tableNum || ''}</span>
                             </div>
                           </div>
                         </div>
@@ -1364,12 +1391,23 @@ export default function MenuPage({ onOpenDemoModal }) {
                   </div>
                 ) : (
                   <div className="admin-form-group mb-3">
-                    <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D' }}>
-                      Your Name / Diner Name
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D', margin: 0 }}>
+                        Your Name / Diner Name
+                      </label>
+                      {confirmedDinerName && isEditingName && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingName(false)}
+                          style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="text"
-                      placeholder="Enter your name"
+                      placeholder="Enter your name (e.g. John)"
                       value={guestName}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -1389,7 +1427,6 @@ export default function MenuPage({ onOpenDemoModal }) {
                         fontWeight: 600
                       }}
                     />
-
                   </div>
                 )}
 
@@ -2518,17 +2555,21 @@ export default function MenuPage({ onOpenDemoModal }) {
                 )}
               </div>
 
-              {/* CONFIRMED DINER — READ ONLY (Persists for the entire session once entered or assigned) */}
-              {confirmedDinerName ? (
+              {/* DINER NAME INPUT / CONFIRMED CARD */}
+              {confirmedDinerName && !isEditingName ? (
                 <div className="admin-form-group mb-3">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                     <label className="form-label" style={{ fontWeight: 800, fontSize: '0.84rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0 }}>
                       <UserCheck size={16} color="#15803D" />
-                      <span>Diner Name (Locked)</span>
+                      <span>Diner Name</span>
                     </label>
-                    <span style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 800, backgroundColor: '#DCFCE7', padding: '0.15rem 0.5rem', borderRadius: '6px' }}>
-                      🔒 Cannot be changed
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingName(true)}
+                      style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 800, backgroundColor: '#DCFCE7', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                    >
+                      ✏️ Edit Name
+                    </button>
                   </div>
                   <div style={{
                     backgroundColor: '#F0FDF4',
@@ -2546,7 +2587,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                             {confirmedDinerName}
                           </div>
                           <div style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 700, marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <span>🔒 Name locked for Table {tableNum || ''} until order is completed</span>
+                            <span>✅ Confirmed for Table {tableNum || ''}</span>
                           </div>
                         </div>
                       </div>
@@ -2558,12 +2599,23 @@ export default function MenuPage({ onOpenDemoModal }) {
                 </div>
               ) : (
                 <div className="admin-form-group mb-3">
-                  <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D' }}>
-                    Your Name / Diner Name
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <label className="form-label" style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F2A1D', margin: 0 }}>
+                      Your Name / Diner Name
+                    </label>
+                    {confirmedDinerName && isEditingName && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingName(false)}
+                        style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
-                    placeholder="Enter your name"
+                    placeholder="Enter your name (e.g. John)"
                     value={guestName}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -2583,9 +2635,6 @@ export default function MenuPage({ onOpenDemoModal }) {
                       backgroundColor: '#FFFFFF'
                     }}
                   />
-                  <div style={{ fontSize: '0.73rem', color: '#64748B', marginTop: '0.35rem', fontWeight: 600 }}>
-                    ℹ️ Once submitted, this name will be permanently locked for Table {tableNum || ''} until your order is completed.
-                  </div>
                 </div>
               )}
 

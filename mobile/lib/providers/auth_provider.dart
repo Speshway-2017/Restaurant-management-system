@@ -3,6 +3,7 @@ import '../models/user_model.dart';
 import '../core/network/api_client.dart';
 import '../core/storage/storage_service.dart';
 import '../core/constants/api_constants.dart';
+import '../core/network/socket_service.dart';
 
 enum AuthStatus { uninitialized, authenticated, unauthenticated, authenticating }
 
@@ -155,6 +156,9 @@ class AuthProvider with ChangeNotifier {
       'attendanceStatus': 'Present',
       'checkInTime': nowStr,
     });
+    if (success) {
+      SocketService.updateCheckInStatus(true);
+    }
     return success;
   }
 
@@ -164,6 +168,9 @@ class AuthProvider with ChangeNotifier {
       'attendanceStatus': 'Checked Out',
       'checkOutTime': nowStr,
     });
+    if (success) {
+      SocketService.updateCheckInStatus(false);
+    }
     return success;
   }
 
@@ -176,6 +183,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> logout() async {
+    SocketService.disconnect();
     await StorageService.clearSession();
     _user = null;
     _status = AuthStatus.unauthenticated;

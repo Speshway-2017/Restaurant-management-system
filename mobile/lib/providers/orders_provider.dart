@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../models/order_model.dart';
 import '../models/assistance_model.dart';
 import '../core/network/api_client.dart';
@@ -33,6 +33,81 @@ class OrdersProvider with ChangeNotifier {
         SoundService.playRingtone(ringtone);
       }
     } catch (_) {}
+  }
+
+  // Handle Real-Time Socket.IO Order Created Event
+  void handleSocketOrderCreated(Map<String, dynamic> data, {bool isCheckedIn = true}) {
+    if (!isCheckedIn) return;
+    try {
+      final orderData = (data['order'] is Map)
+          ? Map<String, dynamic>.from(data['order'])
+          : data;
+      final newOrd = OrderModel.fromJson(orderData);
+      if (newOrd.id.isEmpty && newOrd.orderId == 'ORD-0000') return;
+
+      final cleanId = newOrd.id.trim().toLowerCase();
+      final cleanNum = newOrd.orderId.replaceAll('#', '').trim().toLowerCase();
+
+      final wasLocallyRejected = _locallyRejectedOrderIds.contains(cleanId) ||
+          _locallyRejectedOrderIds.contains(cleanNum) ||
+          _locallyRejectedOrderIds.contains('#$cleanNum');
+
+      if (wasLocallyRejected) return;
+
+      final existingIdx = _orders.indexWhere((o) =>
+          (o.id.isNotEmpty && cleanId.isNotEmpty && o.id.toLowerCase() == cleanId) ||
+          (o.orderId.isNotEmpty && cleanNum.isNotEmpty && o.orderId.replaceAll('#', '').trim().toLowerCase() == cleanNum));
+
+      if (existingIdx != -1) {
+        _orders[existingIdx] = newOrd;
+      } else {
+        _orders.insert(0, newOrd);
+      }
+
+      if (newOrd.id.isNotEmpty) _knownOrderIds.add(newOrd.id);
+      _latestNewOrder = newOrd;
+      _playNewOrderAlert();
+
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) print('[OrdersProvider] error handling socket order_created: $e');
+    }
+  }
+
+  // Handle Real-Time Socket.IO Order Updated Event
+  void handleSocketOrderUpdated(Map<String, dynamic> data) {
+    try {
+      final orderData = (data['order'] is Map)
+          ? Map<String, dynamic>.from(data['order'])
+          : data;
+
+      final updatedId = orderData['_id']?.toString() ?? orderData['id']?.toString() ?? orderData['orderId']?.toString() ?? '';
+      if (updatedId.isEmpty) {
+        fetchOrders(silent: true);
+        return;
+      }
+
+      final cleanId = updatedId.trim().toLowerCase();
+      final cleanNum = updatedId.replaceAll('#', '').trim().toLowerCase();
+
+      final existingIdx = _orders.indexWhere((o) =>
+          (o.id.isNotEmpty && cleanId.isNotEmpty && o.id.toLowerCase() == cleanId) ||
+          (o.orderId.isNotEmpty && cleanNum.isNotEmpty && o.orderId.replaceAll('#', '').trim().toLowerCase() == cleanNum));
+
+      if (existingIdx != -1) {
+        if (orderData['items'] != null || orderData['waiterStatus'] != null || orderData['status'] != null) {
+          final updatedOrd = OrderModel.fromJson(orderData);
+          _orders[existingIdx] = updatedOrd;
+          notifyListeners();
+        } else {
+          fetchOrders(silent: true);
+        }
+      } else {
+        fetchOrders(silent: true);
+      }
+    } catch (e) {
+      if (kDebugMode) print('[OrdersProvider] error handling socket order_updated: $e');
+    }
   }
 
   // Return floor orders: unassigned/pending orders OR orders accepted by/assigned to this specific waiter

@@ -746,13 +746,10 @@ const getActiveTableSession = async (req, res) => {
       status: { $in: ['Confirmed', 'Checked_In', 'Seated', 'Pending'] }
     }).sort({ updatedAt: -1, date: -1 });
 
-    const isGenericName = (n) => !n || ['valued guest', 'guest diner', 'guest', '-', 'n/a', 'null', 'undefined'].includes(String(n).trim().toLowerCase());
+    const isGenericName = (n) => !n || ['valued guest', 'guest diner', 'guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
     const getBestName = (...list) => {
       for (const item of list) {
         if (item && !isGenericName(item)) return String(item).trim();
-      }
-      for (const item of list) {
-        if (item && String(item).trim()) return String(item).trim();
       }
       return '';
     };
