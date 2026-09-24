@@ -300,6 +300,24 @@ const notifyWaiterProfileUpdated = (user) => {
   io.emit('waiter_profile_updated', { user, userId: user._id || user.id });
 };
 
+const notifyBillGenerated = (order) => {
+  if (!io || !order) return;
+  const tableNum = order.table || order.tableNumber || 'T-01';
+  const payload = {
+    order,
+    orderId: order.orderId || order._id || order.id,
+    table: tableNum,
+    status: 'Bill Generated',
+    isBillGenerated: true,
+    paymentStatus: 'Awaiting Payment',
+    message: `🧾 Bill Generated for Table ${tableNum}! Tap to view and pay.`
+  };
+  io.emit('bill_generated', payload);
+  io.emit('order_status_updated', payload);
+  io.emit('order_updated', payload);
+  io.emit('table_updated', { table: tableNum, status: 'Bill Generated' });
+};
+
 module.exports = {
   initSocket,
   getIO,
@@ -317,5 +335,6 @@ module.exports = {
   notifyPaymentCreated,
   notifyPaymentUpdated,
   notifyAssistanceUpdated,
-  notifyWaiterProfileUpdated
+  notifyWaiterProfileUpdated,
+  notifyBillGenerated
 };

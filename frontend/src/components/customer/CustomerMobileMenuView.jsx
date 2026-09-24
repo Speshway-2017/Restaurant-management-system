@@ -40,7 +40,8 @@ export default function CustomerMobileMenuView({
   isAddDisabled = false,
   disabledReason = '',
   confirmedDinerName = '',
-  setIsOrderTrackingOpen = null
+  setIsOrderTrackingOpen = null,
+  onViewBill = null
 }) {
   return (
     <div className="customer-mobile-menu-page" style={{ position: 'relative', backgroundColor: '#F8FAFC', color: '#0F172A', paddingBottom: '5rem', minHeight: '100vh' }}>
@@ -71,11 +72,16 @@ export default function CustomerMobileMenuView({
                 : `Table ${tableNum}`}
             </span>
 
-            {Boolean((confirmedDinerName && confirmedDinerName !== 'Valued Guest' && confirmedDinerName !== 'Guest Diner') || (activeTableSession?.guestName && !['Guest Diner', 'Guest', 'Valued Guest', '-'].includes(activeTableSession.guestName))) && (
-              <span style={{ backgroundColor: '#1E4636', color: '#F2C14E', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #F2C14E' }}>
-                👤 Diner: {confirmedDinerName || activeTableSession?.guestName}
-              </span>
-            )}
+            {(() => {
+              const isGen = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
+              const nameToShow = (confirmedDinerName && !isGen(confirmedDinerName)) ? confirmedDinerName : ((activeTableSession?.guestName && !isGen(activeTableSession.guestName)) ? activeTableSession.guestName : '');
+              if (!nameToShow) return null;
+              return (
+                <span style={{ backgroundColor: '#1E4636', color: '#F2C14E', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #F2C14E' }}>
+                  👤 Diner: {nameToShow}
+                </span>
+              );
+            })()}
 
             {/* Real-Time Table Status Pill */}
             {currentTableStatus === 'Cleaning' || tableCleaningInfo?.isCleaning ? (
@@ -144,6 +150,54 @@ export default function CustomerMobileMenuView({
               <span>Cart {totalCartCount > 0 ? `(${totalCartCount})` : ''}</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Bill Ready Sticky Notification Banner */}
+      {(isTableBillGenerated || currentTableStatus === 'Bill Generated') && (
+        <div
+          onClick={() => (onViewBill ? onViewBill() : (setIsOrderTrackingOpen ? setIsOrderTrackingOpen(true) : null))}
+          style={{
+            position: 'sticky',
+            top: tableNum ? '46px' : 0,
+            zIndex: 989,
+            backgroundColor: '#15803D',
+            color: '#FFFFFF',
+            padding: '0.65rem 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 14px rgba(21, 128, 61, 0.35)',
+            cursor: 'pointer'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <span style={{ fontSize: '1.25rem' }}>🧾</span>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: '0.88rem', lineHeight: 1.2 }}>
+                Your Bill for Table {tableNum || ''} is Ready!
+              </div>
+              <div style={{ fontSize: '0.74rem', opacity: 0.95, fontWeight: 700, marginTop: '0.1rem' }}>
+                Tap here to view items and pay online or cash
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            style={{
+              backgroundColor: '#F2C14E',
+              color: '#0F2A1D',
+              border: 'none',
+              padding: '0.35rem 0.85rem',
+              borderRadius: '8px',
+              fontWeight: 900,
+              fontSize: '0.78rem',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+            }}
+          >
+            Pay Bill Now →
+          </button>
         </div>
       )}
 
