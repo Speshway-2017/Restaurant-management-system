@@ -1,17 +1,6 @@
-import 'package:flutter/foundation.dart';
-
 class ApiConstants {
   // Backend Base URL
-  static String get baseUrl {
-    if (kIsWeb) {
-      final host = Uri.base.host.isNotEmpty && Uri.base.host != '0.0.0.0' ? Uri.base.host : 'localhost';
-      return 'http://$host:5000/api';
-    }
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5000/api';
-    }
-    return 'http://localhost:5000/api';
-  }
+  static String baseUrl = 'https://restaurant.speshway.site/api';
 
   // Auth Endpoints
   static const String login = '/auth/login';
@@ -28,7 +17,6 @@ class ApiConstants {
   // Orders Endpoints
   static const String getOrders = '/orders';
   static String waiterAcceptOrder(String orderId) => '/orders/$orderId/waiter-accept';
-  static String waiterRejectOrder(String orderId) => '/orders/$orderId/waiter-reject';
   static String waiterUpdateStatus(String orderId) => '/orders/$orderId/waiter-status';
   static String updateOrderStatus(String orderId) => '/orders/$orderId/status';
   static String requestCancelItem(String orderId) => '/orders/$orderId/cancel-request';

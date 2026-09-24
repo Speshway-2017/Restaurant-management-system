@@ -136,19 +136,8 @@ class OrderService {
       if (targetTableDoc) {
         if (!existingActiveOrder.tableId) existingActiveOrder.tableId = targetTableDoc._id.toString();
         if (!existingActiveOrder.waiterId && targetTableDoc.assignedWaiterId) {
-          try {
-            const User = require('../models/User');
-            const waiterDoc = await User.findById(targetTableDoc.assignedWaiterId).select('attendanceStatus');
-            const statusStr = String((waiterDoc && waiterDoc.attendanceStatus) || 'Present').toLowerCase().trim();
-            const isWaiterIn = !['checked out', 'absent', 'off duty', 'out'].includes(statusStr);
-            if (isWaiterIn) {
-              existingActiveOrder.waiterId = targetTableDoc.assignedWaiterId;
-              existingActiveOrder.waiterName = targetTableDoc.assignedWaiterName || '';
-            }
-          } catch (err) {
-            existingActiveOrder.waiterId = targetTableDoc.assignedWaiterId;
-            existingActiveOrder.waiterName = targetTableDoc.assignedWaiterName || '';
-          }
+          existingActiveOrder.waiterId = targetTableDoc.assignedWaiterId;
+          existingActiveOrder.waiterName = targetTableDoc.assignedWaiterName || '';
         }
       }
 
@@ -256,25 +245,8 @@ class OrderService {
 
     // 2. If NO active order exists, generate a new orderId and create a brand new order document
     const orderId = data.orderId || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
-    let assignedWaiterId = (targetTableDoc && targetTableDoc.assignedWaiterId) || data.waiterId || '';
-    let assignedWaiterName = (targetTableDoc && targetTableDoc.assignedWaiterName) || data.waiterName || '';
-
-    // If assigned waiter is OUT, do NOT assign them to this new order
-    if (assignedWaiterId) {
-      try {
-        const User = require('../models/User');
-        const waiterDoc = await User.findById(assignedWaiterId).select('attendanceStatus');
-        const statusStr = String((waiterDoc && waiterDoc.attendanceStatus) || 'Present').toLowerCase().trim();
-        const isWaiterIn = !['checked out', 'absent', 'off duty', 'out'].includes(statusStr);
-        if (!isWaiterIn) {
-          assignedWaiterId = '';
-          assignedWaiterName = '';
-        }
-      } catch (err) {
-        // Fallback: keep existing
-      }
-    }
-
+    const assignedWaiterId = (targetTableDoc && targetTableDoc.assignedWaiterId) || data.waiterId || '';
+    const assignedWaiterName = (targetTableDoc && targetTableDoc.assignedWaiterName) || data.waiterName || '';
     const resolvedTableId = targetTableDoc ? targetTableDoc._id.toString() : (data.tableId || '');
 
     const orderData = {

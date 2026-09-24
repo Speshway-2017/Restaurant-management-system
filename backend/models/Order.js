@@ -43,12 +43,12 @@ const orderSchema = new mongoose.Schema({
   sessionId: { type: String, default: '' },
   chefStatus: { 
     type: String, 
-    enum: ['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'REJECTED', 'CANCELLED'], 
+    enum: ['NEW', 'ACCEPTED', 'PREPARING', 'READY'], 
     default: 'NEW' 
   },
   waiterStatus: { 
     type: String, 
-    enum: ['PENDING', 'ACCEPTED', 'SERVING', 'SERVED', 'REJECTED', 'CANCELLED'], 
+    enum: ['PENDING', 'ACCEPTED', 'SERVING', 'SERVED'], 
     default: 'PENDING' 
   },
   chefId: { type: String, index: true, default: '' },
@@ -61,8 +61,7 @@ const orderSchema = new mongoose.Schema({
   waiterName: { type: String, default: '' },
   waiterAcceptedAt: { type: Date },
   waiterServingAt: { type: Date },
-  waiterServedAt: { type: Date },
-  rejectedByWaiters: [{ type: String }]
+  waiterServedAt: { type: Date }
 }, { timestamps: true, strict: false });
 
 orderSchema.pre('save', function(next) {
