@@ -22,7 +22,7 @@ const TableSession = require('../models/TableSession');
 const isGenericDinerName = (name) => {
   if (!name || typeof name !== 'string') return true;
   const lower = name.trim().toLowerCase();
-  return !lower || lower === 'valued guest' || lower === 'guest diner' || lower === 'guest' || lower === '-' || lower === 'n/a' || lower === 'null' || lower === 'undefined';
+  return !lower || ['valued guest', 'guest diner', 'guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(lower);
 };
 
 const getBestDinerName = (...candidates) => {

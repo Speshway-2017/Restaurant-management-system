@@ -15,6 +15,7 @@ class UserModel {
   final String hoursLogged;
   final String attendanceStatus;
   final String avatarUrl;
+  final String managerId;
   final List<String> assignedTables;
 
   UserModel({
@@ -34,6 +35,7 @@ class UserModel {
     this.hoursLogged = '',
     this.attendanceStatus = 'Present',
     this.avatarUrl = '',
+    this.managerId = '',
     this.assignedTables = const [],
   });
 
@@ -72,6 +74,7 @@ class UserModel {
       hoursLogged: json['hoursLogged']?.toString() ?? '',
       attendanceStatus: json['attendanceStatus']?.toString() ?? 'Present',
       avatarUrl: json['avatarUrl']?.toString() ?? '',
+      managerId: json['managerId']?.toString() ?? json['manager']?.toString() ?? '',
       assignedTables: tables,
     );
   }
@@ -94,6 +97,7 @@ class UserModel {
       'hoursLogged': calculatedShiftHours,
       'attendanceStatus': attendanceStatus,
       'avatarUrl': avatarUrl,
+      'managerId': managerId,
       'assignedTables': assignedTables,
     };
   }

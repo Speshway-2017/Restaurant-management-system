@@ -51,7 +51,7 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
           ],
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: List.generate(navItems.length, (idx) {
             final isSelected = currentIndex == idx;
             final item = navItems[idx];
@@ -60,13 +60,15 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
             final label = item['label'] as String;
             final badge = idx == 3 ? activeAlertsCount : 0;
 
-            return _buildNavItem(
-              index: idx,
-              isSelected: isSelected,
-              icon: icon,
-              activeIcon: activeIcon,
-              label: label,
-              badgeCount: badge,
+            return Expanded(
+              child: _buildNavItem(
+                index: idx,
+                isSelected: isSelected,
+                icon: icon,
+                activeIcon: activeIcon,
+                label: label,
+                badgeCount: badge,
+              ),
             );
           }),
         ),
@@ -85,127 +87,136 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => onTap(index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 12 : 8,
-          vertical: 4,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF1E293B) // Dark glass active pill background
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-          border: isSelected
-              ? Border.all(
-                  color: const Color(0xFF475569).withValues(alpha: 0.5),
-                  width: 1,
-                )
-              : null,
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Icon Container (with Rainbow Spectrum Halo Ring when Active)
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                if (isSelected) ...[
-                  // Rainbow Chromatic Spectrum Halo Ring
-                  Container(
-                    padding: const EdgeInsets.all(2.2),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const SweepGradient(
-                        colors: [
-                          Color(0xFFFF0055),
-                          Color(0xFFFFB800),
-                          Color(0xFF00F2FE),
-                          Color(0xFF7928CA),
-                          Color(0xFF00DF72),
-                          Color(0xFFFF0055),
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          // Reduced selected horizontal padding: 8→5 so icon fits in constrained Expanded slot
+          padding: EdgeInsets.symmetric(
+            horizontal: isSelected ? 5 : 4,
+            vertical: 4,
+          ),
+          clipBehavior: Clip.hardEdge, // Prevent overflow indicator in edge cases
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF1E293B)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+            border: isSelected
+                ? Border.all(
+                    color: const Color(0xFF475569).withValues(alpha: 0.5),
+                    width: 1,
+                  )
+                : null,
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Icon Container (with Rainbow Spectrum Halo Ring when Active)
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  if (isSelected) ...[
+                    // Rainbow Chromatic Spectrum Halo Ring — smaller (1.8 padding, 22px inner)
+                    Container(
+                      padding: const EdgeInsets.all(1.8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const SweepGradient(
+                          colors: [
+                            Color(0xFFFF0055),
+                            Color(0xFFFFB800),
+                            Color(0xFF00F2FE),
+                            Color(0xFF7928CA),
+                            Color(0xFF00DF72),
+                            Color(0xFFFF0055),
+                          ],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00F2FE).withValues(alpha: 0.6),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
                         ],
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF00F2FE).withValues(alpha: 0.6),
-                          blurRadius: 8,
-                          spreadRadius: 1,
+                      child: Container(
+                        width: 22,  // Reduced from 26 → 22 to fit constrained slots
+                        height: 22,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF3F3F46), Color(0xFF18181B)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                         ),
-                      ],
-                    ),
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF3F3F46), Color(0xFF18181B)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                        child: Icon(
+                          activeIcon,
+                          size: 13,  // Reduced from 15 → 13
+                          color: Colors.white,
                         ),
                       ),
-                      child: Icon(
-                        activeIcon,
-                        size: 16,
-                        color: Colors.white,
+                    ),
+                  ] else ...[
+                    Icon(
+                      icon,
+                      size: 19,  // Reduced from 20 → 19
+                      color: const Color(0xFF94A3B8),
+                    ),
+                  ],
+
+                  // Badge Indicator for Alerts Tab
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: isSelected ? -2 : -4,
+                      top: isSelected ? -2 : -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 8,
+                          minHeight: 8,
+                        ),
                       ),
                     ),
-                  ),
-                ] else ...[
-                  Icon(
-                    icon,
-                    size: 20,
-                    color: const Color(0xFF94A3B8),
-                  ),
                 ],
+              ),
 
-                // Badge Indicator for Alerts Tab
-                if (badgeCount > 0)
-                  Positioned(
-                    right: isSelected ? -2 : -4,
-                    top: isSelected ? -2 : -4,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEF4444),
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 8,
-                        minHeight: 8,
-                      ),
+              // Active Tab Text Label (Flexible so it yields space to the icon)
+              if (isSelected) ...[
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,   // Reduced from 12 → 11 for tighter fit
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
                     ),
                   ),
-              ],
-            ),
-
-            // Active Tab Text Label (Expanded horizontally next to the rainbow ring icon)
-            if (isSelected) ...[
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
                 ),
-              ),
-              const SizedBox(width: 4),
+                const SizedBox(width: 2),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

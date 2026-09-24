@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/network/socket_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/tables_provider.dart';
 import '../../providers/orders_provider.dart';
 import '../../widgets/flavora_bottom_navigation_bar.dart';
@@ -24,13 +26,37 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshData();
+      _initSocketAndFetchData();
     });
   }
 
+  void _initSocketAndFetchData() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final ordersProvider = Provider.of<OrdersProvider>(context, listen: false);
+    final tablesProvider = Provider.of<TablesProvider>(context, listen: false);
+
+    tablesProvider.fetchTables();
+    ordersProvider.fetchOrders(isCheckedIn: authProvider.user?.isCheckedIn ?? true);
+
+    if (authProvider.user != null) {
+      SocketService.initSocket(
+        user: authProvider.user,
+        isCheckedIn: authProvider.user?.isCheckedIn ?? true,
+        onOrderCreated: (data) => ordersProvider.handleSocketOrderCreated(data, isCheckedIn: authProvider.user?.isCheckedIn ?? true),
+        onOrderUpdated: (data) => ordersProvider.handleSocketOrderUpdated(data),
+        onChefReady: (data) => ordersProvider.handleSocketOrderUpdated(data),
+        onTableUpdated: (data) => tablesProvider.fetchTables(),
+      );
+    }
+  }
+
   void _refreshData() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     Provider.of<TablesProvider>(context, listen: false).fetchTables();
-    Provider.of<OrdersProvider>(context, listen: false).fetchOrders();
+    Provider.of<OrdersProvider>(context, listen: false).fetchOrders(isCheckedIn: authProvider.user?.isCheckedIn ?? true);
+    if (authProvider.user != null) {
+      SocketService.joinRoom(authProvider.user, isCheckedIn: authProvider.user?.isCheckedIn ?? true);
+    }
   }
 
   void _switchTab(int index) {

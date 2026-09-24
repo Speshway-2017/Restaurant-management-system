@@ -90,14 +90,15 @@ class OrderService {
       await activeSession.save();
     }
 
-    let verifiedCustomerName = reservedGuestName || 'Guest Diner';
-    // STRICT IMMUTABILITY: Once a diner name is established for this session, it is locked and cannot be changed until order/session completes
-    if (activeSession.guestName && activeSession.guestName !== 'Guest Diner' && activeSession.guestName !== 'Guest' && String(activeSession.guestName).trim()) {
-      verifiedCustomerName = String(activeSession.guestName).trim();
-    } else if (data.customer && data.customer !== 'Guest Diner' && data.customer !== 'Guest' && String(data.customer).trim()) {
+    const isGenericDiner = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
+
+    let verifiedCustomerName = (reservedGuestName && !isGenericDiner(reservedGuestName)) ? reservedGuestName : 'Guest Diner';
+    if (data.customer && !isGenericDiner(data.customer)) {
       verifiedCustomerName = String(data.customer).trim();
       activeSession.guestName = verifiedCustomerName;
       await activeSession.save();
+    } else if (activeSession.guestName && !isGenericDiner(activeSession.guestName)) {
+      verifiedCustomerName = String(activeSession.guestName).trim();
     }
 
     // 1. Check if an ACTIVE (open/unpaid) order already exists for this table
