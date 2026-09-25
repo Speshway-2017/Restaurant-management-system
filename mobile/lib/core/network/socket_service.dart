@@ -46,8 +46,10 @@ class SocketService {
       }
     }
 
+    final transports = kIsWeb ? ['websocket', 'polling'] : ['polling', 'websocket'];
+
     _socket = socket_io.io(targetUrl, socket_io.OptionBuilder()
-      .setTransports(['websocket', 'polling'])
+      .setTransports(transports)
       .enableAutoConnect()
       .enableReconnection()
       .setReconnectionAttempts(15)

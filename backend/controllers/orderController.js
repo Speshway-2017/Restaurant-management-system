@@ -359,7 +359,7 @@ const chefAcceptOrder = async (req, res) => {
           chefId: req.user._id.toString(),
           chefName: req.user.name,
           chefStatus: 'ACCEPTED',
-          status: 'Accepted',
+          status: 'Confirmed',
           chefAcceptedAt: new Date(),
           claimedAt: new Date()
         }

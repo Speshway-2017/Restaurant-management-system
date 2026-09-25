@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, Clock, CheckCircle2, ChefHat, BellRing, Plus, Utensils, 
   AlertCircle, Sparkles, ChevronRight, Droplets, Receipt, Check 
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { onSocketEvent } from '../../services/socket';
 
 export default function CustomerOrderTrackingModal({ 
   activeOrder, 
@@ -15,11 +16,56 @@ export default function CustomerOrderTrackingModal({
 }) {
   const [callingWaiter, setCallingWaiter] = useState(false);
   const [waiterCallMsg, setWaiterCallMsg] = useState(null);
+  const [liveOrders, setLiveOrders] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFreshOrders = async () => {
+      try {
+        const freshOrders = await api.getOrders();
+        if (!isMounted || !Array.isArray(freshOrders)) return;
+
+        const targetTable = tableNum || activeOrder?.table || '';
+        const cleanTableNum = String(targetTable).replace(/[^0-9]/g, '');
+        if (!cleanTableNum) return;
+
+        const tableOrders = freshOrders.filter(ord => {
+          const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
+          const isMatch = ordTableDigits && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
+          const isClosed = ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled' || ord.payment === 'Paid' || ord.paymentStatus === 'Paid';
+          return isMatch && !isClosed;
+        });
+
+        if (tableOrders.length > 0) {
+          setLiveOrders(tableOrders);
+        }
+      } catch (e) {}
+    };
+
+    fetchFreshOrders();
+
+    const unsub1 = onSocketEvent('chef_ready', fetchFreshOrders);
+    const unsub2 = onSocketEvent('order_status_updated', fetchFreshOrders);
+    const unsub3 = onSocketEvent('order_updated', fetchFreshOrders);
+    const unsub4 = onSocketEvent('waiter_serving', fetchFreshOrders);
+    const unsub5 = onSocketEvent('waiter_served', fetchFreshOrders);
+
+    return () => {
+      isMounted = false;
+      if (typeof unsub1 === 'function') unsub1();
+      if (typeof unsub2 === 'function') unsub2();
+      if (typeof unsub3 === 'function') unsub3();
+      if (typeof unsub4 === 'function') unsub4();
+      if (typeof unsub5 === 'function') unsub5();
+    };
+  }, [tableNum, activeOrder?.table, activeOrder?.orderId]);
 
   // Collect all available orders for this table session
-  const orderList = Array.isArray(orders) && orders.length > 0 
-    ? orders 
-    : (activeOrder ? [activeOrder] : []);
+  const orderList = (Array.isArray(liveOrders) && liveOrders.length > 0)
+    ? liveOrders
+    : (Array.isArray(orders) && orders.length > 0 
+      ? orders 
+      : (activeOrder ? [activeOrder] : []));
 
   const [selectedOrderIdx, setSelectedOrderIdx] = useState(0);
   const currentOrder = orderList[selectedOrderIdx] || activeOrder || null;
@@ -157,8 +203,6 @@ export default function CustomerOrderTrackingModal({
   }
 
   // 2. ACTIVE ORDER STATUS COMPUTATION
-  const orderStatus = (currentOrder.status || 'Placed').toUpperCase();
-
   const STEPS = [
     { key: 'PLACED', label: 'Placed', icon: Clock },
     { key: 'ACCEPTED', label: 'Confirmed', icon: Check },
@@ -167,15 +211,65 @@ export default function CustomerOrderTrackingModal({
     { key: 'SERVED', label: 'Served', icon: CheckCircle2 }
   ];
 
-  const getStepIndex = (statusStr) => {
-    if (statusStr.includes('COMPLETED') || statusStr.includes('DELIVERED') || statusStr.includes('SERVED')) return 4;
-    if (statusStr.includes('READY')) return 3;
-    if (statusStr.includes('PREPARING') || statusStr.includes('COOKING') || statusStr.includes('IN_PROGRESS')) return 2;
-    if (statusStr.includes('ACCEPTED') || statusStr.includes('APPROVED')) return 1;
+  const getStepIndex = (ord) => {
+    if (!ord) return 0;
+    const statusStr = String(ord.status || '').toUpperCase();
+    const chefStr = String(ord.chefStatus || '').toUpperCase();
+    const waiterStr = String(ord.waiterStatus || '').toUpperCase();
+    const items = Array.isArray(ord.items) ? ord.items : [];
+    const activeItems = items.filter(it => it.status !== 'CANCELLED' && it.status !== 'Cancelled');
+
+    // 4. SERVED
+    const isServed = statusStr === 'SERVED' ||
+                     waiterStr === 'SERVED' ||
+                     statusStr.includes('COMPLETED') ||
+                     statusStr.includes('DELIVERED') ||
+                     (activeItems.length > 0 && activeItems.every(it => it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED'));
+    if (isServed) return 4;
+
+    // 3. READY
+    const isReady = statusStr === 'READY' ||
+                    chefStr === 'READY' ||
+                    statusStr.includes('READY') ||
+                    (activeItems.length > 0 && activeItems.every(it => it.isReady || it.status === 'READY' || it.status === 'READY_FOR_PASS' || it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED'));
+    if (isReady) return 3;
+
+    // 2. COOKING / PREPARING
+    const isCooking = statusStr === 'PREPARING' ||
+                      statusStr === 'COOKING' ||
+                      statusStr === 'PARTIALLY DELIVERED' ||
+                      chefStr === 'PREPARING' ||
+                      chefStr === 'COOKING' ||
+                      statusStr.includes('PREPARING') ||
+                      statusStr.includes('COOKING') ||
+                      statusStr.includes('IN_PROGRESS') ||
+                      activeItems.some(it => it.status === 'PREPARING' || it.status === 'COOKING' || it.isReady || it.status === 'READY' || it.status === 'READY_FOR_PASS');
+    if (isCooking) return 2;
+
+    // 1. CONFIRMED / ACCEPTED
+    const isConfirmed = statusStr === 'ACCEPTED' ||
+                        statusStr === 'CONFIRMED' ||
+                        chefStr === 'ACCEPTED' ||
+                        waiterStr === 'ACCEPTED' ||
+                        statusStr.includes('ACCEPTED') ||
+                        statusStr.includes('CONFIRMED') ||
+                        statusStr.includes('APPROVED');
+    if (isConfirmed) return 1;
+
+    // 0. PLACED
     return 0;
   };
 
-  const currentStepIdx = getStepIndex(orderStatus);
+  const currentStepIdx = getStepIndex(currentOrder);
+
+  const isBillGen = Boolean(
+    currentOrder.isBillGenerated ||
+    currentOrder.billGenerated ||
+    currentOrder.status === 'Bill Generated' ||
+    currentOrder.status === 'Billing' ||
+    currentOrder.payment === 'Awaiting Payment' ||
+    currentOrder.paymentStatus === 'Awaiting Payment'
+  );
 
   // Status Highlight Message
   const getStatusDetails = (idx) => {
@@ -408,6 +502,51 @@ export default function CustomerOrderTrackingModal({
             </div>
           )}
 
+          {/* Bill Generated Banner */}
+          {isBillGen && (
+            <div style={{
+              marginBottom: '1rem',
+              padding: '0.85rem 1rem',
+              backgroundColor: '#F3E8FF',
+              borderRadius: '14px',
+              border: '1.5px solid #C084FC',
+              color: '#6B21A8',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 4px 12px rgba(107, 33, 168, 0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <Receipt size={22} color="#6B21A8" />
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: '0.88rem' }}>Bill Generated — Awaiting Payment</div>
+                  <div style={{ fontSize: '0.78rem', color: '#7E22CE', marginTop: '0.1rem' }}>
+                    Total: ₹{totalAmount.toFixed(0)} • Tap to view GST breakdown & pay
+                  </div>
+                </div>
+              </div>
+              {onViewBill && (
+                <button
+                  onClick={onViewBill}
+                  style={{
+                    padding: '0.45rem 0.85rem',
+                    backgroundColor: '#6B21A8',
+                    color: '#FFFFFF',
+                    borderRadius: '10px',
+                    border: 'none',
+                    fontWeight: 800,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 4px 10px rgba(107, 33, 168, 0.25)'
+                  }}
+                >
+                  View Bill
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Stepper Container with Connected Timeline Bar */}
           <div style={{
             backgroundColor: '#F8FAFC',
@@ -612,6 +751,8 @@ export default function CustomerOrderTrackingModal({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {orderItems.map((item, idx) => {
                 const isCancelled = item.status === 'CANCELLED' || item.status === 'Cancelled';
+                const isDeliveredItem = Boolean(item.isDelivered || item.status === 'DELIVERED' || item.status === 'SERVED');
+                const isReadyItem = !isDeliveredItem && Boolean(item.isReady || item.status === 'READY' || item.status === 'READY_FOR_PASS');
                 const itemName = item.name || 'Dish Item';
                 const itemQty = Number(item.quantity) || 1;
                 const itemPrice = Number(item.price) || 0;
@@ -677,16 +818,16 @@ export default function CustomerOrderTrackingModal({
                         borderRadius: '9999px',
                         backgroundColor: isCancelled 
                           ? '#FEE2E2' 
-                          : (item.isDelivered ? '#DCFCE7' : (item.isReady ? '#FEF9C3' : '#EFF6FF')),
+                          : (isDeliveredItem ? '#DCFCE7' : (isReadyItem ? '#FEF9C3' : '#EFF6FF')),
                         color: isCancelled 
                           ? '#991B1B' 
-                          : (item.isDelivered ? '#15803D' : (item.isReady ? '#854D0E' : '#1D4ED8')),
+                          : (isDeliveredItem ? '#15803D' : (isReadyItem ? '#854D0E' : '#1D4ED8')),
                         border: isCancelled 
                           ? '1px solid #FCA5A5' 
-                          : (item.isDelivered ? '1px solid #86EFAC' : (item.isReady ? '1px solid #FDE047' : '1px solid #BFDBFE')),
+                          : (isDeliveredItem ? '1px solid #86EFAC' : (isReadyItem ? '1px solid #FDE047' : '1px solid #BFDBFE')),
                         whiteSpace: 'nowrap'
                       }}>
-                        {isCancelled ? 'Cancelled' : (item.isDelivered ? 'Served' : (item.isReady ? 'Ready' : 'Preparing'))}
+                        {isCancelled ? 'Cancelled' : (isDeliveredItem ? 'Served' : (isReadyItem ? 'Ready' : 'Preparing'))}
                       </span>
                     </div>
 

@@ -9,7 +9,10 @@ const initSocket = (httpServer) => {
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
       credentials: true
     },
-    transports: ['websocket', 'polling']
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
   });
 
   io.on('connection', (socket) => {
@@ -85,26 +88,35 @@ const notifyChefAccepted = (order) => {
   if (!io || !order) return;
   const managerId = order.managerId;
   const chefRoom = managerId ? `chef_${managerId}` : null;
-  emitToRoleAndManager(managerId, chefRoom, null, 'chef_accepted', {
+  const payload = {
     order,
     orderId: order.orderId || order._id,
     chefId: order.chefId,
     chefName: order.chefName,
+    status: order.status,
     message: `Order #${order.orderId || order._id} accepted by Chef ${order.chefName || ''}`
-  });
+  };
+  emitToRoleAndManager(managerId, chefRoom, null, 'chef_accepted', payload);
+  // Also emit generic events so every dashboard (incl. customer tracking) picks up the change
+  io.emit('order_status_updated', { order, status: order.status });
+  io.emit('order_updated', { order });
 };
 
 const notifyChefPreparing = (order) => {
   if (!io || !order) return;
   const managerId = order.managerId;
   const chefRoom = managerId ? `chef_${managerId}` : null;
-  emitToRoleAndManager(managerId, chefRoom, null, 'chef_preparing', {
+  const payload = {
     order,
     orderId: order.orderId || order._id,
     chefId: order.chefId,
     chefName: order.chefName,
+    status: order.status,
     message: `Order #${order.orderId || order._id} is being prepared by Chef ${order.chefName || ''}`
-  });
+  };
+  emitToRoleAndManager(managerId, chefRoom, null, 'chef_preparing', payload);
+  io.emit('order_status_updated', { order, status: order.status });
+  io.emit('order_updated', { order });
 };
 
 const notifyChefReady = (order) => {
@@ -122,6 +134,7 @@ const notifyChefReady = (order) => {
     items: order.items || [],
     chefName: order.chefName || 'Kitchen Chef',
     chefId: order.chefId,
+    status: order.status,
     readyStatus: true,
     message: `Order #${order.orderId || order._id} is ready for Table ${order.table || ''}`
   };
@@ -145,6 +158,8 @@ const notifyChefReady = (order) => {
   }
   // Global broadcast
   io.emit('chef_ready', payload);
+  io.emit('order_status_updated', { order, status: order.status });
+  io.emit('order_updated', { order });
 };
 
 const notifyWaiterAccepted = (order) => {
@@ -159,6 +174,8 @@ const notifyWaiterAccepted = (order) => {
     waiterName: order.waiterName,
     message: `Order #${order.orderId || order._id} accepted by Waiter ${order.waiterName || ''}`
   });
+  io.emit('order_status_updated', { order, status: order.status });
+  io.emit('order_updated', { order });
 };
 
 const notifyWaiterServing = (order) => {
@@ -173,6 +190,8 @@ const notifyWaiterServing = (order) => {
     waiterName: order.waiterName,
     message: `Order #${order.orderId || order._id} is being served to Table ${order.table || ''}`
   });
+  io.emit('order_status_updated', { order, status: order.status });
+  io.emit('order_updated', { order });
 };
 
 const notifyWaiterServed = (order) => {
@@ -187,6 +206,8 @@ const notifyWaiterServed = (order) => {
     waiterName: order.waiterName,
     message: `Order #${order.orderId || order._id} served to Table ${order.table || ''}`
   });
+  io.emit('order_status_updated', { order, status: order.status });
+  io.emit('order_updated', { order });
 };
 
 const notifyReservationCreated = (reservation) => {

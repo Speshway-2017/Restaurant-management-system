@@ -39,14 +39,14 @@ export default function MenuPage({ onOpenDemoModal }) {
       const urlParams = new URLSearchParams(window.location.search);
       const urlTableParam = urlParams.get('table');
 
-      // Only display table number if explicit table parameter exists in URL (e.g. ?table=T-02 from QR scan)
       if (urlTableParam && urlTableParam.trim()) {
         const upper = urlTableParam.trim().toUpperCase();
         sessionStorage.setItem('flavora_scanned_table', upper);
         localStorage.setItem('flavora_scanned_table', upper);
         return upper;
       }
-      return '';
+      const saved = sessionStorage.getItem('flavora_scanned_table') || localStorage.getItem('flavora_scanned_table') || '';
+      return saved ? saved.trim().toUpperCase() : '';
     } catch (e) {
       return '';
     }
@@ -179,12 +179,15 @@ export default function MenuPage({ onOpenDemoModal }) {
 
   const [placedTableOrders, setPlacedTableOrders] = useState(() => {
     try {
-      const currentTable = tableNum;
+      const currentTable = tableNum || (typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('table') || sessionStorage.getItem('flavora_scanned_table') || localStorage.getItem('flavora_scanned_table')) : '');
       if (currentTable) {
-        const saved = localStorage.getItem(`flavora_table_orders_${currentTable}`);
+        const cleanT = String(currentTable).trim().toUpperCase().replace('TABLE', '').replace('T-', '');
+        const saved = localStorage.getItem(`flavora_table_orders_${cleanT}`) ||
+                      localStorage.getItem(`flavora_table_orders_${currentTable}`) ||
+                      localStorage.getItem(`flavora_orders_${cleanT}`);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             return parsed.filter(o => {
               const isClosedOrPaid = o.status === 'Completed' || o.status === 'Paid' || o.status === 'Cancelled' || o.payment === 'Paid' || o.payment === 'Completed' || o.paymentStatus === 'Paid';
               return o.status && !isClosedOrPaid;
@@ -293,29 +296,30 @@ export default function MenuPage({ onOpenDemoModal }) {
 
         const allOrderSources = [...(Array.isArray(orders) ? orders : []), ...(Array.isArray(localOrders) ? localOrders : [])];
         let activeBackendOrders = [];
-        if (allOrderSources.length > 0 && activeSess && (!matchedTbl || matchedTbl.status !== 'Cleaning')) {
+        if (allOrderSources.length > 0 && (!matchedTbl || matchedTbl.status !== 'Cleaning')) {
           const seen = new Set();
           activeBackendOrders = allOrderSources.filter(ord => {
             const rawId = ord.orderId || ord.id || ord._id;
-            if (rawId && seen.has(String(rawId))) return false;
-            if (rawId) seen.add(String(rawId));
+            if (!rawId || seen.has(String(rawId))) return false;
+            seen.add(String(rawId));
 
             const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
             const isMatch = ordTableDigits && cleanTableNum && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
             const isClosedOrPaid = ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled' || ord.payment === 'Paid' || ord.payment === 'Completed' || ord.paymentStatus === 'Paid';
 
-            // STRICT SESSION ISOLATION:
-            // Ensure order belongs to CURRENT active session
-            const matchesSession = Boolean(
-              (ord.sessionId && (ord.sessionId === String(activeSess._id) || ord.sessionId === activeSess.sessionToken)) ||
-              (ord.sessionToken && ord.sessionToken === activeSess.sessionToken) ||
-              (activeSess.orderId && (String(activeSess.orderId) === String(ord.orderId) || String(activeSess.orderId) === String(ord._id)))
-            );
+            if (!isMatch || isClosedOrPaid) return false;
 
-            if (ord.sessionId || ord.sessionToken) {
-              return isMatch && !isClosedOrPaid && matchesSession;
+            // Session isolation check: if activeSession exists and session token/id is present, check match
+            if (activeSess && (ord.sessionId || ord.sessionToken)) {
+              const matchesSession = Boolean(
+                (ord.sessionId && (String(ord.sessionId) === String(activeSess._id) || String(ord.sessionId) === String(activeSess.sessionToken))) ||
+                (ord.sessionToken && String(ord.sessionToken) === String(activeSess.sessionToken)) ||
+                (activeSess.orderId && (String(activeSess.orderId) === String(ord.orderId) || String(activeSess.orderId) === String(ord._id)))
+              );
+              return matchesSession;
             }
-            return isMatch && !isClosedOrPaid;
+
+            return true;
           });
         }
 
@@ -347,10 +351,15 @@ export default function MenuPage({ onOpenDemoModal }) {
           });
 
           const mappedActive = activeBackendOrders.map(ao => ({
+            _id: ao._id || ao.id,
             orderId: ao.orderId || ao.id || ao._id,
             table: ao.table || tableNum,
             customer: ao.customer || 'Guest Diner',
             status: ao.status || 'Placed',
+            chefStatus: ao.chefStatus || 'NEW',
+            waiterStatus: ao.waiterStatus || 'PENDING',
+            payment: ao.payment || 'Pending',
+            paymentStatus: ao.paymentStatus || 'Pending',
             isBillGenerated: Boolean(
               ao.isBillGenerated ||
               ao.billGenerated ||
@@ -361,12 +370,29 @@ export default function MenuPage({ onOpenDemoModal }) {
             ),
             items: ao.items || [],
             totalAmount: ao.total || 0,
-            chefNotes: ao.notes || ''
+            total: ao.total || 0,
+            chefNotes: ao.notes || '',
+            sessionId: ao.sessionId || '',
+            sessionToken: ao.sessionToken || '',
+            createdAt: ao.createdAt || new Date().toISOString()
           }));
           setPlacedTableOrders(mappedActive);
-        } else {
+          try {
+            const cleanT = String(tableNum).toUpperCase().replace('TABLE', '').replace('T-', '').trim();
+            localStorage.setItem(`flavora_table_orders_${cleanT}`, JSON.stringify(mappedActive));
+            localStorage.setItem(`flavora_table_orders_${tableNum}`, JSON.stringify(mappedActive));
+            localStorage.setItem(`flavora_orders_${cleanT}`, JSON.stringify(mappedActive));
+          } catch (e) { }
+        } else if (Array.isArray(orders)) {
           setTableOccupiedInfo(null);
           setPlacedTableOrders([]);
+          try {
+            const cleanT = String(tableNum).toUpperCase().replace('TABLE', '').replace('T-', '').trim();
+            localStorage.removeItem(`flavora_table_orders_${cleanT}`);
+            localStorage.removeItem(`flavora_table_orders_${tableNum}`);
+            localStorage.removeItem(`flavora_orders_${cleanT}`);
+          } catch (e) { }
+        }
 
           // Check for recently paid/completed order on this table belonging to CURRENT session
           const recentCompletedOrder = allOrderSources.find(ord => {
@@ -390,7 +416,6 @@ export default function MenuPage({ onOpenDemoModal }) {
               setIsEngagementModalOpen(true);
             }
           }
-        }
 
         // 4. Determine resolved table status for customer view
         let resolvedStatus = 'Available';
@@ -447,6 +472,17 @@ export default function MenuPage({ onOpenDemoModal }) {
     });
     const unsubOrder = onSocketEvent('order_status_updated', () => checkTableStatus());
     const unsubOrderCreated = onSocketEvent('order_created', () => checkTableStatus());
+
+    // ── Lifecycle events: Chef Accept → Cooking → Ready, Waiter Serving → Served ──
+    // These are the actual socket events emitted by the backend on each transition.
+    // Without these, the customer tracking screen stayed stuck at "Placed" because
+    // chef_accepted / chef_preparing / chef_ready never triggered checkTableStatus.
+    const unsubChefAccepted  = onSocketEvent('chef_accepted',  () => checkTableStatus());
+    const unsubChefPreparing = onSocketEvent('chef_preparing', () => checkTableStatus());
+    const unsubChefReady     = onSocketEvent('chef_ready',     () => checkTableStatus());
+    const unsubWaiterServing = onSocketEvent('waiter_serving', () => checkTableStatus());
+    const unsubWaiterServed  = onSocketEvent('waiter_served',  () => checkTableStatus());
+    const unsubOrderUpdated  = onSocketEvent('order_updated',  () => checkTableStatus());
     const unsubBillGen = onSocketEvent('bill_generated', (data) => {
       checkTableStatus();
       const cleanCurrentT = String(tableNum || '').replace(/[^0-9]/g, '');
@@ -466,6 +502,12 @@ export default function MenuPage({ onOpenDemoModal }) {
       if (typeof unsubOrder === 'function') unsubOrder();
       if (typeof unsubOrderCreated === 'function') unsubOrderCreated();
       if (typeof unsubBillGen === 'function') unsubBillGen();
+      if (typeof unsubChefAccepted === 'function') unsubChefAccepted();
+      if (typeof unsubChefPreparing === 'function') unsubChefPreparing();
+      if (typeof unsubChefReady === 'function') unsubChefReady();
+      if (typeof unsubWaiterServing === 'function') unsubWaiterServing();
+      if (typeof unsubWaiterServed === 'function') unsubWaiterServed();
+      if (typeof unsubOrderUpdated === 'function') unsubOrderUpdated();
       window.removeEventListener('flavora_orders_updated', checkTableStatus);
       window.removeEventListener('flavora_tables_updated', checkTableStatus);
       window.removeEventListener('storage', checkTableStatus);
@@ -987,6 +1029,8 @@ export default function MenuPage({ onOpenDemoModal }) {
         }
 
         setPlacedTableOrders(savedOrders);
+        localStorage.setItem(`flavora_table_orders_${cleanT}`, JSON.stringify(savedOrders));
+        localStorage.setItem(`flavora_table_orders_${activeTable}`, JSON.stringify(savedOrders));
         localStorage.setItem(`flavora_orders_${cleanT}`, JSON.stringify(savedOrders));
         localStorage.setItem(`flavora_table_session_${cleanT}`, JSON.stringify({ isOccupied: true, orderId: backendOrderId }));
         window.dispatchEvent(new Event('flavora_orders_updated'));
@@ -1407,15 +1451,24 @@ export default function MenuPage({ onOpenDemoModal }) {
                     </div>
                     <input
                       type="text"
-                      placeholder="Enter your name (e.g. John)"
+                      placeholder="Enter your full name (e.g. Kiran)"
                       value={guestName}
                       onChange={(e) => {
+                        // Only update React state — do NOT write to sessionStorage here.
+                        // Writing on every keystroke caused the name to lock after 1 letter.
+                        setGuestName(e.target.value);
+                      }}
+                      onBlur={(e) => {
+                        // Persist to sessionStorage only when the user finishes typing (blur).
                         const val = e.target.value;
-                        setGuestName(val);
+                        if (!val.trim()) return;
                         try {
                           const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val);
+                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val.trim());
                         } catch (err) { }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.target.blur();
                       }}
                       className="form-control"
                       style={{
@@ -2615,15 +2668,24 @@ export default function MenuPage({ onOpenDemoModal }) {
                   </div>
                   <input
                     type="text"
-                    placeholder="Enter your name (e.g. John)"
+                    placeholder="Enter your full name (e.g. Kiran)"
                     value={guestName}
                     onChange={(e) => {
+                      // Only update React state — do NOT write to sessionStorage here.
+                      // Writing on every keystroke caused the name to lock after 1 letter.
+                      setGuestName(e.target.value);
+                    }}
+                    onBlur={(e) => {
+                      // Persist to sessionStorage only when the user finishes typing (blur).
                       const val = e.target.value;
-                      setGuestName(val);
+                      if (!val.trim()) return;
                       try {
                         const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                        sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val);
+                        sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val.trim());
                       } catch (err) { }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.target.blur();
                     }}
                     className="form-control"
                     style={{

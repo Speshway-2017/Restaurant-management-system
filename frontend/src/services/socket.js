@@ -9,7 +9,7 @@ export const getSocket = () => {
       : 'http://localhost:5000';
 
     socket = io(backendUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000

@@ -36,7 +36,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final tablesProvider = Provider.of<TablesProvider>(context, listen: false);
 
     tablesProvider.fetchTables();
-    ordersProvider.fetchOrders(isCheckedIn: authProvider.user?.isCheckedIn ?? true);
+    ordersProvider.fetchOrders();
 
     if (authProvider.user != null) {
       SocketService.initSocket(
@@ -53,7 +53,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _refreshData() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     Provider.of<TablesProvider>(context, listen: false).fetchTables();
-    Provider.of<OrdersProvider>(context, listen: false).fetchOrders(isCheckedIn: authProvider.user?.isCheckedIn ?? true);
+    Provider.of<OrdersProvider>(context, listen: false).fetchOrders();
     if (authProvider.user != null) {
       SocketService.joinRoom(authProvider.user, isCheckedIn: authProvider.user?.isCheckedIn ?? true);
     }
