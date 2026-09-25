@@ -137,6 +137,16 @@ class OrderModel {
   }
   bool get canGenerateBill => areAllItemsServed && !isPaid && !isBillGenerated;
 
+  int get cancellableItemsCount => activeItems.where((it) =>
+    !it.isDelivered &&
+    it.status != 'SERVED' &&
+    it.status != 'DELIVERED' &&
+    !it.isReady &&
+    it.status != 'READY'
+  ).length;
+
+  bool get hasCancellableItems => !isPaid && !isServed && status != 'Completed' && status != 'Cancelled' && cancellableItemsCount > 0;
+
   double get calculatedSubtotal {
     double sum = 0;
     for (var item in items) {

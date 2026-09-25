@@ -246,27 +246,29 @@ export default function ChefKdsPassPage({
                   const isOrderAccepted = !isStarted && (ord.chefStatus === 'ACCEPTED' || Boolean(ord.chefId));
 
                   return activeItems.map((item, idx) => {
+                    const origIdx = (ord.items || []).findIndex(it => it === item || (it && item && (it.id === item.id || it._id === item._id || it.name === item.name)));
+                    const targetIdx = origIdx !== -1 ? origIdx : idx;
                     const cleanId = String(ord.id || ord.orderId || '').replace(/^#/i, '').trim();
-                    const itemKey = `${cleanId}-${idx}`;
-                    const isUpdating = Boolean(updatingDishItems && (updatingDishItems[itemKey] || updatingDishItems[`${ord.id}-${idx}`]));
+                    const itemKey = `${cleanId}-${targetIdx}`;
+                    const isUpdating = Boolean(updatingDishItems && (updatingDishItems[itemKey] || updatingDishItems[`${ord.id}-${targetIdx}`]));
                     const isOrderReadyOverall = ord.status === 'Ready' || ord.status === 'Served' || ord.status === 'Completed' || ord.status === 'Paid';
-                    const isCancelled = item.status === 'CANCELLED';
+                    const isCancelled = item.status === 'CANCELLED' || item.isCancelled;
                     const isDelivered = !isCancelled && (item.isDelivered || item.status === 'SERVED' || item.status === 'DELIVERED');
-                    const isCheckedInMap = Boolean(checkedDishItems[ord.id]?.[idx] || checkedDishItems[cleanId]?.[idx] || checkedDishItems[`#${cleanId}`]?.[idx]);
+                    const isCheckedInMap = Boolean(checkedDishItems[ord.id]?.[targetIdx] || checkedDishItems[cleanId]?.[targetIdx] || checkedDishItems[`#${cleanId}`]?.[targetIdx]);
                     const isReady = !isCancelled && !isDelivered && (isOrderReadyOverall || item.isReady || item.status === 'READY' || isCheckedInMap);
                     const isCooking = isStarted && !isReady && !isDelivered && !isCancelled;
                     const isItemAccepted = !isStarted && !isReady && !isDelivered && !isCancelled && isOrderAccepted;
 
                     return (
                       <div
-                        key={idx}
+                        key={targetIdx}
                         onClick={() => {
                           if (isCancelled || isDelivered || isUpdating) return;
                           if (!isStarted) {
                             alert('⚠️ Click "🔥 Start Cooking" below to start preparing dishes!');
                             return;
                           }
-                          handleToggleItemCheck(ord.id, idx);
+                          handleToggleItemCheck(ord.id, targetIdx);
                         }}
                         title={isCancelled ? 'Dish cancelled by waiter/customer' : (!isStarted ? '⚠️ Click "🔥 Start Cooking" below to start preparing & ticking dishes' : (isDelivered ? 'Dish already served' : 'Click to toggle dish ready status'))}
                         style={{

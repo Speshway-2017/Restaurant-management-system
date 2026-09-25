@@ -71,9 +71,11 @@ orderSchema.pre('save', function(next) {
     this.paymentStatus = 'Paid';
     if (Array.isArray(this.items)) {
       this.items.forEach(it => {
-        it.status = 'DELIVERED';
-        it.isDelivered = true;
-        it.isReady = true;
+        if (it.status !== 'CANCELLED' && !it.isCancelled) {
+          it.status = 'DELIVERED';
+          it.isDelivered = true;
+          it.isReady = true;
+        }
       });
     }
   } else if (this.status === 'Bill Generated' || this.status === 'Awaiting Payment' || this.payment === 'Bill Generated' || this.payment === 'Awaiting Payment') {

@@ -35,6 +35,18 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
   }
 
   @override
+  void didUpdateWidget(covariant WaiterOrdersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTabIndex != widget.initialTabIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _tabController.animateTo(widget.initialTabIndex.clamp(0, 4));
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();

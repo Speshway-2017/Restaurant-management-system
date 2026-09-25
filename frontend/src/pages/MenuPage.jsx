@@ -490,6 +490,7 @@ export default function MenuPage({ onOpenDemoModal }) {
     const unsubWaiterServing = onSocketEvent('waiter_serving', () => checkTableStatus());
     const unsubWaiterServed  = onSocketEvent('waiter_served',  () => checkTableStatus());
     const unsubOrderUpdated  = onSocketEvent('order_updated',  () => checkTableStatus());
+    const unsubItemCancelled = onSocketEvent('order_item_cancelled', () => checkTableStatus());
     const unsubBillGen = onSocketEvent('bill_generated', (data) => {
       checkTableStatus();
       const cleanCurrentT = String(tableNum || '').replace(/[^0-9]/g, '');
@@ -515,6 +516,7 @@ export default function MenuPage({ onOpenDemoModal }) {
       if (typeof unsubWaiterServing === 'function') unsubWaiterServing();
       if (typeof unsubWaiterServed === 'function') unsubWaiterServed();
       if (typeof unsubOrderUpdated === 'function') unsubOrderUpdated();
+      if (typeof unsubItemCancelled === 'function') unsubItemCancelled();
       window.removeEventListener('flavora_orders_updated', checkTableStatus);
       window.removeEventListener('flavora_tables_updated', checkTableStatus);
       window.removeEventListener('storage', checkTableStatus);

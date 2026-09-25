@@ -106,9 +106,10 @@ class OrderRepository {
 
       if (fullOrderData.items && Array.isArray(fullOrderData.items)) {
         doc.items = fullOrderData.items.map((it, idx) => {
-          const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
-          const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY'));
-          const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (it.status === 'CANCELLED' ? 'CANCELLED' : (it.status || 'PREPARING')));
+          const isCancelled = Boolean(it.isCancelled || it.status === 'CANCELLED' || it.status === 'Cancelled');
+          const isDelivered = !isCancelled && Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
+          const isReady = !isCancelled && !isDelivered && Boolean(it.isReady || it.status === 'READY');
+          const itemStatus = isCancelled ? 'CANCELLED' : (isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (it.status || 'PREPARING')));
 
           return {
             id: String(it.id || it._id || `item-${idx}`),
@@ -116,6 +117,8 @@ class OrderRepository {
             price: Number(it.price) || 0,
             quantity: Number(it.quantity || it.qty || 1),
             status: itemStatus,
+            isCancelled: isCancelled,
+            cancellationReason: it.cancellationReason || '',
             isReady: isReady,
             isDelivered: isDelivered
           };

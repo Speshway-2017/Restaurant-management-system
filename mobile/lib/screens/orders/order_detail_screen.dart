@@ -18,9 +18,7 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
-  final Set<String> _selectedCancelItems = {};
   final Set<String> _selectedDeliverItems = {};
-  final _cancelReasonController = TextEditingController();
   bool _isActionLoading = false;
   Timer? _refreshTimer;
   String? _currentOrderId;
@@ -41,7 +39,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   void _initSelectionState(OrderModel ord) {
     _selectedDeliverItems.clear();
-    _selectedCancelItems.clear();
 
     // Auto-select all READY items initially for convenient delivery
     for (var item in ord.activeItems) {
@@ -71,68 +68,329 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
-    _cancelReasonController.dispose();
     super.dispose();
   }
 
-  void _showCancelDialog() {
-    if (_selectedCancelItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one item to cancel.')),
-      );
+  void _showCancelDialog(OrderModel currentOrd) {
+    if (!currentOrd.hasCancellableItems) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ All dishes in this order have already been served or cancelled.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
+
+    final List<String> modalSelectedCancelItems = [];
+    String modalCancelReason = 'Customer changed mind';
+    bool isSubmittingModal = false;
+
+    final reasonOptions = [
+      'Customer changed mind',
+      'Item unavailable / Out of stock',
+      'Wrong item ordered',
+      'Duplicate item',
+      'Kitchen delay / Kitchen issue',
+      'Other reason',
+    ];
 
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Request Item Cancellation'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Items to cancel: ${_selectedCancelItems.join(', ')}'),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _cancelReasonController,
-                decoration: const InputDecoration(
-                  labelText: 'Cancellation Reason',
-                  hintText: 'Customer changed mind / Out of stock',
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            final cancellableItemsCount = modalSelectedCancelItems.length;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '⚠️ Request Order / Item Cancellation',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF991B1B)),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
+                    onPressed: isSubmittingModal ? null : () => Navigator.pop(dialogCtx),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.9,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Table ${currentOrd.table} (Order #${currentOrd.orderId}). Select pending dishes to cancel:',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                      ),
+                      const SizedBox(height: 12),
+
+                      const Text(
+                        'Select Dishes to Cancel:',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2A1D)),
+                      ),
+                      const SizedBox(height: 6),
+
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                        ),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(6),
+                          child: Column(
+                            children: currentOrd.items.map((it) {
+                              final bool isServed = it.isDelivered || it.status == 'SERVED' || it.status == 'DELIVERED';
+                              final bool isReady = !isServed && !it.isCancelled && (it.isReady || it.status == 'READY');
+                              final bool isCancelled = it.isCancelled || it.status == 'CANCELLED';
+                              final bool isNonCancellable = isServed || isReady || isCancelled;
+
+                              final String itemKey = it.id.isNotEmpty ? it.id : (it.name.isNotEmpty ? it.name : 'Dish');
+                              final bool isChecked = modalSelectedCancelItems.contains(itemKey) || modalSelectedCancelItems.contains(it.name);
+
+                              return Container(
+                                margin: const EdgeInsets.symmetric(vertical: 3),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isNonCancellable
+                                      ? const Color(0xFFF1F5F9)
+                                      : (isChecked ? const Color(0xFFFEF2F2) : Colors.white),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isNonCancellable
+                                        ? const Color(0xFFE2E8F0)
+                                        : (isChecked ? const Color(0xFFFCA5A5) : const Color(0xFFE2E8F0)),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Checkbox(
+                                      activeColor: const Color(0xFFDC2626),
+                                      value: isChecked,
+                                      onChanged: (isNonCancellable || isSubmittingModal)
+                                          ? null
+                                          : (val) {
+                                              setDialogState(() {
+                                                if (val == true) {
+                                                  if (!modalSelectedCancelItems.contains(itemKey)) {
+                                                    modalSelectedCancelItems.add(itemKey);
+                                                  }
+                                                  if (it.name.isNotEmpty && !modalSelectedCancelItems.contains(it.name)) {
+                                                    modalSelectedCancelItems.add(it.name);
+                                                  }
+                                                } else {
+                                                  modalSelectedCancelItems.remove(itemKey);
+                                                  modalSelectedCancelItems.remove(it.name);
+                                                }
+                                              });
+                                            },
+                                    ),
+                                    Expanded(
+                                      child: RichText(
+                                        text: TextSpan(
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isNonCancellable ? const Color(0xFF64748B) : const Color(0xFF0F2A1D),
+                                            decoration: isCancelled ? TextDecoration.lineThrough : null,
+                                          ),
+                                          children: [
+                                            TextSpan(
+                                              text: '${it.quantity}x ',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: isNonCancellable ? const Color(0xFF64748B) : const Color(0xFFE07A3C),
+                                              ),
+                                            ),
+                                            TextSpan(
+                                              text: it.name,
+                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: isServed
+                                            ? const Color(0xFFE2E8F0)
+                                            : (isReady
+                                                ? const Color(0xFFDCFCE7)
+                                                : (isCancelled ? const Color(0xFFFEE2E2) : const Color(0xFFFFEDD5))),
+                                        borderRadius: BorderRadius.circular(5),
+                                      ),
+                                      child: Text(
+                                        isServed
+                                            ? '🚫 Served (Cannot cancel)'
+                                            : (isReady
+                                                ? '🔔 Ready (Cannot cancel)'
+                                                : (isCancelled ? 'Cancelled' : '⏳ Pending (Can cancel)')),
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                          color: isServed
+                                              ? const Color(0xFF64748B)
+                                              : (isReady
+                                                  ? const Color(0xFF166534)
+                                                  : (isCancelled ? const Color(0xFF991B1B) : const Color(0xFFC2410C))),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      const Text(
+                        'Cancellation Reason Code:',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2A1D)),
+                      ),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue: modalCancelReason,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        items: reasonOptions.map((r) {
+                          return DropdownMenuItem<String>(
+                            value: r,
+                            child: Text(r, style: const TextStyle(fontSize: 12, color: Color(0xFF0F2A1D))),
+                          );
+                        }).toList(),
+                        onChanged: isSubmittingModal
+                            ? null
+                            : (val) {
+                                if (val != null) {
+                                  setDialogState(() {
+                                    modalCancelReason = val;
+                                  });
+                                }
+                              },
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Back'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.cancelledText),
-              onPressed: () async {
-                Navigator.pop(ctx);
-                final messenger = ScaffoldMessenger.of(context);
-                final user = Provider.of<AuthProvider>(context, listen: false).user;
-                final provider = Provider.of<OrdersProvider>(context, listen: false);
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              actions: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: (cancellableItemsCount == 0 || isSubmittingModal) ? Colors.grey : const Color(0xFFDC2626),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: (cancellableItemsCount == 0 || isSubmittingModal)
+                            ? null
+                            : () async {
+                                setDialogState(() {
+                                  isSubmittingModal = true;
+                                });
 
-                setState(() => _isActionLoading = true);
-                final success = await provider.requestCancelItems(
-                  widget.order.id,
-                  _selectedCancelItems.toList(),
-                  _cancelReasonController.text.trim(),
-                  user?.name ?? 'Waiter',
-                );
-                setState(() => _isActionLoading = false);
+                                final user = Provider.of<AuthProvider>(context, listen: false).user;
+                                final provider = Provider.of<OrdersProvider>(context, listen: false);
 
-                if (success && mounted) {
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('Cancellation request sent to manager for approval!')),
-                  );
-                }
-              },
-              child: const Text('Submit Request', style: TextStyle(color: Colors.white)),
-            ),
-          ],
+                                // Collect target dish identifiers (IDs & names)
+                                final List<String> targets = [];
+                                for (var sel in modalSelectedCancelItems) {
+                                  if (sel.isNotEmpty && !targets.contains(sel)) {
+                                    targets.add(sel);
+                                  }
+                                  for (var item in currentOrd.items) {
+                                    if (item.id == sel || item.name == sel) {
+                                      if (item.id.isNotEmpty && !targets.contains(item.id)) {
+                                        targets.add(item.id);
+                                      }
+                                      if (item.name.isNotEmpty && !targets.contains(item.name)) {
+                                        targets.add(item.name);
+                                      }
+                                    }
+                                  }
+                                }
+
+                                final success = await provider.requestCancelItems(
+                                  currentOrd.id,
+                                  targets,
+                                  modalCancelReason,
+                                  user?.name ?? 'Waiter',
+                                );
+
+                                if (dialogCtx.mounted) {
+                                  Navigator.pop(dialogCtx);
+                                }
+
+                                if (mounted) {
+                                  if (success) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('✓ Cancellation request submitted successfully!'),
+                                        backgroundColor: AppColors.accentGreen,
+                                      ),
+                                    );
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(
+                                            '❌ ${provider.error ?? "Failed to submit cancellation request."}',
+                                                ),
+                                                 backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        child: isSubmittingModal
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                'Submit Request${cancellableItemsCount > 0 ? ' ($cancellableItemsCount)' : ''}',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      onPressed: isSubmittingModal ? null : () => Navigator.pop(dialogCtx),
+                      child: const Text('Back', style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -330,9 +588,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         ),
                       ),
                     ],
-                    if (currentOrd.isAcceptedByWaiter && !currentOrd.isServed) ...[
+                    if (currentOrd.isAcceptedByWaiter && currentOrd.hasCancellableItems) ...[
                       TextButton.icon(
-                        onPressed: _showCancelDialog,
+                        onPressed: () => _showCancelDialog(currentOrd),
                         icon: const Icon(Icons.cancel_outlined, size: 16, color: AppColors.cancelledText),
                         label: const Text('Cancel Item', style: TextStyle(color: AppColors.cancelledText, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
@@ -609,8 +867,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 style: TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w600),
                               ),
                               Text(
-                                currentOrd.paymentMethod.isNotEmpty ? currentOrd.paymentMethod.toUpperCase() : 'CASH',
-                                style: const TextStyle(color: Color(0xFF0F2A1D), fontSize: 14, fontWeight: FontWeight.w800),
+                                currentOrd.paymentMethod.isNotEmpty
+                                    ? currentOrd.paymentMethod.toUpperCase()
+                                    : (currentOrd.isPaid ? 'CASH' : 'Pending'),
+                                style: TextStyle(
+                                  color: currentOrd.paymentMethod.isNotEmpty || currentOrd.isPaid
+                                      ? const Color(0xFF0F2A1D)
+                                      : const Color(0xFF64748B),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ],
                           ),

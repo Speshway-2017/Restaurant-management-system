@@ -211,27 +211,20 @@ const requestOrderCancellation = async (req, res) => {
     const { reason, itemId, itemIds } = req.body;
 
     const cleanId = String(id || '').replace(/^#/i, '').trim();
-    const order = await Order.findOne({
-      $or: [{ orderId: cleanId }, { _id: cleanId.match(/^[0-9a-fA-F]{24}$/) ? cleanId : null }]
-    });
+    const queryOr = [
+      { orderId: id },
+      { orderId: `#${cleanId}` },
+      { orderId: cleanId }
+    ];
+    if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
+      queryOr.push({ _id: cleanId });
+    }
+
+    const order = await Order.findOne({ $or: queryOr });
 
     if (!order) {
       return errorResponse(res, 'Order not found', 404);
     }
-
-    // Waiter must accept order before performing cancellation or item operations
-    if (req.user && req.user.role === 'Waiter') {
-      const wStatus = String(order.waiterStatus || 'PENDING').toUpperCase();
-      const isAccepted = wStatus === 'ACCEPTED' || wStatus === 'SERVING' || wStatus === 'SERVED';
-      if (!isAccepted) {
-        return errorResponse(res, 'You must accept the order before requesting cancellation of items.', 400);
-      }
-    }
-
-    const cancelReason = reason || 'Customer changed mind';
-    const targetItemIds = Array.isArray(itemIds) && itemIds.length > 0
-      ? itemIds.map(i => String(i))
-      : (itemId ? [String(itemId)] : []);
 
     const normalizeItem = (it) => {
       if (typeof it === 'string') {
@@ -243,39 +236,101 @@ const requestOrderCancellation = async (req, res) => {
       return { ...(it || {}) };
     };
 
+    // Requirement 4: Reject cancellation if order is fully served, paid, or completed
+    const activeItems = (order.items || []).map(normalizeItem).filter(it => it.status !== 'CANCELLED' && !it.isCancelled);
+    const isAllServed = activeItems.length > 0 && activeItems.every(it => it.isDelivered || it.status === 'SERVED' || it.status === 'DELIVERED');
+    const isOrderServedOrCompleted = 
+      ['Served', 'Completed', 'Cancelled', 'Paid'].includes(order.status) ||
+      ['Paid', 'Completed'].includes(order.paymentStatus) ||
+      order.waiterStatus === 'SERVED' ||
+      isAllServed ||
+      activeItems.length === 0;
+
+    if (isOrderServedOrCompleted) {
+      return errorResponse(res, 'Cannot cancel items on an order that is already fully served, paid, or completed.', 400);
+    }
+
+    // If waiter requests cancellation, auto-accept order if not already accepted
+    if (req.user && req.user.role === 'Waiter') {
+      const wStatus = String(order.waiterStatus || 'PENDING').toUpperCase();
+      const isAccepted = wStatus === 'ACCEPTED' || wStatus === 'SERVING' || wStatus === 'SERVED';
+      if (!isAccepted) {
+        order.waiterStatus = 'ACCEPTED';
+        if (req.user.name) order.waiterName = req.user.name;
+        if (req.user._id || req.user.id) order.waiterId = String(req.user._id || req.user.id);
+      }
+    }
+
+    const cancelReason = reason || 'Customer changed mind';
+    const targetItemIds = Array.isArray(req.body.itemsToCancel) && req.body.itemsToCancel.length > 0
+      ? req.body.itemsToCancel.map(i => String(i).trim())
+      : (Array.isArray(itemIds) && itemIds.length > 0
+          ? itemIds.map(i => String(i).trim())
+          : (itemId ? [String(itemId).trim()] : []));
+
+    let cancelledDishNames = [];
+
     if (targetItemIds.length > 0) {
-      // Validate each target item
-      const invalidItem = (order.items || []).map(normalizeItem).find(it => {
-        const itemName = String(it.name || it.dishId || '');
-        const itemIdStr = String(it._id || it.id || itemName);
-        const isMatch = targetItemIds.includes(itemIdStr) || targetItemIds.includes(itemName);
+      // Validate each target item: cannot cancel ready, served/delivered, or already cancelled items
+      const invalidItem = (order.items || []).map(normalizeItem).find((it, idx) => {
+        const itemName = String(it.name || it.dishId || '').trim();
+        const itemIdStr = String(it._id || it.id || itemName).trim();
+        const isMatch = targetItemIds.some(target => {
+          const cleanTarget = String(target || '').trim().toLowerCase();
+          if (!cleanTarget) return false;
+          return cleanTarget === itemIdStr.toLowerCase() ||
+                 cleanTarget === itemName.toLowerCase() ||
+                 cleanTarget === String(idx) ||
+                 cleanTarget === `item-${idx}`;
+        });
         if (!isMatch) return false;
         
         const isReady = Boolean(it.isReady || it.status === 'READY' || it.status === 'READY_FOR_PASS');
         const isServed = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
-        return isReady || isServed;
+        const isCancelled = Boolean(it.isCancelled || it.status === 'CANCELLED');
+        return isReady || isServed || isCancelled;
       });
 
       if (invalidItem) {
+        if (invalidItem.status === 'CANCELLED' || invalidItem.isCancelled) {
+          return errorResponse(res, `Dish "${invalidItem.name || 'Selected'}" is already cancelled.`, 400);
+        }
         return errorResponse(res, `Dish "${invalidItem.name || 'Selected'}" is already ready or served and cannot be cancelled.`, 400);
       }
 
-      const cancelledDishNames = [];
       // Mark target pending items as CANCELLED
-      order.items = (order.items || []).map(it => {
+      order.items = (order.items || []).map((it, idx) => {
         const itObj = normalizeItem(it);
-        const itemName = String(itObj.name || itObj.dishId || 'Dish');
-        const itemIdStr = String(itObj._id || itObj.id || itemName);
-        const isMatch = targetItemIds.includes(itemIdStr) || targetItemIds.includes(itemName);
+        const itemName = String(itObj.name || itObj.dishId || 'Dish').trim();
+        const itemIdStr = String(itObj._id || itObj.id || itemName).trim();
+        const isMatch = targetItemIds.some(target => {
+          const cleanTarget = String(target || '').trim().toLowerCase();
+          if (!cleanTarget) return false;
+          return cleanTarget === itemIdStr.toLowerCase() ||
+                 cleanTarget === itemName.toLowerCase() ||
+                 cleanTarget === String(idx) ||
+                 cleanTarget === `item-${idx}`;
+        });
 
         if (isMatch) {
           if (!cancelledDishNames.includes(itemName)) {
             cancelledDishNames.push(itemName);
           }
-          return { ...itObj, status: 'CANCELLED', cancellationReason: cancelReason };
+          return {
+            ...itObj,
+            status: 'CANCELLED',
+            isCancelled: true,
+            cancellationReason: cancelReason,
+            isReady: false,
+            isDelivered: false
+          };
         }
         return itObj;
       });
+
+      if (cancelledDishNames.length === 0) {
+        return errorResponse(res, 'No eligible non-served, non-cancelled items were found for cancellation.', 400);
+      }
 
       order.markModified('items');
 
@@ -291,15 +346,19 @@ const requestOrderCancellation = async (req, res) => {
       }
 
       // Recalculate order total excluding cancelled items
-      const activeItems = order.items.filter(i => i.status !== 'CANCELLED');
-      const newTotal = activeItems.reduce((sum, i) => sum + (Number(i.price || 0) * Number(i.quantity || 1)), 0);
-      order.total = newTotal;
-      order.finalAmount = Math.max(0, newTotal - (order.discountAmount || 0));
+      const remainingActiveItems = order.items.filter(i => i.status !== 'CANCELLED' && !i.isCancelled);
+      const newSubtotal = remainingActiveItems.reduce((sum, i) => sum + (Number(i.price || 0) * Number(i.quantity || 1)), 0);
+      order.total = newSubtotal;
+      order.subtotal = newSubtotal;
+      if (order.originalTotal !== undefined) order.originalTotal = newSubtotal;
+      order.amountAfterDiscount = Math.max(0, newSubtotal - (order.discountAmount || 0));
+      order.finalAmount = Math.max(0, order.amountAfterDiscount + (order.gstAmount || 0));
 
-      if (activeItems.length === 0) {
+      if (remainingActiveItems.length === 0) {
         order.status = 'Cancelled';
-      } else {
-        order.status = 'PENDING CANCELLATION APPROVAL';
+        order.total = 0;
+        order.finalAmount = 0;
+        order.subtotal = 0;
       }
 
       order.cancellationReason = cancelReason;
@@ -311,12 +370,23 @@ const requestOrderCancellation = async (req, res) => {
         return errorResponse(res, 'Order cannot be cancelled because some dishes are ready or served.', 400);
       }
 
-      order.status = 'PENDING CANCELLATION APPROVAL';
+      order.status = 'Cancelled';
       order.cancellationReason = cancelReason;
       order.cancellationRequestedAt = new Date();
     }
 
     await order.save();
+    try {
+      const socket = require('../socket');
+      if (socket.notifyOrderItemCancelled) {
+        socket.notifyOrderItemCancelled({
+          order,
+          orderId: order.orderId || order._id,
+          cancelledItems: cancelledDishNames,
+          reason: cancelReason
+        });
+      }
+    } catch (sErr) {}
     return successResponse(res, order, `Cancellation request submitted successfully`);
   } catch (error) {
     return errorResponse(res, error.message, 400);
