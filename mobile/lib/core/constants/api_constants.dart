@@ -1,10 +1,30 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConstants {
   // ─────────────────────────────────────────────────────────────────────────
-  // Backend Base URL — points to the production server.
-  // Change this to your LAN IP (e.g. 'http://192.168.1.4:5000/api') when
-  // running against a local dev backend from a physical Android device.
+  // Backend Base URL — single source of truth across Web and Mobile.
   // ─────────────────────────────────────────────────────────────────────────
-  static String baseUrl = 'https://restaurant.speshway.site/api';
+  static String _overrideBaseUrl = '';
+
+  static String get baseUrl {
+    if (_overrideBaseUrl.isNotEmpty) return _overrideBaseUrl;
+    if (kIsWeb) {
+      return 'http://localhost:5000/api';
+    }
+    if (kDebugMode) {
+      // 192.168.1.4 is the local Wi-Fi host IP for physical Android device testing (I2401).
+      // If using Android Emulator or ADB reverse (`adb reverse tcp:5000 tcp:5000`),
+      // 127.0.0.1:5000 or 10.0.2.2:5000 can also be used.
+      return defaultTargetPlatform == TargetPlatform.android
+          ? 'http://192.168.1.4:5000/api'
+          : 'http://localhost:5000/api';
+    }
+    return 'https://restaurant.speshway.site/api';
+  }
+
+  static set baseUrl(String val) {
+    _overrideBaseUrl = val;
+  }
 
   // Socket.IO Server Root URL (without /api)
   static String get socketUrl {

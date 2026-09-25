@@ -101,21 +101,22 @@ export const mergeOrderItems = (dbItems = [], localItems = []) => {
  */
 export const deriveOrderStatus = (items = [], currentOrderStatus = 'Placed') => {
   const normItems = (items || []).map(normalizeOrderItem);
-  const totalCount = normItems.length;
+  const activeItems = normItems.filter(i => i.status !== 'CANCELLED' && !i.isCancelled);
+  const totalCount = activeItems.length;
 
-  if (totalCount === 0) return currentOrderStatus || 'Placed';
+  if (totalCount === 0) return 'Cancelled';
 
-  const servedCount = normItems.filter(i => i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED').length;
-  const readyCount = normItems.filter(i => !i.isDelivered && i.status !== 'SERVED' && i.status !== 'DELIVERED' && (i.isReady || i.status === 'READY')).length;
+  const servedCount = activeItems.filter(i => i.isDelivered || i.status === 'SERVED' || i.status === 'DELIVERED').length;
+  const readyCount = activeItems.filter(i => !i.isDelivered && i.status !== 'SERVED' && i.status !== 'DELIVERED' && (i.isReady || i.status === 'READY')).length;
 
   if (servedCount === totalCount) {
-    return 'Served'; // All items served -> COMPLETED
+    return 'Served'; // All active items served -> COMPLETED
   }
   if (servedCount > 0) {
     return 'PARTIALLY DELIVERED'; // Partial items served -> INCOMPLETE
   }
   if (readyCount === totalCount || (readyCount > 0 && readyCount + servedCount === totalCount)) {
-    return 'Ready'; // All remaining items ready!
+    return 'Ready'; // All remaining active items ready!
   }
   if (readyCount > 0) {
     return 'Preparing'; // Partial items ready -> Order remains in Preparing with partial items ready

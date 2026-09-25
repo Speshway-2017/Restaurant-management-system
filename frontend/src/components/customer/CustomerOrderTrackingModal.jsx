@@ -49,6 +49,7 @@ export default function CustomerOrderTrackingModal({
     const unsub3 = onSocketEvent('order_updated', fetchFreshOrders);
     const unsub4 = onSocketEvent('waiter_serving', fetchFreshOrders);
     const unsub5 = onSocketEvent('waiter_served', fetchFreshOrders);
+    const unsub6 = onSocketEvent('order_item_cancelled', fetchFreshOrders);
 
     return () => {
       isMounted = false;
@@ -57,6 +58,7 @@ export default function CustomerOrderTrackingModal({
       if (typeof unsub3 === 'function') unsub3();
       if (typeof unsub4 === 'function') unsub4();
       if (typeof unsub5 === 'function') unsub5();
+      if (typeof unsub6 === 'function') unsub6();
     };
   }, [tableNum, activeOrder?.table, activeOrder?.orderId]);
 
@@ -70,6 +72,40 @@ export default function CustomerOrderTrackingModal({
   const [selectedOrderIdx, setSelectedOrderIdx] = useState(0);
   const currentOrder = orderList[selectedOrderIdx] || activeOrder || null;
 
+  // Touch Swipe Gesture State
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchEndX, setTouchEndX] = useState(null);
+
+  const handleTouchStart = (e) => {
+    if (e.targetTouches && e.targetTouches[0]) {
+      setTouchStartX(e.targetTouches[0].clientX);
+      setTouchEndX(null);
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.targetTouches && e.targetTouches[0]) {
+      setTouchEndX(e.targetTouches[0].clientX);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX === null || touchEndX === null || orderList.length <= 1) return;
+    const distance = touchStartX - touchEndX;
+    const minSwipeDistance = 40;
+    if (distance > minSwipeDistance) {
+      // Swiped left -> Next order round
+      setSelectedOrderIdx((prev) => (prev + 1) % orderList.length);
+    } else if (distance < -minSwipeDistance) {
+      // Swiped right -> Previous order round
+      setSelectedOrderIdx((prev) => (prev - 1 + orderList.length) % orderList.length);
+    }
+    setTouchStartX(null);
+    setTouchEndX(null);
+  };
+
+  const [cancellingItemId, setCancellingItemId] = useState(null);
+
   const handleCallWaiter = async (reason) => {
     setCallingWaiter(true);
     try {
@@ -82,6 +118,37 @@ export default function CustomerOrderTrackingModal({
       setTimeout(() => setWaiterCallMsg(null), 4000);
     } finally {
       setCallingWaiter(false);
+    }
+  };
+
+  const handleCancelCustomerItem = async (item, itemKey) => {
+    if (!currentOrder) return;
+    const confirmCancel = window.confirm(`Request cancellation for "${item.name || 'this dish'}"?`);
+    if (!confirmCancel) return;
+
+    setCancellingItemId(itemKey);
+    try {
+      const orderTargetId = currentOrder._id || currentOrder.id || currentOrder.orderId;
+      await api.requestOrderCancellation(orderTargetId, 'Customer changed mind', [itemKey]);
+      setWaiterCallMsg(`✓ Cancellation request for "${item.name || 'Dish'}" submitted!`);
+      setTimeout(() => setWaiterCallMsg(null), 4000);
+
+      const freshOrders = await api.getOrders();
+      if (Array.isArray(freshOrders)) {
+        const targetTable = tableNum || activeOrder?.table || '';
+        const cleanTableNum = String(targetTable).replace(/[^0-9]/g, '');
+        const tableOrders = freshOrders.filter(ord => {
+          const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
+          return ordTableDigits && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
+        });
+        if (tableOrders.length > 0) {
+          setLiveOrders(tableOrders);
+        }
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to request item cancellation');
+    } finally {
+      setCancellingItemId(null);
     }
   };
 
@@ -349,6 +416,9 @@ export default function CustomerOrderTrackingModal({
       <div
         className="customer-modal-card"
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{
           backgroundColor: '#FFFFFF',
           borderRadius: '24px 24px 0 0',
@@ -438,40 +508,59 @@ export default function CustomerOrderTrackingModal({
         {orderList.length > 1 && (
           <div style={{
             display: 'flex',
-            gap: '0.5rem',
-            padding: '0.65rem 1.25rem',
+            flexDirection: 'column',
             backgroundColor: '#F8FAFC',
-            borderBottom: '1px solid #E2E8F0',
-            overflowX: 'auto'
+            borderBottom: '1px solid #E2E8F0'
           }}>
-            {orderList.map((ord, idx) => {
-              const isSel = idx === selectedOrderIdx;
-              return (
-                <button
-                  key={ord.orderId || idx}
-                  onClick={() => setSelectedOrderIdx(idx)}
-                  style={{
-                    padding: '0.35rem 0.75rem',
-                    borderRadius: '8px',
-                    border: isSel ? '1.5px solid #166534' : '1px solid #CBD5E1',
-                    backgroundColor: isSel ? '#166534' : '#FFFFFF',
-                    color: isSel ? '#FFFFFF' : '#475569',
-                    fontSize: '0.76rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem'
-                  }}
-                >
-                  <span>Round {idx + 1}</span>
-                  <span style={{ opacity: 0.8, fontSize: '0.7rem' }}>
-                    ({ord.items?.length || 0})
-                  </span>
-                </button>
-              );
-            })}
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
+              padding: '0.65rem 1.25rem 0.4rem',
+              overflowX: 'auto'
+            }}>
+              {orderList.map((ord, idx) => {
+                const isSel = idx === selectedOrderIdx;
+                return (
+                  <button
+                    key={ord.orderId || idx}
+                    onClick={() => setSelectedOrderIdx(idx)}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '8px',
+                      border: isSel ? '1.5px solid #166534' : '1px solid #CBD5E1',
+                      backgroundColor: isSel ? '#166534' : '#FFFFFF',
+                      color: isSel ? '#FFFFFF' : '#475569',
+                      fontSize: '0.76rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <span>Round {idx + 1}</span>
+                    <span style={{ opacity: 0.8, fontSize: '0.7rem' }}>
+                      ({ord.items?.length || 0})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{
+              padding: '0.2rem 1.25rem 0.5rem',
+              fontSize: '0.72rem',
+              color: '#15803D',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.35rem'
+            }}>
+              <span>👈</span>
+              <span>Swipe left / right to switch orders ({selectedOrderIdx + 1} of {orderList.length})</span>
+              <span>👉</span>
+            </div>
           </div>
         )}
 
@@ -808,8 +897,8 @@ export default function CustomerOrderTrackingModal({
                       )}
                     </div>
 
-                    {/* 3. Status Badge (Single line) */}
-                    <div style={{ flexShrink: 0 }}>
+                    {/* 3. Status Badge & Cancel Action Button (Single line) */}
+                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                       <span style={{
                         display: 'inline-block',
                         fontSize: '0.65rem',
@@ -829,6 +918,27 @@ export default function CustomerOrderTrackingModal({
                       }}>
                         {isCancelled ? 'Cancelled' : (isDeliveredItem ? 'Served' : (isReadyItem ? 'Ready' : 'Preparing'))}
                       </span>
+                      {!isCancelled && !isDeliveredItem && !isReadyItem && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelCustomerItem(item, String(item._id || item.id || item.name || `item-${idx}`))}
+                          disabled={Boolean(cancellingItemId)}
+                          title="Request to cancel this item"
+                          style={{
+                            fontSize: '0.65rem',
+                            fontWeight: 800,
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: '6px',
+                            backgroundColor: '#FEF2F2',
+                            color: '#DC2626',
+                            border: '1px solid #FCA5A5',
+                            cursor: cancellingItemId ? 'not-allowed' : 'pointer',
+                            opacity: cancellingItemId === String(item._id || item.id || item.name || `item-${idx}`) ? 0.6 : 1
+                          }}
+                        >
+                          {cancellingItemId === String(item._id || item.id || item.name || `item-${idx}`) ? '...' : 'Cancel'}
+                        </button>
+                      )}
                     </div>
 
                     {/* 4. Price (Single line, right aligned) */}

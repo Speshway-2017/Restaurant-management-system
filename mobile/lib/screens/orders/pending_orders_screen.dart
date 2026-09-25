@@ -48,100 +48,36 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
     final ok = await provider.acceptOrder(order.id, waiterId, waiterName);
     if (!mounted) return;
 
+    setState(() {
+      _isAccepting = false;
+      _loadingIds.remove(order.id);
+    });
+
     if (ok) {
-      // ── Success: haptic + brief visual feedback, then navigate away ──
       HapticFeedback.mediumImpact();
-      _showSuccessOverlay(order);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Order #${order.orderId} (Table T-${order.tableNum}) Accepted!',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF10B981),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ));
     } else {
-      setState(() {
-        _isAccepting = false;
-        _loadingIds.remove(order.id);
-      });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Failed to accept order. Please try again.'),
         backgroundColor: Colors.red,
       ));
     }
-  }
-
-  /// Shows a green success overlay for 900 ms, then pops back and
-  /// switches the bottom-nav to the Orders (index 2) tab.
-  void _showSuccessOverlay(OrderModel order) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black54,
-      builder: (_) => Center(
-        child: Container(
-          width: 200,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F2A1D),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFF10B981), width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_circle_rounded,
-                    color: Color(0xFF10B981), size: 34),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'Accepted!',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '#${order.orderId}',
-                style: const TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Table T-${order.tableNum}',
-                style: const TextStyle(
-                  color: Color(0xFF10B981),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    // After 900 ms: dismiss overlay → pop back → switch to Orders tab
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(); // close overlay
-      Navigator.of(context).pop(); // go back to dashboard
-      if (widget.onNavigateTab != null) {
-        widget.onNavigateTab!(2); // jump to Orders tab
-      }
-    });
   }
 
   Future<void> _reject(

@@ -97,6 +97,7 @@ export default function CustomerBillModal({
     const unsub2 = onSocketEvent('order_status_updated', fetchLatestOrder);
     const unsub3 = onSocketEvent('order_updated', fetchLatestOrder);
     const unsub4 = onSocketEvent('table_updated', fetchLatestOrder);
+    const unsub5 = onSocketEvent('order_item_cancelled', fetchLatestOrder);
 
     return () => {
       isMounted = false;
@@ -104,6 +105,7 @@ export default function CustomerBillModal({
       if (typeof unsub2 === 'function') unsub2();
       if (typeof unsub3 === 'function') unsub3();
       if (typeof unsub4 === 'function') unsub4();
+      if (typeof unsub5 === 'function') unsub5();
     };
   }, [tableNum, activeOrder?.table, activeOrder?.orderId]);
 
@@ -157,8 +159,13 @@ export default function CustomerBillModal({
 
   const items = (showInvoice && paidReceiptDetails?.items) ? paidReceiptDetails.items : activeItemsList;
 
-  const calculatedFoodTotal = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
-  const foodTotal = (showInvoice && paidReceiptDetails?.foodTotal !== undefined) ? paidReceiptDetails.foodTotal : calculatedFoodTotal;
+  // Requirement 2: Exclude cancelled items from billing subtotal, GST, discounts, and total payable
+  const nonCancelledItems = items.filter(it => it && it.status !== 'CANCELLED' && it.status !== 'Cancelled' && !it.isCancelled);
+
+  const calculatedFoodTotal = nonCancelledItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+  const foodTotal = (showInvoice && paidReceiptDetails?.foodTotal !== undefined)
+    ? paidReceiptDetails.foodTotal
+    : (currentOrder?.subtotal !== undefined && currentOrder?.subtotal > 0 ? Number(currentOrder.subtotal) : calculatedFoodTotal);
 
   // Dynamic GST Tax calculation (configurable via Admin Settings)
   const gstRate = dynamicGstRate;
@@ -629,7 +636,7 @@ export default function CustomerBillModal({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <Utensils size={16} color="#166534" />
                     <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F2A1D', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Order Summary ({items.length} {items.length === 1 ? 'item' : 'items'})
+                      Order Summary ({nonCancelledItems.length} {nonCancelledItems.length === 1 ? 'item' : 'items'})
                     </span>
                   </div>
                   <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -644,15 +651,21 @@ export default function CustomerBillModal({
                         No active order items found in database for Table {tableNum || 'Dine-In'}.
                       </div>
                     ) : (
-                      items.map((it, idx) => (
-                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#334155' }}>
-                          <span>
-                            <strong style={{ color: '#166534', marginRight: '0.35rem' }}>{it.quantity || 1}x</strong>
-                            {it.name}
-                          </span>
-                          <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{(Number(it.price) || 0) * (Number(it.quantity) || 1)}</span>
-                        </div>
-                      ))
+                      items.map((it, idx) => {
+                        const isCancelled = it && (it.status === 'CANCELLED' || it.status === 'Cancelled' || it.isCancelled);
+                        return (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: isCancelled ? '#94A3B8' : '#334155', textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                            <span>
+                              <strong style={{ color: isCancelled ? '#94A3B8' : '#166534', marginRight: '0.35rem' }}>{it.quantity || 1}x</strong>
+                              {it.name}
+                              {isCancelled && <span style={{ marginLeft: '0.35rem', color: '#DC2626', fontSize: '0.7rem', fontWeight: 800, textDecoration: 'none' }}>(Cancelled)</span>}
+                            </span>
+                            <span style={{ fontWeight: 700, color: isCancelled ? '#94A3B8' : '#0F2A1D' }}>
+                              {isCancelled ? '₹0' : `₹${(Number(it.price) || 0) * (Number(it.quantity) || 1)}`}
+                            </span>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 )}
@@ -779,7 +792,7 @@ export default function CustomerBillModal({
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#475569' }}>
-                  <span>Food / Subtotal ({items.length} items):</span>
+                  <span>Food / Subtotal ({nonCancelledItems.length} items):</span>
                   <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{foodTotal}</span>
                 </div>
 

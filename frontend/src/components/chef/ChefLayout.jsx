@@ -329,6 +329,7 @@ export default function ChefLayout({ setActivePage }) {
           delete optimisticStatusesRef.current[idStr];
         }
 
+        const overrideStatus = optimisticStatusesRef.current[cleanId] || optimisticStatusesRef.current[idStr];
         const effectiveRawStatus = overrideStatus || o.status || 'Placed';
         const effectiveChefStatus = o.chefStatus || (o.chefId ? (effectiveRawStatus === 'Preparing' || effectiveRawStatus === 'Cooking' ? 'PREPARING' : (effectiveRawStatus === 'Ready' ? 'READY' : 'ACCEPTED')) : 'NEW');
         const isChefAccepted = Boolean((effectiveChefStatus === 'ACCEPTED' || Boolean(o.chefId)) && effectiveChefStatus !== 'NEW');
@@ -338,8 +339,8 @@ export default function ChefLayout({ setActivePage }) {
             return { id: `item-${itemIdx}`, name: it, price: 150, quantity: 1, status: isChefAccepted ? 'ACCEPTED' : 'PLACED', isReady: false, isDelivered: false };
           }
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
-          const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || (rawStatus === 'Ready' && !hasPendingItems)));
-          const isOrderPreparing = rawStatus === 'Preparing' || rawStatus === 'Cooking' || o.chefStatus === 'PREPARING';
+          const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || (effectiveRawStatus === 'Ready' && !hasPendingItems)));
+          const isOrderPreparing = effectiveRawStatus === 'Preparing' || effectiveRawStatus === 'Cooking' || o.chefStatus === 'PREPARING';
           const isCooking = Boolean(!isDelivered && !isReady && isOrderPreparing && (it.status === 'COOKING' || it.status === 'PREPARING'));
           const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : (isChefAccepted ? 'ACCEPTED' : 'PLACED')));
           return {
@@ -541,8 +542,11 @@ export default function ChefLayout({ setActivePage }) {
 
     let effectiveOrderStatus = newStatus;
     if (newStatus === 'Preparing' && updatedItems.length > 0) {
-      // Mark all non-delivered items as PREPARING when chef clicks Start Cooking
+      // Mark all non-delivered, non-cancelled items as PREPARING when chef clicks Start Cooking
       updatedItems = updatedItems.map(it => {
+        if (it.status === 'CANCELLED' || it.isCancelled) {
+          return it;
+        }
         const isDelivered = it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED';
         if (isDelivered) {
           return { ...it, status: 'SERVED', isDelivered: true };
@@ -552,8 +556,11 @@ export default function ChefLayout({ setActivePage }) {
       effectiveOrderStatus = 'Preparing';
     } else if (newStatus === 'Ready' && updatedItems.length > 0) {
       if (hasCheckedItems) {
-        // Chef explicitly checked specific dish checkboxes! Mark ONLY checked items as READY!
+        // Chef explicitly checked specific dish checkboxes! Mark ONLY checked non-cancelled items as READY!
         updatedItems = updatedItems.map((it, idx) => {
+          if (it.status === 'CANCELLED' || it.isCancelled) {
+            return it;
+          }
           const isDelivered = it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED';
           if (isDelivered) {
             return { ...it, status: 'SERVED', isDelivered: true, isReady: true };
@@ -567,8 +574,11 @@ export default function ChefLayout({ setActivePage }) {
         });
         effectiveOrderStatus = deriveOrderStatus(updatedItems, 'Preparing');
       } else {
-        // If Chef did NOT check individual checkboxes, mark ALL non-delivered items as READY
+        // If Chef did NOT check individual checkboxes, mark ALL non-delivered non-cancelled items as READY
         updatedItems = updatedItems.map(it => {
+          if (it.status === 'CANCELLED' || it.isCancelled) {
+            return it;
+          }
           const isDelivered = it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED';
           if (isDelivered) {
             return { ...it, status: 'SERVED', isDelivered: true, isReady: true };

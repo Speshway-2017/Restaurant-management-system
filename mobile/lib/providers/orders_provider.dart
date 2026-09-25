@@ -261,6 +261,13 @@ class OrdersProvider with ChangeNotifier {
   // 1b. Waiter Reject Order
   Future<bool> rejectOrder(String orderId, String waiterId, String waiterName) async {
     try {
+      _locallyRejectedOrderIds.add(orderId);
+      for (var o in _orders) {
+        if (o.id == orderId || o.orderId == orderId) {
+          if (o.id.isNotEmpty) _locallyRejectedOrderIds.add(o.id);
+          if (o.orderId.isNotEmpty) _locallyRejectedOrderIds.add(o.orderId);
+        }
+      }
       await ApiClient.patch(
         ApiConstants.updateOrderStatus(orderId),
         body: {
@@ -269,7 +276,7 @@ class OrdersProvider with ChangeNotifier {
           'rejectedBy': waiterName,
         },
       );
-      await fetchOrders();
+      await fetchOrders(silent: true);
       return true;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
@@ -355,7 +362,8 @@ class OrdersProvider with ChangeNotifier {
   // 3. Request Item Cancellation
   Future<bool> requestCancelItems(String orderId, List<String> itemNames, String reason, String waiterName) async {
     try {
-      await ApiClient.post(
+      _error = null;
+      final res = await ApiClient.post(
         ApiConstants.requestCancelItem(orderId),
         body: {
           'itemsToCancel': itemNames,
@@ -363,7 +371,17 @@ class OrdersProvider with ChangeNotifier {
           'requestedBy': waiterName,
         },
       );
-      await fetchOrders();
+
+      if (res is Map<String, dynamic>) {
+        final updatedOrd = OrderModel.fromJson(res);
+        final idx = _orders.indexWhere((o) => o.id == updatedOrd.id || o.orderId == updatedOrd.orderId);
+        if (idx != -1) {
+          _orders[idx] = updatedOrd;
+        }
+      }
+
+      await fetchOrders(silent: true);
+      notifyListeners();
       return true;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');

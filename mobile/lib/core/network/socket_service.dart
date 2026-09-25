@@ -46,7 +46,7 @@ class SocketService {
       }
     }
 
-    final transports = kIsWeb ? ['websocket', 'polling'] : ['polling', 'websocket'];
+    final transports = ['websocket', 'polling'];
 
     _socket = socket_io.io(targetUrl, socket_io.OptionBuilder()
       .setTransports(transports)

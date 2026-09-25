@@ -76,12 +76,19 @@ const emitToRoleAndManager = (managerId, chefRoom, waiterRoom, event, payload) =
 
 const notifyOrderCreated = (order) => {
   if (!io || !order) return;
+  console.log(`[Socket] Broadcasting new order #${order.orderId || order._id} for Table ${order.table || 'Table'}`);
   const managerId = order.managerId;
   const chefRoom = managerId ? `chef_${managerId}` : null;
-  emitToRoleAndManager(managerId, chefRoom, null, 'order_created', {
+  const payload = {
     order,
     message: `New order #${order.orderId || order._id} placed for ${order.table || 'Table'}`
-  });
+  };
+  emitToRoleAndManager(managerId, chefRoom, null, 'order_created', payload);
+  io.emit('order_created', payload);
+  io.emit('order_updated', { order });
+  if (order.table) {
+    io.emit('table_updated', { table: order.table, status: order.status });
+  }
 };
 
 const notifyChefAccepted = (order) => {
