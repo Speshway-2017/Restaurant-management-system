@@ -243,7 +243,7 @@ export default function ChefKdsPassPage({
                     typeof it === 'object' && (it.status === 'COOKING' || it.status === 'PREPARING' || it.status === 'READY' || it.isReady)
                   );
                   const isStarted = isOrderPreparingOrCooking || hasAnyItemStarted;
-                  const isOrderAccepted = !isStarted && (ord.chefStatus === 'ACCEPTED' || ord.status === 'Accepted' || Boolean(ord.chefId));
+                  const isOrderAccepted = !isStarted && (ord.chefStatus === 'ACCEPTED' || Boolean(ord.chefId));
 
                   return activeItems.map((item, idx) => {
                     const cleanId = String(ord.id || ord.orderId || '').replace(/^#/i, '').trim();
@@ -255,7 +255,7 @@ export default function ChefKdsPassPage({
                     const isCheckedInMap = Boolean(checkedDishItems[ord.id]?.[idx] || checkedDishItems[cleanId]?.[idx] || checkedDishItems[`#${cleanId}`]?.[idx]);
                     const isReady = !isCancelled && !isDelivered && (isOrderReadyOverall || item.isReady || item.status === 'READY' || isCheckedInMap);
                     const isCooking = isStarted && !isReady && !isDelivered && !isCancelled;
-                    const isItemAccepted = !isStarted && !isReady && !isDelivered && !isCancelled && (isOrderAccepted || item.status === 'ACCEPTED');
+                    const isItemAccepted = !isStarted && !isReady && !isDelivered && !isCancelled && isOrderAccepted;
 
                     return (
                       <div
@@ -347,7 +347,7 @@ export default function ChefKdsPassPage({
                 const chefSt = String(ord.chefStatus || '').toUpperCase();
                 const isReady = chefSt === 'READY' || ord.status === 'Ready';
                 const isPreparing = !isReady && (chefSt === 'PREPARING' || ord.status === 'Preparing' || ord.status === 'Cooking');
-                const isNew = !isReady && !isPreparing && (!ord.chefId || ord.chefId === '') && (chefSt === 'NEW' || !chefSt || ord.status === 'Placed');
+                const isNew = !isReady && !isPreparing && (!ord.chefId || ord.chefId === '') && (chefSt === 'NEW' || !chefSt || chefSt === 'PLACED');
                 const isAccepted = !isReady && !isPreparing && !isNew;
 
                 const effectiveChefId = currentChefId || (() => {

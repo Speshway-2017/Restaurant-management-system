@@ -309,14 +309,21 @@ export default function MenuPage({ onOpenDemoModal }) {
 
             if (!isMatch || isClosedOrPaid) return false;
 
-            // Session isolation check: if activeSession exists and session token/id is present, check match
-            if (activeSess && (ord.sessionId || ord.sessionToken)) {
-              const matchesSession = Boolean(
-                (ord.sessionId && (String(ord.sessionId) === String(activeSess._id) || String(ord.sessionId) === String(activeSess.sessionToken))) ||
-                (ord.sessionToken && String(ord.sessionToken) === String(activeSess.sessionToken)) ||
-                (activeSess.orderId && (String(activeSess.orderId) === String(ord.orderId) || String(activeSess.orderId) === String(ord._id)))
-              );
-              return matchesSession;
+            // Session isolation check: if activeSession exists, ensure order belongs to this active session
+            if (activeSess) {
+              const hasSessionTag = Boolean(ord.sessionId || ord.sessionToken);
+              if (hasSessionTag) {
+                const matchesSession = Boolean(
+                  (ord.sessionId && (String(ord.sessionId) === String(activeSess._id) || String(ord.sessionId) === String(activeSess.sessionToken))) ||
+                  (ord.sessionToken && String(ord.sessionToken) === String(activeSess.sessionToken)) ||
+                  (activeSess.orderId && (String(activeSess.orderId) === String(ord.orderId) || String(activeSess.orderId) === String(ord._id)))
+                );
+                if (!matchesSession) return false;
+              } else if (activeSess.seatedAt && ord.createdAt) {
+                const orderTime = new Date(ord.createdAt).getTime();
+                const sessionTime = new Date(activeSess.seatedAt).getTime();
+                if (orderTime < sessionTime - 60000) return false;
+              }
             }
 
             return true;
@@ -445,8 +452,8 @@ export default function MenuPage({ onOpenDemoModal }) {
             }
           } else {
             autoPoppedBillRef.current = false;
-            if (activeBackendOrders.length > 0 || (matchedTbl && matchedTbl.status === 'Occupied')) {
-              resolvedStatus = 'Order in Progress';
+            if (activeBackendOrders.length > 0 || (matchedTbl && matchedTbl.status === 'Occupied') || (activeSess && activeSess.status === 'ACTIVE')) {
+              resolvedStatus = 'Occupied';
             } else if (matchedTbl && matchedTbl.status === 'Reserved') {
               resolvedStatus = 'Reserved';
             } else {
@@ -1757,28 +1764,57 @@ export default function MenuPage({ onOpenDemoModal }) {
       {/* ================= CUSTOMER SEATED QR BADGE STRIP (SINGLE LINE FIT AT TOP) ================= */}
       {isFixedTableBarActive && (
         <div className="customer-seated-bar">
-          {/* Left Side: Table Badge & Real-Time Status Pill */}
+          {/* Left Side: Table Badge & Real-Time Table Status Badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0, flexShrink: 1 }}>
             <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
               Table {tableNum}
             </span>
-            {currentTableStatus === 'Cleaning' ? (
-              <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #FCD34D' }}>
-                🧹 Cleaning in Progress
-              </span>
-            ) : currentTableStatus === 'Order in Progress' ? (
-              <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #BFDBFE' }}>
-                ⏳ Order in Progress
-              </span>
-            ) : (currentTableStatus === 'Bill Generated' || isTableBillGenerated) ? (
-              <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #FDE68A' }}>
-                🧾 Bill Generated
-              </span>
-            ) : (
-              <span style={{ backgroundColor: '#DCFCE7', color: '#166534', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid #86EFAC' }}>
-                🟢 Table Available
-              </span>
-            )}
+            {(() => {
+              const statusUpper = String(currentTableStatus || '').toUpperCase();
+              let statusText = 'Available';
+              let badgeBg = '#DCFCE7';
+              let badgeColor = '#166534';
+              let badgeBorder = '1px solid #86EFAC';
+
+              if (statusUpper === 'CLEANING' || tableCleaningInfo?.isCleaning) {
+                statusText = 'Cleaning';
+                badgeBg = '#FEF3C7';
+                badgeColor = '#92400E';
+                badgeBorder = '1px solid #FCD34D';
+              } else if (
+                statusUpper === 'OCCUPIED' ||
+                statusUpper === 'ORDER IN PROGRESS' ||
+                statusUpper === 'BILL GENERATED' ||
+                statusUpper === 'BILLING' ||
+                placedTableOrders.length > 0 ||
+                (activeTableSession && activeTableSession.status === 'ACTIVE')
+              ) {
+                statusText = 'Occupied';
+                badgeBg = '#FEF3C7';
+                badgeColor = '#92400E';
+                badgeBorder = '1px solid #FCD34D';
+              } else if (statusUpper === 'RESERVED') {
+                statusText = 'Reserved';
+                badgeBg = '#EEF2FF';
+                badgeColor = '#3730A3';
+                badgeBorder = '1px solid #C7D2FE';
+              }
+
+              return (
+                <span style={{
+                  backgroundColor: badgeBg,
+                  color: badgeColor,
+                  padding: '0.2rem 0.55rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                  border: badgeBorder
+                }}>
+                  {statusText}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Right Side: My Orders (if any) + Cart Button */}

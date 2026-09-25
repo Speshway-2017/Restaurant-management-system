@@ -52,6 +52,29 @@ export default function WaiterOrdersPage() {
   const [tipInput, setTipInput] = useState('');
   const [showPreparedOnly, setShowPreparedOnly] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [processingOrderIds, setProcessingOrderIds] = useState(new Set());
+
+  function getSessionUser() {
+    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) {}
+    }
+    return null;
+  }
+
+  const sessionUser = getSessionUser();
+  const currentWaiterId = sessionUser?._id || sessionUser?.id || sessionUser?.userId || '';
+
+  const [rejectedOrderIds, setRejectedOrderIds] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+      const u = raw ? JSON.parse(raw) : null;
+      const wId = u?._id || u?.id || u?.userId || 'default';
+      const saved = localStorage.getItem(`flavora_rejected_orders_${wId}`);
+      if (saved) return new Set(JSON.parse(saved));
+    } catch (e) {}
+    return new Set();
+  });
 
   // Pagination state (10 orders per page, starting on page 1 showing latest 10 orders)
   const [currentPage, setCurrentPage] = useState(1);
@@ -409,6 +432,7 @@ export default function WaiterOrdersPage() {
     const waiterName = session?.name || 'Waiter';
 
     try {
+      setProcessingOrderIds(prev => new Set(prev).add(cleanId));
       await api.waiterAcceptOrder(cleanId);
       const updated = orders.map(o => {
         if (o.id === order.id || o._id === order._id || o.orderId === order.orderId) {
@@ -424,9 +448,67 @@ export default function WaiterOrdersPage() {
       setOrders(updated);
       showNotification(`✓ Order #${getOrderId(order)} accepted by you for service!`);
       window.dispatchEvent(new Event('flavora_orders_updated'));
+      window.dispatchEvent(new Event('flavora_tables_updated'));
       fetchOrders();
     } catch (err) {
       alert(err.message || 'Failed to accept order');
+    } finally {
+      setProcessingOrderIds(prev => {
+        const next = new Set(prev);
+        next.delete(cleanId);
+        return next;
+      });
+    }
+  };
+
+  const handleWaiterReject = async (order) => {
+    const targetOrderId = order._id || order.id || order.orderId;
+    const cleanId = String(targetOrderId).replace(/^#/i, '').trim();
+    const session = getSessionUser();
+    const waiterName = session?.name || 'Waiter';
+
+    if (processingOrderIds.has(cleanId)) return;
+
+    setProcessingOrderIds(prev => new Set(prev).add(cleanId));
+
+    try {
+      const wId = currentWaiterId || 'default';
+      const storageKey = `flavora_rejected_orders_${wId}`;
+
+      setRejectedOrderIds(prev => {
+        const next = new Set(prev);
+        next.add(cleanId);
+        next.add(cleanId.toLowerCase());
+        if (order.orderId) {
+          const cleanNum = String(order.orderId).replace(/^#/i, '').trim().toLowerCase();
+          next.add(cleanNum);
+        }
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(Array.from(next)));
+        } catch (e) {}
+        return next;
+      });
+
+      try {
+        await api.updateOrderStatus(cleanId, 'Cancelled', {
+          waiterStatus: 'REJECTED',
+          rejectedBy: waiterName
+        });
+      } catch (e) {
+        console.warn('Backend rejection notice:', e.message);
+      }
+
+      showNotification(`Order #${getOrderId(order)} rejected.`);
+      window.dispatchEvent(new Event('flavora_orders_updated'));
+      fetchOrders();
+    } catch (err) {
+      alert(err.message || 'Failed to reject order');
+    } finally {
+      setProcessingOrderIds(prev => {
+        const next = new Set(prev);
+        next.delete(cleanId);
+        return next;
+      });
     }
   };
 
@@ -586,16 +668,6 @@ export default function WaiterOrdersPage() {
     o.payment === 'Paid' || o.payment === 'Completed'
   );
 
-  function getSessionUser() {
-    const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
-    if (raw) {
-      try { return JSON.parse(raw); } catch (e) {}
-    }
-    return null;
-  }
-
-  const sessionUser = getSessionUser();
-  const currentWaiterId = sessionUser?._id || sessionUser?.id || sessionUser?.userId || '';
   const isManagerOrAdmin = Boolean(
     sessionUser?.role &&
     (sessionUser.role.toLowerCase().includes('admin') || sessionUser.role.toLowerCase().includes('manager'))
@@ -620,8 +692,15 @@ export default function WaiterOrdersPage() {
     return timeB - timeA;
   });
 
-  // Only show orders that are unclaimed OR accepted by this specific waiter
-  const visibleOrders = sortedOrders.filter(o => !isAcceptedByOtherWaiter(o));
+  const isOrderRejectedByMe = (o) => {
+    if (!o) return false;
+    const cleanId = String(o.id || o._id || o.orderId || '').replace(/^#/i, '').trim().toLowerCase();
+    const cleanNum = String(o.orderId || '').replace(/^#/i, '').trim().toLowerCase();
+    return rejectedOrderIds.has(cleanId) || rejectedOrderIds.has(cleanNum);
+  };
+
+  // Only show orders that are unclaimed OR accepted by this specific waiter, and not rejected by this waiter
+  const visibleOrders = sortedOrders.filter(o => !isAcceptedByOtherWaiter(o) && !isOrderRejectedByMe(o));
 
   const filteredOrders = visibleOrders.filter(o => {
     const isPaid = getIsPaid(o);
@@ -1017,49 +1096,23 @@ export default function WaiterOrdersPage() {
                         const isPreparing = order.chefStatus === 'PREPARING' || order.status === 'Preparing' || order.status === 'Cooking';
                         const wStatus = String(order.waiterStatus || 'PENDING').toUpperCase();
 
-                        const isUnaccepted = wStatus === 'PENDING' || !order.waiterStatus;
-                        // Waiter can accept the order when food is ready, partially prepared, or cooking/preparing
+                        const isUnaccepted = wStatus === 'PENDING' || !order.waiterStatus || (!order.waiterId && !order.waiterName);
                         const canAccept = (isKitchenReady || isPartiallyReady || isPreparing) && isUnaccepted;
 
-                        // 1. Unaccepted and Kitchen hasn't started yet
-                        if (isUnaccepted && !canAccept) {
-                          return (
-                            <div style={{ marginBottom: '0.2rem' }}>
-                              <button
-                                disabled
-                                style={{
-                                  width: '100%',
-                                  backgroundColor: '#F1F5F9',
-                                  color: '#64748B',
-                                  border: '1px solid #CBD5E1',
-                                  padding: '0.65rem',
-                                  borderRadius: '10px',
-                                  fontSize: '0.8rem',
-                                  fontWeight: 800,
-                                  cursor: 'not-allowed',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '0.4rem'
-                                }}
-                              >
-                                <Clock size={15} />
-                                <span>Order Placed • Waiting for Kitchen</span>
-                              </button>
-                            </div>
-                          );
-                        }
+                        const targetOrderId = order._id || order.id || order.orderId;
+                        const cleanOrderIdStr = String(targetOrderId).replace(/^#/i, '').trim();
+                        const isBusy = processingOrderIds.has(cleanOrderIdStr);
 
-                        // 2. Unaccepted but Food is ready, partially prepared, or preparing -> Waiter accepts
-                        if (isUnaccepted && canAccept) {
-                          const bannerBg = isAllReady ? '#DCFCE7' : (isPartiallyReady ? '#FEF3C7' : '#FFF3EB');
-                          const bannerBorder = isAllReady ? '1px solid #86EFAC' : (isPartiallyReady ? '1px solid #FCD34D' : '1px solid #FDBA74');
-                          const bannerColor = isAllReady ? '#166534' : (isPartiallyReady ? '#92400E' : '#C2410C');
+                        // 1. Unaccepted order -> Display Accept and Reject action buttons for eligible waiter
+                        if (isUnaccepted) {
+                          const bannerBg = isAllReady ? '#DCFCE7' : (isPartiallyReady ? '#FEF3C7' : '#EEF2FF');
+                          const bannerBorder = isAllReady ? '1px solid #86EFAC' : (isPartiallyReady ? '1px solid #FCD34D' : '1px solid #C7D2FE');
+                          const bannerColor = isAllReady ? '#166534' : (isPartiallyReady ? '#92400E' : '#283593');
                           const bannerText = isAllReady
                             ? `🔔 Ready from Kitchen (${order.chefName ? `Chef ${order.chefName}` : 'Pass Queue'})`
                             : (isPartiallyReady
                               ? `🔔 Partially Prepared (${readyCount}/${totalItemsCount} dishes ready)`
-                              : `⏳ Food Preparing in Kitchen (${order.chefName ? `Chef ${order.chefName}` : 'Chef'})`);
+                              : (isPreparing ? `⏳ Food Preparing in Kitchen (${order.chefName ? `Chef ${order.chefName}` : 'Chef'})` : `📝 New Order Placed • Needs Waiter Acceptance`));
 
                           return (
                             <div style={{ marginBottom: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -1075,29 +1128,59 @@ export default function WaiterOrdersPage() {
                               }}>
                                 {bannerText}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleWaiterAccept(order)}
-                                style={{
-                                  width: '100%',
-                                  backgroundColor: '#0F2A1D',
-                                  color: '#FFFFFF',
-                                  border: 'none',
-                                  padding: '0.65rem',
-                                  borderRadius: '10px',
-                                  fontSize: '0.84rem',
-                                  fontWeight: 900,
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '0.4rem',
-                                  boxShadow: '0 4px 12px rgba(15, 42, 29, 0.25)'
-                                }}
-                              >
-                                <Utensils size={16} />
-                                <span>Accept Order</span>
-                              </button>
+
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleWaiterAccept(order)}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: '#0F2A1D',
+                                    color: '#FFFFFF',
+                                    border: 'none',
+                                    padding: '0.65rem 0.5rem',
+                                    borderRadius: '10px',
+                                    fontSize: '0.84rem',
+                                    fontWeight: 900,
+                                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.4rem',
+                                    boxShadow: '0 4px 12px rgba(15, 42, 29, 0.25)',
+                                    opacity: isBusy ? 0.7 : 1
+                                  }}
+                                >
+                                  <Utensils size={16} />
+                                  <span>{isBusy ? 'Processing...' : 'Accept'}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleWaiterReject(order)}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: '#FEF2F2',
+                                    color: '#991B1B',
+                                    border: '1px solid #FCA5A5',
+                                    padding: '0.65rem 0.5rem',
+                                    borderRadius: '10px',
+                                    fontSize: '0.84rem',
+                                    fontWeight: 800,
+                                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.35rem',
+                                    opacity: isBusy ? 0.7 : 1
+                                  }}
+                                >
+                                  <X size={16} />
+                                  <span>Reject</span>
+                                </button>
+                              </div>
                             </div>
                           );
                         }
