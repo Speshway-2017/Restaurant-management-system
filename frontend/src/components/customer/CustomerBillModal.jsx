@@ -6,6 +6,7 @@ import {
 import { api } from '../../services/api';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 import { onSocketEvent } from '../../services/socket';
+import { clearTableSessionStorage } from '../../utils/orderUtils';
 
 export default function CustomerBillModal({
   activeOrder,
@@ -318,8 +319,10 @@ export default function CustomerBillModal({
         localStorage.setItem('flavora_manager_orders', JSON.stringify(updatedLocal));
       } catch (e) { }
 
-      // 3. Emit real-time synchronization events for Waiter & Receptionist dashboards
+      // 3. Clear customer dining session storage & emit real-time synchronization events
       try {
+        clearTableSessionStorage(activeTableStr);
+        if (tableNum) clearTableSessionStorage(tableNum);
         window.dispatchEvent(new Event('flavora_orders_updated'));
         window.dispatchEvent(new Event('flavora_tables_updated'));
         window.dispatchEvent(new CustomEvent('flavora_payment_completed', { detail: { orderId: targetOrderId, table: activeTableStr } }));

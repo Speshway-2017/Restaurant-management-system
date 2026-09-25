@@ -64,7 +64,7 @@ export default function CustomerMobileMenuView({
             boxShadow: '0 4px 14px rgba(15, 42, 29, 0.22)'
           }}
         >
-          {/* Left: Table badge & active real-time status */}
+          {/* Left: Table badge & real-time table status badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, overflow: 'hidden' }}>
             <span style={{ backgroundColor: '#E07A3C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
               {activeTableSession && Array.isArray(activeTableSession.mergedTableNums) && activeTableSession.mergedTableNums.length > 0
@@ -72,35 +72,54 @@ export default function CustomerMobileMenuView({
                 : `Table ${tableNum}`}
             </span>
 
+            {/* Real-Time Table Status Badge — Visible in every table lifecycle state */}
             {(() => {
-              const isGen = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
-              const nameToShow = (confirmedDinerName && !isGen(confirmedDinerName)) ? confirmedDinerName : ((activeTableSession?.guestName && !isGen(activeTableSession.guestName)) ? activeTableSession.guestName : '');
-              if (!nameToShow) return null;
+              const statusUpper = String(currentTableStatus || '').toUpperCase();
+              let statusText = 'Available';
+              let badgeBg = '#DCFCE7';
+              let badgeColor = '#166534';
+              let badgeBorder = '1px solid #86EFAC';
+
+              if (statusUpper === 'CLEANING' || tableCleaningInfo?.isCleaning) {
+                statusText = 'Cleaning';
+                badgeBg = '#FEF3C7';
+                badgeColor = '#92400E';
+                badgeBorder = '1px solid #FCD34D';
+              } else if (
+                statusUpper === 'OCCUPIED' ||
+                statusUpper === 'ORDER IN PROGRESS' ||
+                statusUpper === 'BILL GENERATED' ||
+                statusUpper === 'BILLING' ||
+                placedTableOrders.length > 0 ||
+                (activeTableSession && activeTableSession.status === 'ACTIVE')
+              ) {
+                statusText = 'Occupied';
+                badgeBg = '#FEF3C7';
+                badgeColor = '#92400E';
+                badgeBorder = '1px solid #FCD34D';
+              } else if (statusUpper === 'RESERVED') {
+                statusText = 'Reserved';
+                badgeBg = '#EEF2FF';
+                badgeColor = '#3730A3';
+                badgeBorder = '1px solid #C7D2FE';
+              }
+
               return (
-                <span style={{ backgroundColor: '#1E4636', color: '#F2C14E', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #F2C14E' }}>
-                  👤 Diner: {nameToShow}
+                <span style={{
+                  backgroundColor: badgeBg,
+                  color: badgeColor,
+                  padding: '0.2rem 0.55rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  border: badgeBorder
+                }}>
+                  {statusText}
                 </span>
               );
             })()}
-
-            {/* Real-Time Table Status Pill */}
-            {currentTableStatus === 'Cleaning' || tableCleaningInfo?.isCleaning ? (
-              <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #FCD34D' }}>
-                🧹 Cleaning
-              </span>
-            ) : currentTableStatus === 'Order in Progress' ? (
-              <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #BFDBFE' }}>
-                ⏳ In Progress
-              </span>
-            ) : (currentTableStatus === 'Bill Generated' || isTableBillGenerated) ? (
-              <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #FDE68A' }}>
-                🧾 Billing
-              </span>
-            ) : (
-              <span style={{ backgroundColor: '#DCFCE7', color: '#166534', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid #86EFAC' }}>
-                🟢 Available
-              </span>
-            )}
           </div>
 
           {/* Right: Orders & Cart button */}

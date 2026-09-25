@@ -151,17 +151,19 @@ export default function WaiterDashboardHome({ onNavigateTab }) {
     (sessionUser.role.toLowerCase().includes('admin') || sessionUser.role.toLowerCase().includes('manager'))
   );
 
-  const isAcceptedByOtherWaiter = (o) => {
-    if (isManagerOrAdmin) return false;
-    if (!currentWaiterId) return false;
-    const orderWaiterId = o.waiterId ? String(o.waiterId).trim() : '';
-    if (!orderWaiterId) return false;
-    if (orderWaiterId === String(currentWaiterId).trim()) return false;
-    const isAccepted = o.waiterStatus === 'ACCEPTED' || o.waiterStatus === 'SERVING' || o.waiterStatus === 'SERVED' || Boolean(o.waiterAcceptedAt);
-    return isAccepted || Boolean(orderWaiterId && o.waiterName);
+  const isOrderRejectedByMe = (o) => {
+    if (!o) return false;
+    const cleanId = String(o._id || o.id || o.orderId || '').replace(/^#/i, '').trim().toLowerCase();
+    const cleanNum = String(o.orderId || '').replace(/^#/i, '').trim().toLowerCase();
+    let saved = [];
+    try {
+      const raw = localStorage.getItem(`flavora_rejected_orders_${currentWaiterId || 'default'}`);
+      if (raw) saved = JSON.parse(raw);
+    } catch (e) {}
+    return saved.includes(cleanId) || saved.includes(cleanNum);
   };
 
-  const visibleActiveOrders = activeOrders.filter(o => !isAcceptedByOtherWaiter(o));
+  const visibleActiveOrders = activeOrders.filter(o => !isAcceptedByOtherWaiter(o) && !isOrderRejectedByMe(o));
 
   // Calculations for Waiter KPIs
   const liveOrders = visibleActiveOrders.filter(o => o.status !== 'Completed' && o.status !== 'Cancelled');

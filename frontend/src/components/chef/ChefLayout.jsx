@@ -329,18 +329,19 @@ export default function ChefLayout({ setActivePage }) {
           delete optimisticStatusesRef.current[idStr];
         }
 
-        const overrideStatus = optimisticStatusesRef.current[cleanId] || optimisticStatusesRef.current[idStr];
-        const rawStatus = overrideStatus || o.status || 'Placed';
+        const effectiveRawStatus = overrideStatus || o.status || 'Placed';
+        const effectiveChefStatus = o.chefStatus || (o.chefId ? (effectiveRawStatus === 'Preparing' || effectiveRawStatus === 'Cooking' ? 'PREPARING' : (effectiveRawStatus === 'Ready' ? 'READY' : 'ACCEPTED')) : 'NEW');
+        const isChefAccepted = Boolean((effectiveChefStatus === 'ACCEPTED' || Boolean(o.chefId)) && effectiveChefStatus !== 'NEW');
 
         const finalItems = activeItemsList.map((it, itemIdx) => {
           if (typeof it === 'string') {
-            return { id: `item-${itemIdx}`, name: it, price: 150, quantity: 1, status: (effectiveRawStatus === 'Accepted' || o.chefStatus === 'ACCEPTED') ? 'ACCEPTED' : 'PLACED', isReady: false, isDelivered: false };
+            return { id: `item-${itemIdx}`, name: it, price: 150, quantity: 1, status: isChefAccepted ? 'ACCEPTED' : 'PLACED', isReady: false, isDelivered: false };
           }
           const isDelivered = Boolean(it.isDelivered || it.status === 'DELIVERED' || it.status === 'SERVED');
           const isReady = Boolean(!isDelivered && (it.isReady || it.status === 'READY' || (rawStatus === 'Ready' && !hasPendingItems)));
           const isOrderPreparing = rawStatus === 'Preparing' || rawStatus === 'Cooking' || o.chefStatus === 'PREPARING';
-          const isCooking = Boolean(!isDelivered && !isReady && isOrderPreparing && (it.status === 'COOKING' || it.status === 'PREPARING' || !it.status || it.status === 'PLACED' || it.status === 'ACCEPTED'));
-          const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : ((rawStatus === 'Accepted' || o.chefStatus === 'ACCEPTED') ? 'ACCEPTED' : 'PLACED')));
+          const isCooking = Boolean(!isDelivered && !isReady && isOrderPreparing && (it.status === 'COOKING' || it.status === 'PREPARING'));
+          const itemStatus = isDelivered ? 'DELIVERED' : (isReady ? 'READY' : (isCooking ? 'COOKING' : (isChefAccepted ? 'ACCEPTED' : 'PLACED')));
           return {
             ...it,
             id: it.id || it._id || `item-${itemIdx}`,
@@ -363,9 +364,6 @@ export default function ChefLayout({ setActivePage }) {
         };
 
         const cleanNote = getCleanChefNote(o.notes || o.chefNotes || o.instructions || '');
-
-        const effectiveRawStatus = overrideStatus || o.status || 'Placed';
-        const effectiveChefStatus = o.chefStatus || (o.chefId ? (effectiveRawStatus === 'Preparing' || effectiveRawStatus === 'Cooking' ? 'PREPARING' : (effectiveRawStatus === 'Ready' ? 'READY' : 'ACCEPTED')) : 'NEW');
 
         let finalStatus = effectiveRawStatus;
         if (activeItemsList.length === 0 || o.status === 'Cancelled') {
