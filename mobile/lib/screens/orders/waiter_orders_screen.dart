@@ -65,7 +65,7 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
     final readyOrders = myOrders.where((o) => o.isReadyToServe && !o.isServed).toList();
     final servingOrders = myOrders.where((o) => o.isServingInTransit).toList();
     final servedOrders = myOrders.where((o) => o.isServed && !o.isPaid).toList();
-    final activeOrders = myOrders.where((o) => !o.isPaid && o.status != 'SERVED').toList();
+    final activeOrders = myOrders.where((o) => !o.isPaid && o.status != 'SERVED' && o.isAcceptedByWaiter).toList();
     final completedOrders = myOrders.where((o) => o.isPaid || o.status.toLowerCase() == 'completed' || o.status.toLowerCase() == 'paid').toList();
 
     return Scaffold(

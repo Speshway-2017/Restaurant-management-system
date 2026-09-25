@@ -9,6 +9,7 @@ import '../../widgets/user_avatar_widget.dart';
 import '../../widgets/check_in_toggle_widget.dart';
 import '../orders/order_detail_screen.dart';
 import '../orders/waiter_orders_screen.dart';
+import '../orders/pending_orders_screen.dart';
 import '../settings/waiter_settings_screen.dart';
 import '../profile/waiter_profile_screen.dart';
 
@@ -261,15 +262,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 3. Hero Card (Pending Acceptance Card if order pending, else Active Accepted Order Card, else Floor Duty Monitor)
-                        if (pendingAcceptanceOrders.isNotEmpty) ...[
-                          _buildPendingAcceptanceHeroCard(
-                              context,
-                              pendingAcceptanceOrders.first,
-                              waiterId,
-                              waiterName,
-                              ordersProvider),
-                        ] else if (acceptedOrders.isNotEmpty) ...[
+                        // 3. Hero Card (Active Accepted Order Card if active order exists, else Pending Acceptance Card if order pending, else Floor Duty Monitor)
+                        if (acceptedOrders.isNotEmpty) ...[
                           _buildActiveOrderHeroCard(
                             context,
                             acceptedOrders,
@@ -280,6 +274,14 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               });
                             },
                           ),
+                        ] else if (pendingAcceptanceOrders.isNotEmpty) ...[
+                          _buildPendingAcceptanceHeroCard(
+                              context,
+                              pendingAcceptanceOrders.first,
+                              waiterId,
+                              waiterName,
+                              ordersProvider,
+                              pendingAcceptanceOrders),
                         ] else ...[
                           Container(
                             width: double.infinity,
@@ -656,6 +658,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     VoidCallback? onTap,
   }) {
     final content = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 34,
@@ -677,14 +680,18 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF64748B),
-            height: 1.1,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+              height: 1.1,
+            ),
           ),
         ),
       ],
@@ -762,43 +769,50 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFF4ED),
-                    shape: BoxShape.circle,
+            Expanded(
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFF4ED),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.receipt_long_rounded,
+                        color: badgeText, size: 22),
                   ),
-                  child: Icon(Icons.receipt_long_rounded,
-                      color: badgeText, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Table T - ${ord.tableNum}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2C140E),
-                      ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Table T - ${ord.tableNum}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2C140E),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${ord.items.length} Items • ₹${ord.totalAmount.toStringAsFixed(0)}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${ord.items.length} Items • ₹${ord.totalAmount.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -896,13 +910,17 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Text(
-                                'ACTIVE ORDER',
-                                style: TextStyle(
-                                  color: Color(0xFFE87524),
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 11,
-                                  letterSpacing: 1.1,
+                              const Flexible(
+                                child: Text(
+                                  'ACTIVE ORDER',
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    color: Color(0xFFE87524),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11,
+                                    letterSpacing: 1.1,
+                                  ),
                                 ),
                               ),
                             ],
@@ -912,6 +930,8 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                             order.orderId.startsWith('#')
                                 ? order.orderId
                                 : '#${order.orderId}',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
@@ -922,30 +942,37 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE87524),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  order.status.toUpperCase(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
-                                    letterSpacing: 0.5,
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE87524),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    order.status.toUpperCase(),
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(
-                                'ETA 10-15 Mins',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
+                              Flexible(
+                                child: Text(
+                                  'ETA 10-15 Mins',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
@@ -1153,43 +1180,49 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE87524),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFE87524)
-                                  .withValues(alpha: 0.3),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE87524),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFE87524)
+                                    .withValues(alpha: 0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            '+${acceptedOrders.length - 1}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
                             ),
-                          ],
-                        ),
-                        child: Text(
-                          '+${acceptedOrders.length - 1}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        '${acceptedOrders.length - 1} More Active Order${acceptedOrders.length - 1 > 1 ? "s" : ""}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            '${acceptedOrders.length - 1} More Active Order${acceptedOrders.length - 1 > 1 ? "s" : ""}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   InkWell(
                     onTap: () {
                       final nextIndex =
@@ -1233,6 +1266,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
     String waiterId,
     String waiterName,
     OrdersProvider ordersProvider,
+    List<OrderModel> allPending,
   ) {
     final itemsSummary = order.items.isNotEmpty
         ? order.items.map((i) => '${i.quantity}x ${i.name}').join(', ')
@@ -1265,38 +1299,50 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2C2415),
-                  borderRadius: BorderRadius.circular(16),
-                  border:
-                      Border.all(color: const Color(0xFFD97706), width: 1.5),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.access_time_filled,
-                        color: Color(0xFFF59E0B), size: 14),
-                    SizedBox(width: 6),
-                    Text(
-                      'Pending Acceptance',
-                      style: TextStyle(
-                        color: Color(0xFFF59E0B),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+              Flexible(
+                fit: FlexFit.loose,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C2415),
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: const Color(0xFFD97706), width: 1.5),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.access_time_filled,
+                          color: Color(0xFFF59E0B), size: 13),
+                      SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          'Pending Acceptance',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Color(0xFFF59E0B),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-              Text(
-                '#${order.orderId}',
-                style: const TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+              const SizedBox(width: 8),
+              Flexible(
+                fit: FlexFit.loose,
+                child: Text(
+                  '#${order.orderId}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ],
@@ -1309,12 +1355,15 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
               const Icon(Icons.calendar_today_outlined,
                   color: Color(0xFFE87524), size: 14),
               const SizedBox(width: 8),
-              Text(
-                'Order Time: $formattedTime',
-                style: const TextStyle(
-                  color: Color(0xFFCBD5E1),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              Flexible(
+                child: Text(
+                  'Order Time: $formattedTime',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFCBD5E1),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -1324,10 +1373,10 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
           // Location / Table Route Row
           Row(
             children: [
-              // Table Start
+              // Table Start dot
               Container(
-                width: 12,
-                height: 12,
+                width: 11,
+                height: 11,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFFE87524), width: 3),
@@ -1340,29 +1389,29 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
               const Icon(Icons.arrow_forward,
-                  color: Color(0xFF64748B), size: 16),
-              const SizedBox(width: 8),
-              // Kitchen Target
+                  color: Color(0xFF64748B), size: 14),
+              const SizedBox(width: 6),
+              // Kitchen Target dot
               Container(
-                width: 12,
-                height: 12,
+                width: 11,
+                height: 11,
                 decoration: const BoxDecoration(
                   color: Color(0xFF10B981),
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               const Text(
-                'Kitchen Pickup',
+                'Kitchen',
                 style: TextStyle(
                   color: Color(0xFF10B981),
-                  fontSize: 14,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1485,6 +1534,95 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
               ),
             ],
           ),
+
+          // ── "View More" footer: only when >1 pending order exists ──────────
+          if (allPending.length > 1)
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => PendingOrdersScreen(
+                          onNavigateTab: widget.onNavigateTab,
+                        )),
+              ),
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF142F1E),
+                  borderRadius:
+                      BorderRadius.vertical(bottom: Radius.circular(24)),
+                  border: Border(
+                      top: BorderSide(color: Color(0xFF1E3A2B), width: 1)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                        // Live count badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFF59E0B)
+                                    .withValues(alpha: 0.35),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            '${allPending.length - 1}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              '${allPending.length - 1} more pending order${allPending.length - 1 > 1 ? "s" : ""}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'View More',
+                          style: TextStyle(
+                            color: Color(0xFFE87524),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(width: 3),
+                        Icon(Icons.arrow_forward_rounded,
+                            color: Color(0xFFE87524), size: 15),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

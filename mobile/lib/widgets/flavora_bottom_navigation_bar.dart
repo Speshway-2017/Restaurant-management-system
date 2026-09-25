@@ -61,6 +61,9 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
             final badge = idx == 3 ? activeAlertsCount : 0;
 
             return Expanded(
+              // Selected tab gets 2x flex so icon+label pill has room to breathe.
+              // Inactive tabs share 1x each (total ratio: 2 : 1 : 1 : 1 : 1).
+              flex: isSelected ? 2 : 1,
               child: _buildNavItem(
                 index: idx,
                 isSelected: isSelected,
@@ -197,9 +200,9 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
                 ],
               ),
 
-              // Active Tab Text Label (Flexible so it yields space to the icon)
+              // Active Tab Text Label — gap trimmed to 3px, trailing box removed
               if (isSelected) ...[
-                const SizedBox(width: 5),
+                const SizedBox(width: 3),
                 Flexible(
                   child: Text(
                     label,
@@ -207,13 +210,12 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 11,   // Reduced from 12 → 11 for tighter fit
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.1,
                     ),
                   ),
                 ),
-                const SizedBox(width: 2),
               ],
             ],
           ),

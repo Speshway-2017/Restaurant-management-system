@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
+import { onSocketEvent } from '../../services/socket';
 
 export default function CustomerBillModal({
   activeOrder,
@@ -63,17 +64,64 @@ export default function CustomerBillModal({
   const [showItemDetails, setShowItemDetails] = useState(true);
   const [isRequestingBill, setIsRequestingBill] = useState(false);
   const [requestBillSent, setRequestBillSent] = useState(false);
+  const [liveOrder, setLiveOrder] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLatestOrder = async () => {
+      try {
+        const freshOrders = await api.getOrders();
+        if (!isMounted || !Array.isArray(freshOrders)) return;
+
+        const targetTable = tableNum || activeOrder?.table || '';
+        const cleanTableNum = String(targetTable).replace(/[^0-9]/g, '');
+        if (!cleanTableNum) return;
+
+        const matched = freshOrders.find(ord => {
+          const ordTableDigits = String(ord.table || ord.tableNumber || '').replace(/[^0-9]/g, '');
+          const isMatch = ordTableDigits && cleanTableNum && String(parseInt(ordTableDigits, 10)) === String(parseInt(cleanTableNum, 10));
+          const isClosed = ord.status === 'Completed' || ord.status === 'Paid' || ord.status === 'Cancelled' || ord.payment === 'Paid' || ord.paymentStatus === 'Paid';
+          return isMatch && !isClosed;
+        });
+
+        if (matched) {
+          setLiveOrder(matched);
+        }
+      } catch (e) {}
+    };
+
+    fetchLatestOrder();
+
+    const unsub1 = onSocketEvent('bill_generated', fetchLatestOrder);
+    const unsub2 = onSocketEvent('order_status_updated', fetchLatestOrder);
+    const unsub3 = onSocketEvent('order_updated', fetchLatestOrder);
+    const unsub4 = onSocketEvent('table_updated', fetchLatestOrder);
+
+    return () => {
+      isMounted = false;
+      if (typeof unsub1 === 'function') unsub1();
+      if (typeof unsub2 === 'function') unsub2();
+      if (typeof unsub3 === 'function') unsub3();
+      if (typeof unsub4 === 'function') unsub4();
+    };
+  }, [tableNum, activeOrder?.table, activeOrder?.orderId]);
+
+  const currentOrder = liveOrder || activeOrder;
 
   const isBillGenerated = Boolean(
-    activeOrder?.isBillGenerated ||
-    activeOrder?.billGenerated ||
-    activeOrder?.status === 'Bill Generated' ||
-    activeOrder?.status === 'Billing' ||
-    activeOrder?.payment === 'Awaiting Payment' ||
-    activeOrder?.paymentStatus === 'Awaiting Payment' ||
-    activeOrder?.status === 'Paid' ||
-    activeOrder?.payment === 'Paid' ||
-    activeOrder?.status === 'Completed'
+    currentOrder?.isBillGenerated ||
+    currentOrder?.billGenerated ||
+    currentOrder?.status === 'Bill Generated' ||
+    currentOrder?.status === 'Billing' ||
+    currentOrder?.status === 'Awaiting Payment' ||
+    currentOrder?.payment === 'Awaiting Payment' ||
+    currentOrder?.payment === 'Bill Generated' ||
+    currentOrder?.paymentStatus === 'Awaiting Payment' ||
+    currentOrder?.paymentStatus === 'Bill Generated' ||
+    currentOrder?.status === 'Paid' ||
+    currentOrder?.payment === 'Paid' ||
+    currentOrder?.paymentStatus === 'Paid' ||
+    currentOrder?.status === 'Completed'
   );
 
   const handleRequestBillFromWaiter = async () => {
@@ -93,15 +141,18 @@ export default function CustomerBillModal({
   const [paidReceiptDetails, setPaidReceiptDetails] = useState(null);
 
   useEffect(() => {
-    if (Array.isArray(activeOrder?.items) && activeOrder.items.length > 0) {
-      setLastKnownItems(activeOrder.items);
+    const itemsSrc = currentOrder?.items || activeOrder?.items;
+    if (Array.isArray(itemsSrc) && itemsSrc.length > 0) {
+      setLastKnownItems(itemsSrc);
     }
-  }, [activeOrder]);
+  }, [currentOrder, activeOrder]);
 
   // Items fetched strictly from MongoDB active order with fallback to last known items
-  const activeItemsList = Array.isArray(activeOrder?.items) && activeOrder.items.length > 0
-    ? activeOrder.items
-    : (lastKnownItems.length > 0 ? lastKnownItems : []);
+  const activeItemsList = (Array.isArray(currentOrder?.items) && currentOrder.items.length > 0)
+    ? currentOrder.items
+    : ((Array.isArray(activeOrder?.items) && activeOrder.items.length > 0)
+      ? activeOrder.items
+      : (lastKnownItems.length > 0 ? lastKnownItems : []));
 
   const items = (showInvoice && paidReceiptDetails?.items) ? paidReceiptDetails.items : activeItemsList;
 
@@ -178,8 +229,8 @@ export default function CustomerBillModal({
   const handlePayOrder = async () => {
     setIsProcessingPayment(true);
     try {
-      const activeTableStr = tableNum || activeOrder?.table || 'T-01';
-      const targetOrderId = activeOrder?._id || activeOrder?.orderId || activeOrder?.id || activeTableStr;
+      const activeTableStr = tableNum || currentOrder?.table || activeOrder?.table || 'T-01';
+      const targetOrderId = currentOrder?._id || currentOrder?.orderId || currentOrder?.id || activeOrder?._id || activeOrder?.orderId || activeOrder?.id || activeTableStr;
 
       const payData = {
         status: 'Paid',

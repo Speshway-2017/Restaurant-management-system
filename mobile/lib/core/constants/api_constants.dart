@@ -1,18 +1,9 @@
 class ApiConstants {
-  static String _overrideBaseUrl = '';
-
-  static void setOverrideBaseUrl(String url) {
-    _overrideBaseUrl = url.trim();
-  }
-
   // ─────────────────────────────────────────────────────────────────────────
-  // PHYSICAL ANDROID DEVICE: Set your machine's LAN/Wi-Fi IP here.
-  // Run `ipconfig` on Windows → look for "IPv4 Address" under your Wi-Fi
-  // adapter (e.g. 192.168.1.5). Leave empty ('') to use emulator default.
+  // Backend Base URL — points to the production server.
+  // Change this to your LAN IP (e.g. 'http://192.168.1.4:5000/api') when
+  // running against a local dev backend from a physical Android device.
   // ─────────────────────────────────────────────────────────────────────────
-  static const String _lanIp = '192.168.1.4'; // Machine LAN IP (ipconfig → Wi-Fi IPv4)
-
-  // Backend Base URL
   static String baseUrl = 'https://restaurant.speshway.site/api';
 
   // Socket.IO Server Root URL (without /api)

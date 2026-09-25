@@ -13,6 +13,9 @@ class OrdersProvider with ChangeNotifier {
   String? _error;
   OrderModel? _latestNewOrder;
   final Set<String> _knownOrderIds = {};
+  // Tracks orders locally rejected/dismissed by this waiter so socket
+  // re-broadcasts don't re-insert them into the active list.
+  final Set<String> _locallyRejectedOrderIds = {};
 
   List<OrderModel> get orders => _orders;
   List<AssistanceModel> get assistanceRequests => _assistanceRequests;
