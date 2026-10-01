@@ -802,177 +802,179 @@ export default function ManagerDashboardHome({ setActiveTab }) {
           </div>
         </div>
 
-        {/* Orders Table */}
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>ORDER ID</th>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TABLE & ZONE</th>
-              <th style={{ padding: '0.65rem 0.85rem' }}>ITEMS ORDERED</th>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>CUSTOMER</th>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TOTAL</th>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>STATUS</th>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TIME</th>
-              <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center', whiteSpace: 'nowrap' }}>TICKET</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredOrders.length === 0 ? (
-              <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: '#94A3B8' }}>
-                  <ShoppingBag size={32} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#475569' }}>No live active orders currently</div>
-                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '0.2rem' }}>New active QR table orders will appear here in real-time.</p>
-                </td>
+        {/* Orders Table Container with Horizontal Scroll */}
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: '850px', borderCollapse: 'separate', borderSpacing: '0', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>ORDER ID</th>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TABLE & ZONE</th>
+                <th style={{ padding: '0.65rem 0.85rem' }}>ITEMS ORDERED</th>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>CUSTOMER</th>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TOTAL</th>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>STATUS</th>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TIME</th>
+                <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center', whiteSpace: 'nowrap' }}>TICKET</th>
               </tr>
-            ) : (
-              filteredOrders.map((ord, index) => {
-                const isCompleted = ord.status === 'Completed';
-                const itemsStr = String(ord.items || '');
-                const itemsList = itemsStr ? itemsStr.split(',').map(i => i.trim()) : [];
-                const visibleItems = itemsList.slice(0, 2);
-                const remainingCount = itemsList.length - 2;
+            </thead>
+            <tbody>
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: '#94A3B8' }}>
+                    <ShoppingBag size={32} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#475569' }}>No live active orders currently</div>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '0.2rem' }}>New active QR table orders will appear here in real-time.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map((ord, index) => {
+                  const isCompleted = ord.status === 'Completed';
+                  const itemsStr = String(ord.items || '');
+                  const itemsList = itemsStr ? itemsStr.split(',').map(i => i.trim()) : [];
+                  const visibleItems = itemsList.slice(0, 2);
+                  const remainingCount = itemsList.length - 2;
 
-                return (
-                  <tr 
-                    key={ord.id} 
-                    style={{ 
-                      backgroundColor: index % 2 === 0 ? '#FFFFFF' : '#FDFBF7',
-                      borderBottom: '1px solid #F4EFEA',
-                      transition: 'background-color 0.15s ease'
-                    }}
-                  >
-                    {/* ORDER ID */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <span style={{ 
-                        fontSize: '0.82rem', 
-                        fontWeight: 900, 
-                        color: '#1C130E',
-                        backgroundColor: '#F5F0E8',
-                        padding: '0.2rem 0.55rem',
-                        borderRadius: '6px',
-                        border: '1px solid #EAE3D2',
-                        fontFamily: 'monospace',
-                        display: 'inline-block'
-                      }}>
-                        #{ord.id}
-                      </span>
-                    </td>
-
-                    {/* TABLE & ZONE */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  return (
+                    <tr 
+                      key={ord.id} 
+                      style={{ 
+                        backgroundColor: index % 2 === 0 ? '#FFFFFF' : '#FDFBF7',
+                        borderBottom: '1px solid #F4EFEA',
+                        transition: 'background-color 0.15s ease'
+                      }}
+                    >
+                      {/* ORDER ID */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                         <span style={{ 
-                          fontSize: '0.78rem', 
-                          fontWeight: 800, 
-                          color: '#92400E', 
-                          backgroundColor: '#FFF5ED', 
-                          padding: '0.2rem 0.55rem', 
+                          fontSize: '0.82rem', 
+                          fontWeight: 900, 
+                          color: '#1C130E',
+                          backgroundColor: '#F5F0E8',
+                          padding: '0.2rem 0.55rem',
                           borderRadius: '6px',
-                          border: '1px solid #FDE68A'
-                        }}>
-                          🪑 {ord.table}
-                        </span>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B' }}>
-                          ({ord.zone || 'Main Dining'})
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* ITEMS ORDERED (STRICT SINGLE LINE) */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', maxWidth: '360px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'nowrap', overflow: 'hidden' }}>
-                        {visibleItems.map((it, idx) => (
-                          <span 
-                            key={idx} 
-                            style={{ 
-                              backgroundColor: '#FFFFFF', 
-                              color: '#2D231E', 
-                              padding: '0.15rem 0.45rem', 
-                              borderRadius: '6px', 
-                              fontSize: '0.74rem', 
-                              fontWeight: 700, 
-                              border: '1px solid #E8E2D5',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            {it}
-                          </span>
-                        ))}
-                        {remainingCount > 0 && (
-                          <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', fontSize: '0.71rem', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-                            +{remainingCount} more
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* CUSTOMER */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#1C130E' }}>
-                        {ord.customer || 'Guest Diner'}
-                      </span>
-                    </td>
-
-                    {/* TOTAL */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#1C130E' }}>
-                        {ord.total}
-                      </span>
-                    </td>
-
-                    {/* STATUS */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <span style={{
-                        padding: '0.2rem 0.55rem',
-                        borderRadius: '9999px',
-                        fontSize: '0.73rem',
-                        fontWeight: 800,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.25rem',
-                        backgroundColor: isCompleted ? '#ECFDF5' : ord.status === 'Preparing' ? '#FEFCE8' : ord.status === 'Ready' ? '#EFF6FF' : '#FFF7ED',
-                        color: isCompleted ? '#047857' : ord.status === 'Preparing' ? '#A16207' : ord.status === 'Ready' ? '#1D4ED8' : '#C2410C',
-                        border: `1px solid ${isCompleted ? '#A7F3D0' : ord.status === 'Preparing' ? '#FEF08A' : ord.status === 'Ready' ? '#BFDBFE' : '#FFEDD5'}`
-                      }}>
-                        <span>{isCompleted ? '✅' : ord.status === 'Preparing' ? '🍳' : ord.status === 'Ready' ? '🔔' : '🔵'}</span>
-                        <span>{ord.status}</span>
-                      </span>
-                    </td>
-
-                    {/* TIME */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '0.76rem', color: '#64748B', fontWeight: 700 }}>
-                      {ord.time}
-                    </td>
-
-                    {/* TICKET ACTION */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button 
-                        onClick={() => setSelectedOrderModal(ord)}
-                        style={{
-                          backgroundColor: '#FAF6EE',
                           border: '1px solid #EAE3D2',
-                          borderRadius: '8px',
-                          padding: '0.3rem 0.65rem',
-                          cursor: 'pointer',
-                          color: '#1E4636',
+                          fontFamily: 'monospace',
+                          display: 'inline-block'
+                        }}>
+                          #{ord.id}
+                        </span>
+                      </td>
+
+                      {/* TABLE & ZONE */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span style={{ 
+                            fontSize: '0.78rem', 
+                            fontWeight: 800, 
+                            color: '#92400E', 
+                            backgroundColor: '#FFF5ED', 
+                            padding: '0.2rem 0.55rem', 
+                            borderRadius: '6px',
+                            border: '1px solid #FDE68A'
+                          }}>
+                            🪑 {ord.table}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B' }}>
+                            ({ord.zone || 'Main Dining'})
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* ITEMS ORDERED (STRICT SINGLE LINE) */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', maxWidth: '360px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'nowrap', overflow: 'hidden' }}>
+                          {visibleItems.map((it, idx) => (
+                            <span 
+                              key={idx} 
+                              style={{ 
+                                backgroundColor: '#FFFFFF', 
+                                color: '#2D231E', 
+                                padding: '0.15rem 0.45rem', 
+                                borderRadius: '6px', 
+                                fontSize: '0.74rem', 
+                                fontWeight: 700, 
+                                border: '1px solid #E8E2D5',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {it}
+                            </span>
+                          ))}
+                          {remainingCount > 0 && (
+                            <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', fontSize: '0.71rem', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                              +{remainingCount} more
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* CUSTOMER */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#1C130E' }}>
+                          {ord.customer || 'Guest Diner'}
+                        </span>
+                      </td>
+
+                      {/* TOTAL */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#1C130E' }}>
+                          {ord.total}
+                        </span>
+                      </td>
+
+                      {/* STATUS */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <span style={{
+                          padding: '0.2rem 0.55rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.73rem',
+                          fontWeight: 800,
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '0.3rem',
-                          fontSize: '0.76rem',
-                          fontWeight: 800
-                        }}
-                      >
-                        <Eye size={13} color="#1E4636" />
-                        <span>View</span>
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                          gap: '0.25rem',
+                          backgroundColor: isCompleted ? '#ECFDF5' : ord.status === 'Preparing' ? '#FEFCE8' : ord.status === 'Ready' ? '#EFF6FF' : '#FFF7ED',
+                          color: isCompleted ? '#047857' : ord.status === 'Preparing' ? '#A16207' : ord.status === 'Ready' ? '#1D4ED8' : '#C2410C',
+                          border: `1px solid ${isCompleted ? '#A7F3D0' : ord.status === 'Preparing' ? '#FEF08A' : ord.status === 'Ready' ? '#BFDBFE' : '#FFEDD5'}`
+                        }}>
+                          <span>{isCompleted ? '✅' : ord.status === 'Preparing' ? '🍳' : ord.status === 'Ready' ? '🔔' : '🔵'}</span>
+                          <span>{ord.status}</span>
+                        </span>
+                      </td>
+
+                      {/* TIME */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '0.76rem', color: '#64748B', fontWeight: 700 }}>
+                        {ord.time}
+                      </td>
+
+                      {/* TICKET ACTION */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <button 
+                          onClick={() => setSelectedOrderModal(ord)}
+                          style={{
+                            backgroundColor: '#FAF6EE',
+                            border: '1px solid #EAE3D2',
+                            borderRadius: '8px',
+                            padding: '0.3rem 0.65rem',
+                            cursor: 'pointer',
+                            color: '#1E4636',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            fontSize: '0.76rem',
+                            fontWeight: 800
+                          }}
+                        >
+                          <Eye size={13} color="#1E4636" />
+                          <span>View</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ================= 5. RECENT LIVE OPERATIONS & ACTIVITY FEED ================= */}
@@ -1022,139 +1024,141 @@ export default function ManagerDashboardHome({ setActiveTab }) {
           </div>
         </div>
 
-        {/* Activity Table */}
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TABLE & EVENT</th>
-              <th style={{ padding: '0.65rem 0.85rem' }}>EVENT DETAILS</th>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>AMOUNT / ACTOR</th>
-              <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TIME</th>
-              <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTION</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredActivities.length === 0 ? (
-              <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: '#94A3B8' }}>
-                  <Clock size={32} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#475569' }}>No recent activity recorded</div>
-                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '0.2rem' }}>Live QR orders & table changes will stream here dynamically.</p>
-                </td>
+        {/* Activity Table Container with Horizontal Scroll */}
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: '850px', borderCollapse: 'separate', borderSpacing: '0', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TABLE & EVENT</th>
+                <th style={{ padding: '0.65rem 0.85rem' }}>EVENT DETAILS</th>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>AMOUNT / ACTOR</th>
+                <th style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>TIME</th>
+                <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTION</th>
               </tr>
-            ) : (
-              filteredActivities.map((act, index) => {
-                const detailsStr = String(act.details || '');
-                const detailItems = detailsStr ? detailsStr.split(',').map(d => d.trim()) : [];
-                const visibleDetails = detailItems.slice(0, 2);
-                const extraCount = detailItems.length - 2;
+            </thead>
+            <tbody>
+              {filteredActivities.length === 0 ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: '#94A3B8' }}>
+                    <Clock size={32} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#475569' }}>No recent activity recorded</div>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '0.2rem' }}>Live QR orders & table changes will stream here dynamically.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredActivities.map((act, index) => {
+                  const detailsStr = String(act.details || '');
+                  const detailItems = detailsStr ? detailsStr.split(',').map(d => d.trim()) : [];
+                  const visibleDetails = detailItems.slice(0, 2);
+                  const extraCount = detailItems.length - 2;
 
-                return (
-                  <tr 
-                    key={act.id} 
-                    style={{ 
-                      backgroundColor: index % 2 === 0 ? '#FFFFFF' : '#FDFBF7',
-                      borderBottom: '1px solid #F4EFEA',
-                      transition: 'background-color 0.15s ease'
-                    }}
-                  >
-                    {/* TABLE & EVENT */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span style={{ 
-                          fontSize: '0.76rem', 
-                          fontWeight: 800, 
-                          color: '#92400E', 
-                          backgroundColor: '#FFF5ED', 
-                          padding: '0.15rem 0.5rem', 
-                          borderRadius: '6px',
-                          border: '1px solid #FDE68A'
-                        }}>
-                          🪑 {act.table}
-                        </span>
-                        <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#1C130E' }}>
-                          {act.title}
-                        </span>
-                        <span style={{ backgroundColor: act.badgeBg || '#FEF3C7', color: act.badgeColor || '#B45309', fontSize: '0.68rem', fontWeight: 800, padding: '0.08rem 0.4rem', borderRadius: '4px' }}>
-                          {act.zone}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* EVENT DETAILS (STRICT SINGLE LINE) */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', maxWidth: '360px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'nowrap', overflow: 'hidden' }}>
-                        {visibleDetails.map((dt, idx) => (
-                          <span 
-                            key={idx} 
-                            style={{ 
-                              backgroundColor: '#FFFFFF', 
-                              color: '#2D231E', 
-                              padding: '0.15rem 0.45rem', 
-                              borderRadius: '6px', 
-                              fontSize: '0.74rem', 
-                              fontWeight: 700, 
-                              border: '1px solid #E8E2D5',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            {dt}
+                  return (
+                    <tr 
+                      key={act.id} 
+                      style={{ 
+                        backgroundColor: index % 2 === 0 ? '#FFFFFF' : '#FDFBF7',
+                        borderBottom: '1px solid #F4EFEA',
+                        transition: 'background-color 0.15s ease'
+                      }}
+                    >
+                      {/* TABLE & EVENT */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ 
+                            fontSize: '0.76rem', 
+                            fontWeight: 800, 
+                            color: '#92400E', 
+                            backgroundColor: '#FFF5ED', 
+                            padding: '0.15rem 0.5rem', 
+                            borderRadius: '6px',
+                            border: '1px solid #FDE68A'
+                          }}>
+                            🪑 {act.table}
                           </span>
-                        ))}
-                        {extraCount > 0 && (
-                          <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', fontSize: '0.71rem', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-                            +{extraCount} more
+                          <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#1C130E' }}>
+                            {act.title}
                           </span>
-                        )}
-                      </div>
-                    </td>
+                          <span style={{ backgroundColor: act.badgeBg || '#FEF3C7', color: act.badgeColor || '#B45309', fontSize: '0.68rem', fontWeight: 800, padding: '0.08rem 0.4rem', borderRadius: '4px' }}>
+                            {act.zone}
+                          </span>
+                        </div>
+                      </td>
 
-                    {/* AMOUNT / ACTOR */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <div style={{ fontSize: '0.88rem', fontWeight: 900, color: '#1C130E' }}>
-                        {act.amount !== '-' ? act.amount : ''}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700 }}>
-                        By {act.actor}
-                      </div>
-                    </td>
+                      {/* EVENT DETAILS (STRICT SINGLE LINE) */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', maxWidth: '360px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'nowrap', overflow: 'hidden' }}>
+                          {visibleDetails.map((dt, idx) => (
+                            <span 
+                              key={idx} 
+                              style={{ 
+                                backgroundColor: '#FFFFFF', 
+                                color: '#2D231E', 
+                                padding: '0.15rem 0.45rem', 
+                                borderRadius: '6px', 
+                                fontSize: '0.74rem', 
+                                fontWeight: 700, 
+                                border: '1px solid #E8E2D5',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {dt}
+                            </span>
+                          ))}
+                          {extraCount > 0 && (
+                            <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', fontSize: '0.71rem', fontWeight: 800, padding: '0.15rem 0.45rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                              +{extraCount} more
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    {/* TIME */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '0.76rem', color: '#64748B', fontWeight: 700 }}>
-                      {act.time}
-                    </td>
+                      {/* AMOUNT / ACTOR */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: '0.88rem', fontWeight: 900, color: '#1C130E' }}>
+                          {act.amount !== '-' ? act.amount : ''}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700 }}>
+                          By {act.actor}
+                        </div>
+                      </td>
 
-                    {/* ACTION */}
-                    <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button 
-                        onClick={() => {
-                          const realOrd = activeOrders.find(o => String(o.id) === String(act.orderId) || String(o.id) === String(act.id.replace('act-live-', '')));
-                          setSelectedOrderModal(realOrd || { id: act.orderId || act.id, table: act.table, customer: act.actor, total: act.amount, items: act.details, status: act.status || 'Placed' });
-                        }}
-                        style={{
-                          backgroundColor: '#FAF6EE',
-                          border: '1px solid #EAE3D2',
-                          borderRadius: '8px',
-                          padding: '0.3rem 0.65rem',
-                          cursor: 'pointer',
-                          color: '#1E4636',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.3rem',
-                          fontSize: '0.76rem',
-                          fontWeight: 800
-                        }}
-                      >
-                        <Eye size={13} color="#1E4636" />
-                        <span>Details</span>
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                      {/* TIME */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '0.76rem', color: '#64748B', fontWeight: 700 }}>
+                        {act.time}
+                      </td>
+
+                      {/* ACTION */}
+                      <td style={{ padding: '0.55rem 0.85rem', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <button 
+                          onClick={() => {
+                            const realOrd = activeOrders.find(o => String(o.id) === String(act.orderId) || String(o.id) === String(act.id.replace('act-live-', '')));
+                            setSelectedOrderModal(realOrd || { id: act.orderId || act.id, table: act.table, customer: act.actor, total: act.amount, items: act.details, status: act.status || 'Placed' });
+                          }}
+                          style={{
+                            backgroundColor: '#FAF6EE',
+                            border: '1px solid #EAE3D2',
+                            borderRadius: '8px',
+                            padding: '0.3rem 0.65rem',
+                            cursor: 'pointer',
+                            color: '#1E4636',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            fontSize: '0.76rem',
+                            fontWeight: 800
+                          }}
+                        >
+                          <Eye size={13} color="#1E4636" />
+                          <span>Details</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ================= ORDER DETAILS MODAL ================= */}

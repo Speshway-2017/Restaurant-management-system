@@ -33,7 +33,9 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text.trim(),
       );
 
-      if (!success && mounted) {
+      if (success && mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else if (!success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -41,14 +43,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Icon(Icons.error_outline, color: Colors.white),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: Text(authProvider.errorMessage ??
-                        'Invalid email or password.')),
+                  child: Text(
+                    authProvider.errorMessage ?? 'Invalid email or password.',
+                  ),
+                ),
               ],
             ),
             backgroundColor: AppColors.cancelledText,
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -71,64 +76,104 @@ class _LoginScreenState extends State<LoginScreen> {
     final isAuthLoading = authProvider.status == AuthStatus.authenticating;
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
-                child: IntrinsicHeight(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const SizedBox(height: 10),
+      backgroundColor: const Color(0xFFFDF8EE),
+      body: Stack(
+        children: [
+          // 1. Full-Screen Background Image (Shared directly with Splash Screen)
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/splash_screen.jpg',
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              alignment: Alignment.center,
+              errorBuilder: (ctx, err, stack) {
+                return Container(
+                  color: const Color(0xFFFDF8EE),
+                  child: CustomPaint(
+                    painter: LoginBackgroundPainter(),
+                  ),
+                );
+              },
+            ),
+          ),
 
-                                // Unified Form & Branding Card
+          // 2. Subtle Dark Vignette Overlay for image depth and contrast
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.15),
+            ),
+          ),
+
+          // 3. Foreground Content with Floating Warm Cream Card Container
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  physics: const BouncingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 440),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 24,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(height: 12),
+
+                                // Warm Cream Floating Card Container (Matches Splash Screen Visual Language)
                                 Container(
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(24),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    color: const Color(0xFFFFF8EF),
+                                    borderRadius: BorderRadius.circular(28),
+                                    border: Border.all(
+                                      color: const Color(0xFFE7DCCF),
+                                      width: 1.5,
+                                    ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.05),
-                                        blurRadius: 20,
-                                        offset: const Offset(0, 8),
+                                        color: Colors.black.withValues(alpha: 0.22),
+                                        blurRadius: 30,
+                                        offset: const Offset(0, 12),
                                       ),
                                     ],
                                   ),
-                                  padding: const EdgeInsets.all(24),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 26,
+                                  ),
                                   child: Form(
                                     key: _formKey,
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
-                                        // Brand Logo (Inside Card)
+                                        // Flavora Logo Emblem Container (Matches Splash Logo Container)
                                         Container(
-                                          width: 100,
-                                          height: 100,
-                                          padding: const EdgeInsets.all(6),
+                                          width: 90,
+                                          height: 90,
+                                          padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(20),
+                                            color: const Color(0xFFFFFDF8),
+                                            borderRadius: BorderRadius.circular(22),
+                                            border: Border.all(
+                                              color: const Color(0xFFE7DCCF),
+                                              width: 1,
+                                            ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: Colors.black
-                                                    .withValues(alpha: 0.04),
-                                                blurRadius: 10,
-                                                offset: const Offset(0, 3),
+                                                color: const Color(0xFF0F4D3A)
+                                                    .withValues(alpha: 0.08),
+                                                blurRadius: 12,
+                                                offset: const Offset(0, 4),
                                               ),
                                             ],
                                           ),
@@ -137,15 +182,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                             fit: BoxFit.contain,
                                             errorBuilder: (ctx, err, stack) {
                                               return const Icon(
-                                                  Icons.restaurant_outlined,
-                                                  size: 36,
-                                                  color: Color(0xFF0F3526));
+                                                Icons.restaurant_outlined,
+                                                size: 40,
+                                                color: Color(0xFF0F4D3A),
+                                              );
                                             },
                                           ),
                                         ),
-                                        const SizedBox(height: 10),
+                                        const SizedBox(height: 12),
 
-                                        // Flavora Kitchen Brand Name Text
+                                        // Brand Header Text
                                         RichText(
                                           textAlign: TextAlign.center,
                                           text: const TextSpan(
@@ -153,50 +199,48 @@ class _LoginScreenState extends State<LoginScreen> {
                                               TextSpan(
                                                 text: 'Flavora ',
                                                 style: TextStyle(
-                                                  fontSize: 25,
-                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 26,
+                                                  fontWeight: FontWeight.bold,
                                                   fontStyle: FontStyle.italic,
-                                                  color: Color(0xFFE87524),
-                                                  letterSpacing: 0,
-                                                  height: 1.0,
+                                                  color: Color(0xFFF36F0A),
+                                                  letterSpacing: -0.5,
                                                 ),
                                               ),
                                               TextSpan(
                                                 text: 'Kitchen',
                                                 style: TextStyle(
-                                                  fontSize: 25,
-                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 26,
+                                                  fontWeight: FontWeight.bold,
                                                   fontStyle: FontStyle.italic,
-                                                  color: Color(0xFF252525),
-                                                  letterSpacing: 0,
-                                                  height: 1.0,
+                                                  color: Color(0xFF0F4D3A),
+                                                  letterSpacing: -0.5,
                                                 ),
                                               ),
                                             ],
                                           ),
                                         ),
-                                        const SizedBox(height: 6),
-                                        // Tagline (Inside Card)
+                                        const SizedBox(height: 4),
+
+                                        // Tagline matching Splash Screen
                                         const Text(
-                                          'GOOD FOOD GREAT MOMENTS',
+                                          'GOOD FOOD. GREAT MOMENTS.',
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize: 11,
                                             fontWeight: FontWeight.w900,
-                                            color:
-                                                Color(0xFFD95D27), // Terracotta Orange
-                                            letterSpacing: 2.5,
+                                            color: Color(0xFFD97706),
+                                            letterSpacing: 2.2,
                                           ),
                                           textAlign: TextAlign.center,
                                         ),
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 16),
 
-                                        // Title (Inside Card)
+                                        // Header Title & Subtitle
                                         const Text(
                                           'Welcome Back!',
                                           style: TextStyle(
                                             fontSize: 28,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF0F3526),
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F4D3A),
                                             letterSpacing: -0.5,
                                           ),
                                           textAlign: TextAlign.center,
@@ -205,15 +249,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                         const Text(
                                           'Sign in to continue to your RMS account',
                                           style: TextStyle(
-                                            fontSize: 13,
-                                            color: Color(0xFF64748B),
+                                            fontSize: 13.5,
+                                            color: Color(0xFF6B7280),
                                             fontWeight: FontWeight.w500,
                                           ),
                                           textAlign: TextAlign.center,
                                         ),
                                         const SizedBox(height: 24),
 
-                                        // Email Input
+                                        // Email Field Label & Input
                                         Align(
                                           alignment: Alignment.centerLeft,
                                           child: _buildLabel('Email Address'),
@@ -233,7 +277,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                         const SizedBox(height: 16),
 
-                                        // Password Input
+                                        // Password Field Label & Input
                                         Align(
                                           alignment: Alignment.centerLeft,
                                           child: _buildLabel('Password'),
@@ -249,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                               _obscurePassword
                                                   ? Icons.visibility_outlined
                                                   : Icons.visibility_off_outlined,
-                                              color: const Color(0xFF94A3B8),
+                                              color: const Color(0xFF6B7280),
                                               size: 20,
                                             ),
                                             onPressed: () {
@@ -268,22 +312,24 @@ class _LoginScreenState extends State<LoginScreen> {
                                         const SizedBox(height: 14),
 
                                         // Remember Me & Forgot Password Row
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
+                                        Wrap(
+                                          alignment: WrapAlignment.spaceBetween,
+                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          spacing: 8,
+                                          runSpacing: 8,
                                           children: [
                                             Row(
+                                              mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 SizedBox(
                                                   width: 20,
                                                   height: 20,
                                                   child: Checkbox(
                                                     value: _rememberMe,
-                                                    activeColor:
-                                                        const Color(0xFF0F3526),
+                                                    activeColor: const Color(0xFF0F4D3A),
                                                     shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(4)),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
                                                     onChanged: (val) {
                                                       setState(() {
                                                         _rememberMe = val ?? true;
@@ -296,53 +342,52 @@ class _LoginScreenState extends State<LoginScreen> {
                                                   'Remember me',
                                                   style: TextStyle(
                                                     fontSize: 13,
-                                                    color: Color(0xFF475569),
-                                                    fontWeight: FontWeight.w500,
+                                                    color: Color(0xFF374151),
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
                                               ],
                                             ),
                                             GestureDetector(
                                               onTap: () =>
-                                                  _navigateToForgotPasswordScreen(
-                                                      context),
+                                                  _navigateToForgotPasswordScreen(context),
                                               child: const Text(
                                                 'Forgot Password?',
                                                 style: TextStyle(
                                                   fontSize: 13,
-                                                  color: Color(
-                                                      0xFFD95D27), // Terracotta Orange
+                                                  color: Color(0xFFF36F0A),
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                               ),
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 20),
+                                        const SizedBox(height: 22),
 
-                                        // Dark Green Sign In Button
+                                        // Sign In CTA Button (Matching Splash Button Style)
                                         SizedBox(
                                           width: double.infinity,
-                                          height: 50,
+                                          height: 54,
                                           child: ElevatedButton(
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                  0xFF0F3526), // Dark Forest Green
+                                              backgroundColor: const Color(0xFF0F4D3A),
                                               foregroundColor: Colors.white,
-                                              elevation: 0,
+                                              elevation: 4,
+                                              shadowColor: const Color(0xFF0F4D3A)
+                                                  .withValues(alpha: 0.35),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(14),
+                                                borderRadius: BorderRadius.circular(28),
                                               ),
                                             ),
-                                            onPressed:
-                                                isAuthLoading ? null : _handleLogin,
+                                            onPressed: isAuthLoading ? null : _handleLogin,
                                             child: isAuthLoading
                                                 ? const SizedBox(
-                                                    width: 20,
-                                                    height: 20,
+                                                    width: 22,
+                                                    height: 22,
                                                     child: CircularProgressIndicator(
-                                                        color: Colors.white,
-                                                        strokeWidth: 2),
+                                                      color: Colors.white,
+                                                      strokeWidth: 2.5,
+                                                    ),
                                                   )
                                                 : const Row(
                                                     mainAxisAlignment:
@@ -351,110 +396,149 @@ class _LoginScreenState extends State<LoginScreen> {
                                                       Text(
                                                         'Sign In',
                                                         style: TextStyle(
-                                                          fontSize: 16,
+                                                          fontSize: 16.5,
                                                           fontWeight: FontWeight.bold,
-                                                          letterSpacing: 0.2,
+                                                          letterSpacing: 0.5,
                                                         ),
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Icon(
+                                                        Icons.arrow_forward_rounded,
+                                                        size: 20,
                                                       ),
                                                     ],
                                                   ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 24),
+
+                                        // Suite Divider Line
+                                        const Row(
+                                          children: [
+                                            Expanded(
+                                              child: Divider(
+                                                color: Color(0xFFE7DCCF),
+                                                thickness: 1,
+                                              ),
+                                            ),
+                                            Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 10),
+                                              child: Text(
+                                                'INTEGRATED MANAGEMENT SUITE',
+                                                style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF6B7280),
+                                                  letterSpacing: 1.1,
+                                                ),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: Divider(
+                                                color: Color(0xFFE7DCCF),
+                                                thickness: 1,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+
+                                        // 4 Feature Suite Quick Chips
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            Expanded(
+                                              child: _buildSuiteFeatureChip(
+                                                icon: Icons.touch_app_rounded,
+                                                label: 'Smart Ordering',
+                                                iconColor: const Color(0xFFF36F0A),
+                                                bgColor: const Color(0xFFFFE7D2),
+                                                borderColor: const Color(0xFFFFCFA5),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: _buildSuiteFeatureChip(
+                                                icon: Icons.soup_kitchen_rounded,
+                                                label: 'Live Kitchen',
+                                                iconColor: const Color(0xFF0F4D3A),
+                                                bgColor: const Color(0xFFDDEFE5),
+                                                borderColor: const Color(0xFFBBE0CD),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: _buildSuiteFeatureChip(
+                                                icon: Icons.table_restaurant_rounded,
+                                                label: 'Table Mgmt',
+                                                iconColor: const Color(0xFFD97706),
+                                                bgColor: const Color(0xFFFFF0C7),
+                                                borderColor: const Color(0xFFFFE38E),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: _buildSuiteFeatureChip(
+                                                icon: Icons.insights_rounded,
+                                                label: 'Analytics',
+                                                iconColor: const Color(0xFF4F46E5),
+                                                bgColor: const Color(0xFFE6E9FF),
+                                                borderColor: const Color(0xFFC5CBFF),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 20),
+
+                                        // Bottom Feature Footer Bar Container
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                            horizontal: 14,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF5ECE0),
+                                            borderRadius: BorderRadius.circular(16),
+                                            border: Border.all(
+                                              color: const Color(0xFFE7DCCF),
+                                            ),
+                                          ),
+                                          child: const Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceAround,
+                                            children: [
+                                              _FooterFeatureItem(
+                                                icon: Icons.apartment_rounded,
+                                                label: 'Multi-Branch',
+                                              ),
+                                              _FooterFeatureItem(
+                                                icon: Icons.gpp_good_outlined,
+                                                label: 'Secure RMS',
+                                              ),
+                                              _FooterFeatureItem(
+                                                icon: Icons.support_agent_rounded,
+                                                label: '24/7 Support',
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 24),
-
-                                // Integrated Management Suite Section
-                                const Text(
-                                  'INTEGRATED MANAGEMENT SUITE',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF64748B),
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-
-                                // 4 Feature Quick Chips with Colorful & Attractive Icons
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    Expanded(
-                                      child: _buildSuiteFeatureChip(
-                                        icon: Icons.touch_app_rounded,
-                                        label: 'Smart Ordering',
-                                        iconColor: const Color(0xFFE87524), // Terracotta Orange
-                                        bgColor: const Color(0xFFFFF4ED),
-                                        borderColor: const Color(0xFFFFD8C2),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: _buildSuiteFeatureChip(
-                                        icon: Icons.soup_kitchen_rounded,
-                                        label: 'Live Kitchen',
-                                        iconColor: const Color(0xFF0F3526), // Deep Forest Green
-                                        bgColor: const Color(0xFFE6F4ED),
-                                        borderColor: const Color(0xFFBBE3CE),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: _buildSuiteFeatureChip(
-                                        icon: Icons.table_restaurant_rounded,
-                                        label: 'Table Mgmt',
-                                        iconColor: const Color(0xFFD97706), // Amber Warm Gold
-                                        bgColor: const Color(0xFFFEF3C7),
-                                        borderColor: const Color(0xFFFDE68A),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: _buildSuiteFeatureChip(
-                                        icon: Icons.insights_rounded,
-                                        label: 'Analytics',
-                                        iconColor: const Color(0xFF4F46E5), // Indigo Royal Blue
-                                        bgColor: const Color(0xFFEEF2FF),
-                                        borderColor: const Color(0xFFC7D2FE),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 24),
+                                const SizedBox(height: 12),
                               ],
                             ),
-
-                            // Bottom Feature Footer Bar
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEFE9DE), // Warm Light Tan
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFFE2D7C7)),
-                              ),
-                              child: const Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                children: [
-                                  _FooterFeatureItem(
-                                      icon: Icons.apartment_rounded, label: 'Multi-Branch'),
-                                  _FooterFeatureItem(
-                                      icon: Icons.gpp_good_outlined, label: 'Secure RMS'),
-                                  _FooterFeatureItem(
-                                      icon: Icons.support_agent_rounded, label: '24/7 Support'),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            );
-          },
-        ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -465,7 +549,7 @@ class _LoginScreenState extends State<LoginScreen> {
       style: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.bold,
-        color: Color(0xFF1E293B),
+        color: Color(0xFF0F4D3A),
       ),
     );
   }
@@ -485,33 +569,36 @@ class _LoginScreenState extends State<LoginScreen> {
       keyboardType: keyboardType,
       validator: validator,
       style: const TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF1F2937),
+      ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(
-            fontSize: 14,
-            color: Color(0xFF94A3B8),
-            fontWeight: FontWeight.normal),
+          fontSize: 14,
+          color: Color(0xFF9CA3AF),
+          fontWeight: FontWeight.normal,
+        ),
         filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 20),
+        fillColor: const Color(0xFFFFFDF8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        prefixIcon: Icon(icon, color: const Color(0xFF0F4D3A), size: 20),
         suffixIcon: suffixIcon,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(22),
+          borderSide: const BorderSide(color: Color(0xFFE7DCCF)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(22),
+          borderSide: const BorderSide(color: Color(0xFFE7DCCF)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0F3526), width: 1.8),
+          borderRadius: BorderRadius.circular(22),
+          borderSide: const BorderSide(color: Color(0xFF0F4D3A), width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(22),
           borderSide: const BorderSide(color: Color(0xFFEF4444)),
         ),
       ),
@@ -528,8 +615,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 48,
-          height: 48,
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: bgColor,
@@ -544,7 +631,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           child: Icon(icon, size: 22, color: iconColor),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
           child: FittedBox(
@@ -555,7 +642,7 @@ class _LoginScreenState extends State<LoginScreen> {
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF334155),
+                color: Color(0xFF374151),
               ),
             ),
           ),
@@ -577,7 +664,7 @@ class _FooterFeatureItem extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: const Color(0xFF475569)),
+          Icon(icon, size: 14, color: const Color(0xFF0F4D3A)),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
@@ -587,7 +674,7 @@ class _FooterFeatureItem extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF334155),
+                color: Color(0xFF374151),
               ),
             ),
           ),
@@ -595,4 +682,47 @@ class _FooterFeatureItem extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CUSTOM PAINTER FOR SOFT AMBIENT BACKGROUND GLOW (FALLBACK MATCHING SPLASH)
+// ─────────────────────────────────────────────────────────────────────────
+class LoginBackgroundPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paintGreen = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFF0F4D3A).withValues(alpha: 0.08),
+          const Color(0xFFFFF8EF).withValues(alpha: 0.0),
+        ],
+      ).createShader(Rect.fromCircle(
+        center: Offset(size.width * 0.15, size.height * 0.12),
+        radius: size.width * 0.6,
+      ));
+    canvas.drawCircle(
+      Offset(size.width * 0.15, size.height * 0.12),
+      size.width * 0.6,
+      paintGreen,
+    );
+
+    final paintOrange = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFFF8A00).withValues(alpha: 0.14),
+          const Color(0xFFFFF8EF).withValues(alpha: 0.0),
+        ],
+      ).createShader(Rect.fromCircle(
+        center: Offset(size.width * 0.5, size.height * 0.45),
+        radius: size.width * 0.5,
+      ));
+    canvas.drawCircle(
+      Offset(size.width * 0.5, size.height * 0.45),
+      size.width * 0.5,
+      paintOrange,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -1698,6 +1698,9 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
               onTap: () async {
                 Navigator.pop(context);
                 await authProvider.logout();
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
               },
               borderRadius: BorderRadius.circular(10),
               child: const Padding(
