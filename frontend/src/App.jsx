@@ -66,10 +66,25 @@ export default function App() {
     const path = window.location.pathname.toLowerCase();
     const search = window.location.search.toLowerCase();
 
+    if (path === '/' || path === '' || path === '/home') {
+      return 'home';
+    }
+    if (path.includes('/login')) {
+      return 'login';
+    }
     // Public customer dining menu QR bypass
     if (path.includes('/menu') || search.includes('table=')) {
       return 'menu';
     }
+    if (path.includes('/about')) return 'about';
+    if (path.includes('/gallery')) return 'gallery';
+    if (path.includes('/offer')) return 'offer';
+    if (path.includes('/features')) return 'features';
+    if (path.includes('/performance')) return 'performance';
+    if (path.includes('/security')) return 'security';
+    if (path.includes('/blogs')) return 'blogs';
+    if (path.includes('/contact')) return 'contact';
+
     if (path.includes('/receptionist')) {
       return getAuthorizedDashboardPage('receptionist');
     }
@@ -90,7 +105,7 @@ export default function App() {
     if (saved && ['admin', 'manager', 'chef', 'waiter', 'receptionist'].includes(saved)) {
       return getAuthorizedDashboardPage(saved);
     }
-    return saved || 'home';
+    return (saved && saved !== 'login') ? saved : 'home';
   });
 
   const [demoModalOpen, setDemoModalOpen] = useState(false);
@@ -137,8 +152,16 @@ export default function App() {
           localStorage.removeItem('flavora_logged_in');
           localStorage.removeItem('flavora_user_role');
           localStorage.removeItem('flavora_user_data');
-          setActivePageState('login');
-          window.history.pushState({}, '', '/login');
+          
+          // Only redirect to login page if currently on a protected staff dashboard
+          setActivePageState((prevPage) => {
+            const protectedPages = ['admin', 'manager', 'chef', 'waiter', 'receptionist'];
+            if (protectedPages.includes(prevPage)) {
+              window.history.pushState({}, '', '/login');
+              return 'login';
+            }
+            return prevPage || 'home';
+          });
         });
     }
   }, []);
@@ -174,8 +197,28 @@ export default function App() {
       const path = window.location.pathname.toLowerCase();
       const search = window.location.search.toLowerCase();
 
-      if (path.includes('/menu') || search.includes('table=')) {
+      if (path === '/' || path === '' || path === '/home') {
+        setActivePageState('home');
+      } else if (path.includes('/login')) {
+        setActivePageState('login');
+      } else if (path.includes('/menu') || search.includes('table=')) {
         setActivePageState('menu');
+      } else if (path.includes('/about')) {
+        setActivePageState('about');
+      } else if (path.includes('/gallery')) {
+        setActivePageState('gallery');
+      } else if (path.includes('/offer')) {
+        setActivePageState('offer');
+      } else if (path.includes('/features')) {
+        setActivePageState('features');
+      } else if (path.includes('/performance')) {
+        setActivePageState('performance');
+      } else if (path.includes('/security')) {
+        setActivePageState('security');
+      } else if (path.includes('/blogs')) {
+        setActivePageState('blogs');
+      } else if (path.includes('/contact')) {
+        setActivePageState('contact');
       } else if (path.includes('/receptionist')) {
         setActivePageState(getAuthorizedDashboardPage('receptionist'));
       } else if (path.includes('/chef')) {
