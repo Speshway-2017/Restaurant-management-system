@@ -28,3 +28,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/images/logo.png
+    - assets/images/qr-logo.png
+    - assets/images/splash_screen.jpg

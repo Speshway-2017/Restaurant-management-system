@@ -4,6 +4,7 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -2305,7 +2306,7 @@ h6 {
   font-family: 'Inter', sans-serif;
   font-size: 0.72rem;
   font-weight: 700;
-  color:#000000;
+  color: #000000;
   opacity: 0.95;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -8220,8 +8221,8 @@ input::-webkit-credentials-auto-fill-button {
 /* ==========================================================================
    GLOBAL MODAL SCROLLING & MAX-HEIGHT SAFETY RULES
    ========================================================================== */
-div[style*="position: fixed"] > div,
-div[style*="position:fixed"] > div,
+div[style*="position: fixed"]>div,
+div[style*="position:fixed"]>div,
 .admin-modal-card,
 .modal-card {
   max-height: 90vh !important;
@@ -8265,6 +8266,7 @@ div[style*="position:fixed"] > div,
     justify-content: flex-start;
     scrollbar-width: none;
   }
+
   .customer-filter-scroll-group::-webkit-scrollbar {
     display: none;
   }
@@ -8370,6 +8372,7 @@ div[style*="position:fixed"] > div,
     padding: 0 !important;
     align-items: flex-end !important;
   }
+
   .customer-modal-card {
     border-radius: 24px 24px 0 0 !important;
     max-height: 92vh !important;

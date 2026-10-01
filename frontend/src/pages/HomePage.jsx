@@ -55,7 +55,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
       try {
         const saved = localStorage.getItem('flavora_restaurant_settings');
         setSettings(saved ? JSON.parse(saved) : {});
-      } catch (e) {}
+      } catch (e) { }
     };
     window.addEventListener('flavora_settings_updated', handleSettingsSync);
     return () => window.removeEventListener('flavora_settings_updated', handleSettingsSync);
@@ -94,7 +94,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
         const clean = String(tableParam).toUpperCase().replace(/[^A-Z0-9-]/g, '');
         return `flavora_cart_${clean}`;
       }
-    } catch (e) {}
+    } catch (e) { }
     return 'flavora_cart_GENERAL';
   };
 
@@ -118,7 +118,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
         localStorage.setItem(key, JSON.stringify(newCart));
       }
       window.dispatchEvent(new Event('flavora_cart_updated'));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -126,7 +126,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
       try {
         const saved = localStorage.getItem(getCartStorageKey());
         setCart(saved ? JSON.parse(saved) : {});
-      } catch (e) {}
+      } catch (e) { }
     };
     handleCartSync();
     window.addEventListener('flavora_cart_updated', handleCartSync);
@@ -158,7 +158,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
 
   // Default menu highlights
   const [menuHighlights, setMenuHighlights] = useState([
-    
+
   ]);
 
   const totalCartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
@@ -189,7 +189,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
               bestseller: item.bestseller !== undefined ? item.bestseller : (item.isBestseller !== undefined ? item.isBestseller : false)
             })));
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // Fetch from API database and merge local availability status
@@ -319,7 +319,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
           return parsed.filter(c => c.available !== false);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return defaultCombosList;
   });
 
@@ -334,7 +334,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
             return;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
       setSpecialCombos(defaultCombosList);
     };
 
@@ -397,13 +397,13 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
 
       {/* ================= 1. HERO SLIDER SECTION (VIBRANT RMS PALETTE + 3D PARALLAX) ================= */}
       <section className="ref-hero-wrapper" style={{ minHeight: '92vh', display: 'flex', alignItems: 'center', position: 'relative', overflow: 'hidden', backgroundColor: '#FFFDF8' }}>
-        
+
         {/* Background Glowing Halos */}
         <div className="hero-ambient-blob hero-blob-1" style={{ background: 'radial-gradient(circle, rgba(255, 138, 0, 0.22), transparent 70%)' }} />
         <div className="hero-ambient-blob hero-blob-2" style={{ background: 'radial-gradient(circle, rgba(15, 42, 29, 0.18), transparent 70%)' }} />
-        
+
         <div className="ref-hero-container" style={{ width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '2rem 1.5rem', display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '3rem', alignItems: 'center' }}>
-          
+
           {/* Left Column: Kinetic Typography & Actions */}
           <div style={{ position: 'relative', zIndex: 3 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
@@ -430,7 +430,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
                 <span>{statusInfo.label}</span>
               </span>
             </div>
-            
+
             <h1 className="ref-hero-title" style={{ fontSize: 'clamp(2.4rem, 5vw, 3.8rem)', fontWeight: 800, lineHeight: 1.15, marginBottom: '1.25rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
               <KineticCenterBuild
                 phrases={heroSlides.map(s => s.title)}
@@ -472,7 +472,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
           </div>
 
           {/* Right Column: 3D Parallax Stage & Glass Dish Cards (NO RATING BADGES ON IMAGES) */}
-          <div 
+          <div
             className="ref-hero-dish-stage"
             onMouseMove={handleDishMouseMove}
             onMouseLeave={handleDishMouseLeave}
@@ -482,7 +482,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
             <div className="dish-stage-halo" style={{ background: 'radial-gradient(circle, rgba(255, 138, 0, 0.28), transparent 70%)' }} />
 
             {/* Floating Glassmorphic Dish Card 1 (NO RATING BADGE) */}
-            <div 
+            <div
               style={{
                 position: 'absolute',
                 top: '4%',
@@ -509,7 +509,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
             </div>
 
             {/* Floating Glassmorphic Dish Card 2 (NO RATING BADGE) */}
-            <div 
+            <div
               style={{
                 position: 'absolute',
                 bottom: '6%',
@@ -583,7 +583,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
       <section style={{ backgroundColor: '#0A2318', padding: '1.1rem 0', color: '#FFFFFF', overflow: 'hidden', borderTop: '2px solid #FF8A00' }}>
         <InfiniteSlider gap={36} speed={28} speedOnHover={0}>
           {marqueeBadges.map((badge, bIdx) => (
-            <div 
+            <div
               key={bIdx}
               style={{
                 display: 'inline-flex',
@@ -608,7 +608,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
       <section style={{ backgroundColor: '#F0F7F3', padding: '3.5rem 1.5rem', borderTop: '1px solid #D8EADF' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'center' }}>
-            
+
             <div>
               <div style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                 OUR STORY & LEGACY
@@ -648,7 +648,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
             </div>
 
             <div style={{ position: 'relative' }}>
-              <div 
+              <div
                 style={{
                   position: 'absolute',
                   inset: '-10px',
@@ -736,20 +736,20 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
               Reserve Your Table in Advance
             </h2>
 
-            <p style={{ fontSize: '1.02rem', color: '#CBD5E1', lineHeight: 1.65, margin: '0 0 1.5rem 0', maxWidth: '560px' }}>
+            <p style={{ fontSize: '1.02rem', color: '#0F2A1D', lineHeight: 1.65, margin: '0 0 1.5rem 0', maxWidth: '560px' }}>
               Planning a royal family feast, romantic candlelight dinner, or business lunch? Book your table with instant confirmation, live seating preferences, and dedicated chef hospitality.
             </p>
 
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#E2E8F0', fontWeight: 600 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#0F2A1D', fontWeight: 600 }}>
                 <CheckCircle2 size={16} color="#FF8A00" />
                 <span>Zero Booking Fees</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#E2E8F0', fontWeight: 600 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#0F2A1D', fontWeight: 600 }}>
                 <CheckCircle2 size={16} color="#FF8A00" />
                 <span>15-Min Grace Period</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#E2E8F0', fontWeight: 600 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#0F2A1D', fontWeight: 600 }}>
                 <CheckCircle2 size={16} color="#FF8A00" />
                 <span>Instant Confirmation</span>
               </div>
@@ -808,7 +808,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
       {/* ================= 5. CURATED CULINARY SELECTION ================= */}
       <section style={{ backgroundColor: '#FFFDF8', padding: '2rem 1.5rem 1.75rem 1.5rem', borderTop: '1px solid #F0F4F2' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
-          
+
           <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.35rem', display: 'block' }}>
               OUR SIGNATURE MENU
@@ -851,7 +851,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
             </div>
 
             {/* Veg Only Toggle Switch (Single Line) */}
-            <div 
+            <div
               onClick={() => setVegOnly(!vegOnly)}
               style={{
                 display: 'inline-flex',
@@ -868,7 +868,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
                 <span style={{ position: 'absolute', inset: '2.5px', backgroundColor: '#166534', borderRadius: '50%' }}></span>
               </span>
               <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#1E4636', whiteSpace: 'nowrap' }}>Veg Only</span>
-              <div 
+              <div
                 style={{
                   width: '44px',
                   height: '24px',
@@ -923,7 +923,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
 
             return homeSections.map((group) => (
               <div key={group.key} style={{ marginBottom: '2.5rem' }}>
-                
+
                 {/* Category Alignment Section Header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem', borderBottom: '2px solid rgba(15, 42, 29, 0.12)', paddingBottom: '0.5rem' }}>
                   <span style={{ fontSize: '1.4rem' }}>{group.icon}</span>

@@ -7,6 +7,7 @@ import 'core/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/tables_provider.dart';
 import 'providers/orders_provider.dart';
+import 'screens/splash/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_navigation_screen.dart';
 
@@ -32,8 +33,23 @@ void main() async {
   runApp(const FlavoraWaiterApp());
 }
 
-class FlavoraWaiterApp extends StatelessWidget {
+class FlavoraWaiterApp extends StatefulWidget {
   const FlavoraWaiterApp({super.key});
+
+  @override
+  State<FlavoraWaiterApp> createState() => _FlavoraWaiterAppState();
+}
+
+class _FlavoraWaiterAppState extends State<FlavoraWaiterApp> {
+  bool _splashCompleted = false;
+
+  void _handleSplashCompleted() {
+    if (mounted) {
+      setState(() {
+        _splashCompleted = true;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,10 +73,17 @@ class FlavoraWaiterApp extends StatelessWidget {
   }
 
   Widget _buildHome(AuthProvider auth) {
+    if (!_splashCompleted) {
+      return SplashScreen(
+        onComplete: _handleSplashCompleted,
+      );
+    }
+
     if (auth.status == AuthStatus.uninitialized) {
       return const Scaffold(
+        backgroundColor: Color(0xFF0F3526),
         body: Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(color: Color(0xFFFF8A00)),
         ),
       );
     }
