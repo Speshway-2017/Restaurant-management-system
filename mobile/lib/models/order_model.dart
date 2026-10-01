@@ -120,10 +120,10 @@ class OrderModel {
     return clean.isNotEmpty ? clean : table;
   }
 
-  bool get isReadyToServe => chefStatus == 'READY' || status == 'Ready' || readyItemsCount > 0;
+  bool get isServed => waiterStatus == 'SERVED' || servingStatus == 'SERVED' || status.toLowerCase() == 'served' || status.toLowerCase() == 'completed' || (areAllItemsServed && activeItems.isNotEmpty);
+  bool get isServingInTransit => !isServed && (waiterStatus == 'SERVING' || servingStatus == 'IN_TRANSIT');
+  bool get isReadyToServe => !isServed && (chefStatus == 'READY' || status == 'Ready' || readyItemsCount > 0);
   bool get isAcceptedByWaiter => waiterStatus == 'ACCEPTED' || waiterStatus == 'SERVING' || waiterStatus == 'SERVED';
-  bool get isServingInTransit => waiterStatus == 'SERVING' || servingStatus == 'IN_TRANSIT';
-  bool get isServed => (waiterStatus == 'SERVED' || servingStatus == 'SERVED' || status == 'Served' || status == 'Completed') && areAllItemsServed;
   bool get isPaid => paymentStatus == 'Paid' || paymentStatus == 'Completed';
   bool get isBillGenerated => status == 'Bill Generated' || status == 'Billed' || paymentStatus == 'Awaiting Payment';
 

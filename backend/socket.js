@@ -15,7 +15,13 @@ const initSocket = (httpServer) => {
     pingInterval: 25000
   });
 
+  io.engine.on('connection_error', (err) => {
+    console.warn('[Socket Engine Connection Error]:', err.req?.url, err.code, err.message);
+  });
+
   io.on('connection', (socket) => {
+    console.log(`[Socket] New connection established: ID=${socket.id}, Transport=${socket.conn?.transport?.name || 'unknown'}`);
+
     // Client joins room based on role & identity
     socket.on('join', (data = {}) => {
       try {
