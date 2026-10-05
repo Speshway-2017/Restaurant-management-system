@@ -381,6 +381,22 @@ export const api = {
   createStaff: (data) => request('/staff', { method: 'POST', body: JSON.stringify(data) }),
   updateStaff: (id, data) => request(`/staff/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStaff: (id) => request(`/staff/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  checkStaffPhone: (phone, excludeId = '') => request(`/staff/check-phone?phone=${encodeURIComponent(phone)}${excludeId ? `&excludeId=${encodeURIComponent(excludeId)}` : ''}`)
+  checkStaffPhone: (phone, excludeId = '') => request(`/staff/check-phone?phone=${encodeURIComponent(phone)}${excludeId ? `&excludeId=${encodeURIComponent(excludeId)}` : ''}`),
+
+  // Staff Attendance & Availability Tracking API
+  staffCheckIn: () => request('/staff-attendance/in', { method: 'POST' }),
+  staffCheckOut: () => request('/staff-attendance/out', { method: 'POST' }),
+  getStaffAvailabilityCurrent: () => request('/staff-attendance/current'),
+  getStaffAttendanceHistory: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.date) query.append('date', params.date);
+    if (params.role) query.append('role', params.role);
+    if (params.status) query.append('status', params.status);
+    if (params.search) query.append('search', params.search);
+    if (params.staffId) query.append('staffId', params.staffId);
+    const qStr = query.toString();
+    return request(`/staff-attendance/history${qStr ? `?${qStr}` : ''}`);
+  },
+  getMyStaffStatus: () => request('/staff-attendance/my-status')
 };
 

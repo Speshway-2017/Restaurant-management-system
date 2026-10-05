@@ -265,6 +265,18 @@ export default function WaiterLayout({ setActivePage }) {
       setWaiterDutyStatus(saved);
     };
     syncDutyStatus();
+
+    api.getMyStaffStatus()
+      .then(res => {
+        if (res && res.dutyStatus) {
+          const current = getSessionUser();
+          const currentKey = current?._id || current?.id || accountKey;
+          setWaiterDutyStatus(res.dutyStatus);
+          localStorage.setItem(`flavora_waiter_duty_status_${currentKey}`, res.dutyStatus);
+        }
+      })
+      .catch(() => {});
+
     window.addEventListener('flavora_waiter_duty_updated', syncDutyStatus);
     window.addEventListener('storage', syncDutyStatus);
     return () => {
@@ -273,13 +285,21 @@ export default function WaiterLayout({ setActivePage }) {
     };
   }, [accountKey]);
 
-  const handleToggleWaiterDuty = () => {
+  const handleToggleWaiterDuty = async () => {
     const current = getSessionUser();
     const currentKey = current?._id || current?.id || accountKey;
     const nextStatus = waiterDutyStatus === 'LOGGED_IN' ? 'LOGGED_OUT' : 'LOGGED_IN';
     setWaiterDutyStatus(nextStatus);
     localStorage.setItem(`flavora_waiter_duty_status_${currentKey}`, nextStatus);
     window.dispatchEvent(new Event('flavora_waiter_duty_updated'));
+
+    try {
+      if (nextStatus === 'LOGGED_IN') {
+        await api.staffCheckIn();
+      } else {
+        await api.staffCheckOut();
+      }
+    } catch (e) { }
   };
 
   useEffect(() => {

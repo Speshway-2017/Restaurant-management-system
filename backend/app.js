@@ -39,6 +39,7 @@ app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/tables', require('./routes/tableRoutes'));
 app.use('/api/reservations', require('./routes/reservationRoutes'));
 app.use('/api/staff', require('./routes/staffRoutes'));
+app.use('/api/staff-attendance', require('./routes/staffAttendanceRoutes'));
 app.use('/api/inventory', require('./routes/inventoryRoutes'));
 app.use('/api/coupons', require('./routes/couponRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
