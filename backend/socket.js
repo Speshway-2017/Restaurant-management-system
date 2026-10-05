@@ -80,6 +80,28 @@ const emitToRoleAndManager = (managerId, chefRoom, waiterRoom, event, payload) =
   io.emit(event, payload);
 };
 
+const notifyOrderStatusUpdated = (order, extraPayload = {}) => {
+  if (!io || !order) return;
+  const orderId = order.orderId || order._id || order.id;
+  const status = extraPayload.status || order.status || 'Updated';
+  const payload = {
+    order,
+    orderId: String(orderId),
+    status,
+    updatedAt: new Date(),
+    table: order.table || order.tableNumber || '',
+    ...extraPayload
+  };
+  console.log(`[Socket] Order status updated for #${orderId} -> ${status}`);
+  console.log(`[Socket] Emitting orderStatusUpdated`, { orderId: String(orderId), status });
+  io.emit('orderStatusUpdated', payload);
+  io.emit('order_status_updated', payload);
+  io.emit('order_updated', payload);
+  if (order.table) {
+    io.emit('table_updated', { table: order.table, status });
+  }
+};
+
 const notifyOrderCreated = (order) => {
   if (!io || !order) return;
   console.log(`[Socket] Broadcasting new order #${order.orderId || order._id} for Table ${order.table || 'Table'}`);
@@ -87,14 +109,13 @@ const notifyOrderCreated = (order) => {
   const chefRoom = managerId ? `chef_${managerId}` : null;
   const payload = {
     order,
+    orderId: order.orderId || order._id,
+    status: order.status || 'Placed',
     message: `New order #${order.orderId || order._id} placed for ${order.table || 'Table'}`
   };
   emitToRoleAndManager(managerId, chefRoom, null, 'order_created', payload);
   io.emit('order_created', payload);
-  io.emit('order_updated', { order });
-  if (order.table) {
-    io.emit('table_updated', { table: order.table, status: order.status });
-  }
+  notifyOrderStatusUpdated(order, payload);
 };
 
 const notifyChefAccepted = (order) => {
@@ -110,9 +131,7 @@ const notifyChefAccepted = (order) => {
     message: `Order #${order.orderId || order._id} accepted by Chef ${order.chefName || ''}`
   };
   emitToRoleAndManager(managerId, chefRoom, null, 'chef_accepted', payload);
-  // Also emit generic events so every dashboard (incl. customer tracking) picks up the change
-  io.emit('order_status_updated', { order, status: order.status });
-  io.emit('order_updated', { order });
+  notifyOrderStatusUpdated(order, payload);
 };
 
 const notifyChefPreparing = (order) => {
@@ -128,8 +147,7 @@ const notifyChefPreparing = (order) => {
     message: `Order #${order.orderId || order._id} is being prepared by Chef ${order.chefName || ''}`
   };
   emitToRoleAndManager(managerId, chefRoom, null, 'chef_preparing', payload);
-  io.emit('order_status_updated', { order, status: order.status });
-  io.emit('order_updated', { order });
+  notifyOrderStatusUpdated(order, payload);
 };
 
 const notifyChefReady = (order) => {
@@ -152,7 +170,6 @@ const notifyChefReady = (order) => {
     message: `Order #${order.orderId || order._id} is ready for Table ${order.table || ''}`
   };
 
-  // Dedicated targeted notification to assigned Waiter
   if (waiterRoom) {
     io.to(waiterRoom).emit('chef_ready', payload);
     io.to(waiterRoom).emit('waiter_notification', {
@@ -165,14 +182,11 @@ const notifyChefReady = (order) => {
     });
   }
 
-  // Manager retains full visibility
   if (managerId) {
     io.to(`manager_${managerId}`).emit('chef_ready', payload);
   }
-  // Global broadcast
   io.emit('chef_ready', payload);
-  io.emit('order_status_updated', { order, status: order.status });
-  io.emit('order_updated', { order });
+  notifyOrderStatusUpdated(order, payload);
 };
 
 const notifyWaiterAccepted = (order) => {
@@ -180,15 +194,16 @@ const notifyWaiterAccepted = (order) => {
   const managerId = order.managerId;
   const waiterId = order.waiterId;
   const waiterRoom = waiterId ? `waiter_${waiterId}` : null;
-  emitToRoleAndManager(managerId, null, waiterRoom, 'waiter_accepted', {
+  const payload = {
     order,
     orderId: order.orderId || order._id,
     waiterId: order.waiterId,
     waiterName: order.waiterName,
+    status: order.status,
     message: `Order #${order.orderId || order._id} accepted by Waiter ${order.waiterName || ''}`
-  });
-  io.emit('order_status_updated', { order, status: order.status });
-  io.emit('order_updated', { order });
+  };
+  emitToRoleAndManager(managerId, null, waiterRoom, 'waiter_accepted', payload);
+  notifyOrderStatusUpdated(order, payload);
 };
 
 const notifyWaiterServing = (order) => {
@@ -196,15 +211,16 @@ const notifyWaiterServing = (order) => {
   const managerId = order.managerId;
   const waiterId = order.waiterId;
   const waiterRoom = waiterId ? `waiter_${waiterId}` : null;
-  emitToRoleAndManager(managerId, null, waiterRoom, 'waiter_serving', {
+  const payload = {
     order,
     orderId: order.orderId || order._id,
     waiterId: order.waiterId,
     waiterName: order.waiterName,
+    status: order.status,
     message: `Order #${order.orderId || order._id} is being served to Table ${order.table || ''}`
-  });
-  io.emit('order_status_updated', { order, status: order.status });
-  io.emit('order_updated', { order });
+  };
+  emitToRoleAndManager(managerId, null, waiterRoom, 'waiter_serving', payload);
+  notifyOrderStatusUpdated(order, payload);
 };
 
 const notifyWaiterServed = (order) => {
@@ -212,15 +228,16 @@ const notifyWaiterServed = (order) => {
   const managerId = order.managerId;
   const waiterId = order.waiterId;
   const waiterRoom = waiterId ? `waiter_${waiterId}` : null;
-  emitToRoleAndManager(managerId, null, waiterRoom, 'waiter_served', {
+  const payload = {
     order,
     orderId: order.orderId || order._id,
     waiterId: order.waiterId,
     waiterName: order.waiterName,
+    status: order.status,
     message: `Order #${order.orderId || order._id} served to Table ${order.table || ''}`
-  });
-  io.emit('order_status_updated', { order, status: order.status });
-  io.emit('order_updated', { order });
+  };
+  emitToRoleAndManager(managerId, null, waiterRoom, 'waiter_served', payload);
+  notifyOrderStatusUpdated(order, payload);
 };
 
 const notifyReservationCreated = (reservation) => {
@@ -306,6 +323,7 @@ const notifyBillGenerated = (order) => {
 module.exports = {
   initSocket,
   getIO,
+  notifyOrderStatusUpdated,
   notifyOrderCreated,
   notifyChefAccepted,
   notifyChefPreparing,

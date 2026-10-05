@@ -44,23 +44,95 @@ export default function CustomerOrderTrackingModal({
 
     fetchFreshOrders();
 
-    const unsub1 = onSocketEvent('chef_ready', fetchFreshOrders);
-    const unsub2 = onSocketEvent('order_status_updated', fetchFreshOrders);
-    const unsub3 = onSocketEvent('order_updated', fetchFreshOrders);
-    const unsub4 = onSocketEvent('waiter_serving', fetchFreshOrders);
-    const unsub5 = onSocketEvent('waiter_served', fetchFreshOrders);
-    const unsub6 = onSocketEvent('order_item_cancelled', fetchFreshOrders);
+    const normalizeId = (id) => String(id || '').replace(/^#/i, '').trim().toLowerCase();
+
+    // Real-Time Socket Event Listener for Customer Live Order Updates
+    const handleSocketStatusUpdate = (data) => {
+      console.log('[Socket] Order status received', data);
+      if (!data) return;
+
+      const payloadOrder = data.order || (typeof data === 'object' ? data : null);
+      const incomingId = normalizeId(data.orderId || payloadOrder?.orderId || payloadOrder?._id || payloadOrder?.id);
+      const incomingTableDigits = String(data.table || data.tableNumber || payloadOrder?.table || payloadOrder?.tableNumber || '').replace(/[^0-9]/g, '');
+      const currentTableDigits = String(tableNum || activeOrder?.table || '').replace(/[^0-9]/g, '');
+
+      // Check if event targets this customer's active order or table
+      let isTargeted = false;
+
+      if (incomingId) {
+        const activeOrdersList = liveOrders.length > 0 ? liveOrders : (orders.length > 0 ? orders : (activeOrder ? [activeOrder] : []));
+        isTargeted = activeOrdersList.some(ord => {
+          const ordId = normalizeId(ord.orderId || ord._id || ord.id);
+          return ordId === incomingId;
+        });
+      }
+
+      if (!isTargeted && incomingTableDigits && currentTableDigits) {
+        isTargeted = String(parseInt(incomingTableDigits, 10)) === String(parseInt(currentTableDigits, 10));
+      }
+
+      if (isTargeted) {
+        const newStatus = data.status || payloadOrder?.status;
+        console.log(`[Customer Live Order] Updating status for order: ${incomingId || currentTableDigits} -> ${newStatus}`);
+
+        if (payloadOrder && (payloadOrder.orderId || payloadOrder._id || payloadOrder.id)) {
+          setLiveOrders(prev => {
+            if (!Array.isArray(prev) || prev.length === 0) {
+              return [payloadOrder];
+            }
+            const exists = prev.some(ord => normalizeId(ord.orderId || ord._id || ord.id) === incomingId);
+            if (exists) {
+              return prev.map(ord => {
+                if (normalizeId(ord.orderId || ord._id || ord.id) === incomingId) {
+                  return {
+                    ...ord,
+                    ...payloadOrder,
+                    status: newStatus || payloadOrder.status || ord.status
+                  };
+                }
+                return ord;
+              });
+            } else {
+              return [...prev, payloadOrder];
+            }
+          });
+        }
+
+        // Fetch fresh order details from backend to ensure all nested properties match
+        fetchFreshOrders();
+      }
+    };
+
+    // Socket Event Subscriptions
+    const unsubEvent1 = onSocketEvent('orderStatusUpdated', handleSocketStatusUpdate);
+    const unsubEvent2 = onSocketEvent('order_status_updated', handleSocketStatusUpdate);
+    const unsubEvent3 = onSocketEvent('order_updated', handleSocketStatusUpdate);
+    const unsubEvent4 = onSocketEvent('chef_accepted', handleSocketStatusUpdate);
+    const unsubEvent5 = onSocketEvent('chef_preparing', handleSocketStatusUpdate);
+    const unsubEvent6 = onSocketEvent('chef_ready', handleSocketStatusUpdate);
+    const unsubEvent7 = onSocketEvent('waiter_accepted', handleSocketStatusUpdate);
+    const unsubEvent8 = onSocketEvent('waiter_serving', handleSocketStatusUpdate);
+    const unsubEvent9 = onSocketEvent('waiter_served', handleSocketStatusUpdate);
+    const unsubEvent10 = onSocketEvent('order_item_cancelled', handleSocketStatusUpdate);
+    const unsubEvent11 = onSocketEvent('bill_generated', handleSocketStatusUpdate);
+    const unsubConnect = onSocketEvent('connect', fetchFreshOrders);
 
     return () => {
       isMounted = false;
-      if (typeof unsub1 === 'function') unsub1();
-      if (typeof unsub2 === 'function') unsub2();
-      if (typeof unsub3 === 'function') unsub3();
-      if (typeof unsub4 === 'function') unsub4();
-      if (typeof unsub5 === 'function') unsub5();
-      if (typeof unsub6 === 'function') unsub6();
+      if (typeof unsubEvent1 === 'function') unsubEvent1();
+      if (typeof unsubEvent2 === 'function') unsubEvent2();
+      if (typeof unsubEvent3 === 'function') unsubEvent3();
+      if (typeof unsubEvent4 === 'function') unsubEvent4();
+      if (typeof unsubEvent5 === 'function') unsubEvent5();
+      if (typeof unsubEvent6 === 'function') unsubEvent6();
+      if (typeof unsubEvent7 === 'function') unsubEvent7();
+      if (typeof unsubEvent8 === 'function') unsubEvent8();
+      if (typeof unsubEvent9 === 'function') unsubEvent9();
+      if (typeof unsubEvent10 === 'function') unsubEvent10();
+      if (typeof unsubEvent11 === 'function') unsubEvent11();
+      if (typeof unsubConnect === 'function') unsubConnect();
     };
-  }, [tableNum, activeOrder?.table, activeOrder?.orderId]);
+  }, [tableNum, activeOrder?.table, activeOrder?.orderId, activeOrder?._id]);
 
   // Collect all available orders for this table session
   const orderList = (Array.isArray(liveOrders) && liveOrders.length > 0)

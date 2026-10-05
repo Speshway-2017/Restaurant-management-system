@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  ChefHat, Clock, CheckCircle2, AlertCircle, Flame, Bell, Volume2, VolumeX,
+  ChefHat, Clock, CheckCircle2, AlertCircle, Flame, Volume2, VolumeX,
   Filter, Search, LogOut, Utensils, CheckSquare, Square, ShoppingBag,
   Sparkles, RefreshCw, Layers, XCircle, ShieldCheck, Eye, Award, TrendingUp,
   User, Check, ChevronRight, ChevronDown, X, Menu, BarChart3, Settings, Table2,
@@ -1262,23 +1262,6 @@ export default function ChefLayout({ setActivePage }) {
               );
             })()}
 
-            {/* Notifications Button */}
-            <div className="admin-header-icon-btn-wrapper" style={{ position: 'relative' }}>
-              <button 
-                type="button"
-                className="admin-header-icon-btn" 
-                aria-label="Notifications"
-                onClick={() => showToast('🔔 Kitchen Order Notifications Active')}
-                style={{ position: 'relative' }}
-              >
-                <Bell size={19} color="#1E4636" />
-                {ordersList.filter(o => o.status === 'Placed' || o.chefStatus === 'PREPARING').length > 0 && (
-                  <span className="admin-notif-dot" style={{ backgroundColor: '#EF4444', color: '#FFFFFF', fontSize: '0.65rem', fontWeight: 900, padding: '0.1rem 0.35rem', borderRadius: '9999px', position: 'absolute', top: '-4px', right: '-4px' }}>
-                    {ordersList.filter(o => o.status === 'Placed' || o.chefStatus === 'PREPARING').length}
-                  </span>
-                )}
-              </button>
-            </div>
 
             {/* Chef User Profile Card */}
             <div className="admin-user-profile-wrapper" ref={profileMenuRef} style={{ position: 'relative' }}>
