@@ -12,6 +12,7 @@ import KineticCenterBuild from '../components/KineticCenterBuild';
 import Cta2 from '../components/Cta2';
 import { findItemInCatalog, calculateCartTotal } from '../utils/menuRegistry';
 import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
+import { isRestaurantOpenNow } from '../utils/restaurantTimings';
 
 export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTable }) {
   const { brandName } = useRestaurantBranding();
@@ -70,15 +71,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
       return { label: '🟢 OPEN NOW', isOpen: true, bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' };
     }
 
-    const now = new Date();
-    const day = now.getDay();
-    const isWeekend = (day === 0 || day === 6);
-    const currentMins = now.getHours() * 60 + now.getMinutes();
-
-    const openMin = isWeekend ? 600 : 660; // 10:00 AM vs 11:00 AM
-    const closeMin = isWeekend ? 1440 : 1320; // 12:00 AM vs 10:00 PM
-
-    const isOpen = currentMins >= openMin && currentMins < closeMin;
+    const isOpen = isRestaurantOpenNow(settings);
     return isOpen
       ? { label: '🟢 OPEN NOW', isOpen: true, bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' }
       : { label: '🔴 CLOSED NOW', isOpen: false, bg: '#FEF2F2', color: '#DC2626', border: '#FCA5A5' };

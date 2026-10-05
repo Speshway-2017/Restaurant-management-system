@@ -7,6 +7,19 @@ const getSettings = async (req, res) => {
     let settings = await Settings.findOne({}).sort({ updatedAt: -1 });
     if (!settings) {
       settings = await Settings.create({});
+    } else {
+      let needsSave = false;
+      if (!settings.weekdayHours || settings.weekdayHours === '11:00 AM – 10:00 PM' || settings.weekdayHours === '10:00 AM – 10:00 PM') {
+        settings.weekdayHours = '12:00 PM – 11:00 PM';
+        needsSave = true;
+      }
+      if (!settings.weekendHours || settings.weekendHours === '10:00 AM – 12:00 AM' || settings.weekendHours === '10:00 AM – 11:00 PM') {
+        settings.weekendHours = '11:00 AM – 12:00 AM';
+        needsSave = true;
+      }
+      if (needsSave) {
+        await settings.save();
+      }
     }
     const obj = settings.toObject ? settings.toObject() : { ...settings };
     const nameVal = obj.restaurantName || obj.brandName || obj.name || 'Flavora Kitchen';
@@ -18,6 +31,8 @@ const getSettings = async (req, res) => {
     obj.logoUrl = logoVal;
     obj.logo = logoVal;
     obj.brandLogo = logoVal;
+    obj.weekdayHours = obj.weekdayHours || '12:00 PM – 11:00 PM';
+    obj.weekendHours = obj.weekendHours || '11:00 AM – 12:00 AM';
 
     res.json(obj);
   } catch (error) {

@@ -40,8 +40,8 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
       contactEmail: branding.contactEmail || (isManagerMode ? 'manager@flavorakitchen.in' : 'admin@flavorakitchen.in'),
       contactPhone: branding.contactPhone || '+91 98765 43210',
       address: branding.address || 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
-      weekdayHours: branding.weekdayHours || '11:00 AM – 10:00 PM',
-      weekendHours: branding.weekendHours || '10:00 AM – 12:00 AM',
+      weekdayHours: branding.weekdayHours || '12:00 PM – 11:00 PM',
+      weekendHours: branding.weekendHours || '11:00 AM – 12:00 AM',
       restaurantStatus: branding.restaurantStatus || 'open', // 'open', 'closed', 'force_open'
       closedMessage: branding.closedMessage || 'We are currently closed for orders. Please visit during our operating hours!',
       autoAcceptOrders: branding.autoAcceptOrders ?? true,
@@ -241,9 +241,9 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
               <input 
                 type="text" 
                 className="form-control" 
-                value={settingsData.weekdayHours || '11:00 AM – 10:00 PM'} 
+                value={settingsData.weekdayHours || '12:00 PM – 11:00 PM'} 
                 onChange={(e) => setSettingsData({ ...settingsData, weekdayHours: e.target.value })}
-                placeholder="e.g. 11:00 AM – 10:00 PM"
+                placeholder="e.g. 12:00 PM – 11:00 PM"
                 required 
               />
             </div>
@@ -253,9 +253,9 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
               <input 
                 type="text" 
                 className="form-control" 
-                value={settingsData.weekendHours || '10:00 AM – 12:00 AM'} 
+                value={settingsData.weekendHours || '11:00 AM – 12:00 AM'} 
                 onChange={(e) => setSettingsData({ ...settingsData, weekendHours: e.target.value })}
-                placeholder="e.g. 10:00 AM – 12:00 AM"
+                placeholder="e.g. 11:00 AM – 12:00 AM"
                 required 
               />
             </div>

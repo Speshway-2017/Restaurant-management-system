@@ -1,12 +1,13 @@
 /**
  * Restaurant Timings and Operational Status Utility
+ * Centralized Source of Truth for Flavora Kitchen Restaurant Operating Hours & Open/Closed Status
  */
 
 export const parseTimeToMinutes = (timeStr, defaultMins = 0) => {
   if (!timeStr || typeof timeStr !== 'string') return defaultMins;
   try {
     const trimmed = timeStr.trim();
-    // Matches formats like "11:00 AM", "11:00am", "11 AM", "11am", "23:00", "9:30 PM", "9:30"
+    // Matches formats like "12:00 PM", "11:00 AM", "12:00am", "11 AM", "23:00", "00:00"
     const match = trimmed.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
     if (!match) return defaultMins;
     
@@ -25,37 +26,80 @@ export const parseTimeToMinutes = (timeStr, defaultMins = 0) => {
   }
 };
 
-export const isRestaurantOpenNow = (settings = {}) => {
+/**
+ * Calculates current time and day of week in Asia/Kolkata (IST) timezone
+ */
+export const getISTTime = (customDate = null) => {
+  const dateObj = customDate ? new Date(customDate) : new Date();
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour12: false,
+      weekday: 'short',
+      hour: 'numeric',
+      minute: 'numeric'
+    });
+    const parts = formatter.formatToParts(dateObj);
+    const map = {};
+    parts.forEach(p => { map[p.type] = p.value; });
+
+    const daysMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const day = daysMap[map.weekday] !== undefined ? daysMap[map.weekday] : dateObj.getDay();
+    let hours = parseInt(map.hour, 10);
+    if (hours === 24) hours = 0;
+    const minutes = parseInt(map.minute, 10);
+
+    return {
+      day,
+      hours,
+      minutes,
+      currentMins: hours * 60 + minutes
+    };
+  } catch (e) {
+    const day = dateObj.getDay();
+    const hours = dateObj.getHours();
+    const minutes = dateObj.getMinutes();
+    return {
+      day,
+      hours,
+      minutes,
+      currentMins: hours * 60 + minutes
+    };
+  }
+};
+
+export const isRestaurantOpenNow = (settings = {}, customDate = null) => {
   const status = settings.restaurantStatus || 'open';
   if (status === 'closed') return false;
   if (status === 'force_open') return true;
 
-  const now = new Date();
-  const day = now.getDay(); // 0 = Sun, 6 = Sat
-  const isWeekend = (day === 0 || day === 6);
-  const currentMins = now.getHours() * 60 + now.getMinutes();
+  const { day, currentMins } = getISTTime(customDate);
+  const isWeekend = (day === 0 || day === 6); // 0 = Sun, 6 = Sat
 
+  // Default Operating Hours:
+  // Mon – Fri: 12:00 PM – 11:00 PM (open 720, close 1380)
+  // Sat – Sun: 11:00 AM – 12:00 AM (open 660, close 1440)
   const hoursString = isWeekend
-    ? (settings.weekendHours || '10:00 AM – 12:00 AM')
-    : (settings.weekdayHours || '11:00 AM – 10:00 PM');
+    ? (settings.weekendHours || '11:00 AM – 12:00 AM')
+    : (settings.weekdayHours || '12:00 PM – 11:00 PM');
 
   const parts = hoursString.split(/–|—|-|\bto\b/i);
   if (parts.length < 2) return true; // Default to open if invalid format
 
-  const openMin = parseTimeToMinutes(parts[0], isWeekend ? 600 : 660);
-  let closeMin = parseTimeToMinutes(parts[1], isWeekend ? 1440 : 1320);
+  const openMin = parseTimeToMinutes(parts[0], isWeekend ? 660 : 720);
+  let closeMin = parseTimeToMinutes(parts[1], isWeekend ? 1440 : 1380);
 
-  // If closing time is specified as "12:00 AM" or "0:00", it means midnight (1440 mins / end of day)
+  // If closing time is specified as "12:00 AM", "00:00", or "midnight", it represents end-of-day (1440 mins)
   if (closeMin === 0 && (/12(?::00)?\s*AM/i.test(parts[1]) || /24:00/i.test(parts[1]) || /midnight/i.test(parts[1]))) {
     closeMin = 1440;
   }
 
-  // Normal daytime hours (e.g. 11:00 AM (660) to 10:00 PM (1320))
+  // Normal daytime operating hours (e.g. 12:00 PM (720) to 11:00 PM (1380))
   if (closeMin > openMin) {
     return currentMins >= openMin && currentMins < closeMin;
   }
 
-  // Overnight hours (e.g. 11:00 AM (660) to 01:00 AM (60) next day)
+  // Overnight operating hours (e.g. 11:00 AM to 02:00 AM next day)
   if (closeMin < openMin) {
     return currentMins >= openMin || currentMins < closeMin;
   }
@@ -64,16 +108,15 @@ export const isRestaurantOpenNow = (settings = {}) => {
   return true;
 };
 
-export const getRestaurantStatusDetails = (settings = {}) => {
-  const isOpen = isRestaurantOpenNow(settings);
-  const now = new Date();
-  const day = now.getDay();
+export const getRestaurantStatusDetails = (settings = {}, customDate = null) => {
+  const isOpen = isRestaurantOpenNow(settings, customDate);
+  const { day } = getISTTime(customDate);
   const isWeekend = (day === 0 || day === 6);
   const currentHours = isWeekend
-    ? (settings.weekendHours || '10:00 AM – 12:00 AM')
-    : (settings.weekdayHours || '11:00 AM – 10:00 PM');
+    ? (settings.weekendHours || '11:00 AM – 12:00 AM')
+    : (settings.weekdayHours || '12:00 PM – 11:00 PM');
 
-  const defaultClosedMsg = `We are currently closed for orders. Operating Hours: Mon – Fri: ${settings.weekdayHours || '11:00 AM – 10:00 PM'} | Sat – Sun: ${settings.weekendHours || '10:00 AM – 12:00 AM'}`;
+  const defaultClosedMsg = `We are currently closed for orders. Operating Hours: Mon – Fri: ${settings.weekdayHours || '12:00 PM – 11:00 PM'} | Sat – Sun: ${settings.weekendHours || '11:00 AM – 12:00 AM'}`;
   const closedMessage = settings.closedMessage || defaultClosedMsg;
 
   return {
@@ -81,8 +124,8 @@ export const getRestaurantStatusDetails = (settings = {}) => {
     isClosed: !isOpen,
     statusOverride: settings.restaurantStatus || 'open',
     currentHours,
-    weekdayHours: settings.weekdayHours || '11:00 AM – 10:00 PM',
-    weekendHours: settings.weekendHours || '10:00 AM – 12:00 AM',
+    weekdayHours: settings.weekdayHours || '12:00 PM – 11:00 PM',
+    weekendHours: settings.weekendHours || '11:00 AM – 12:00 AM',
     closedMessage
   };
 };

@@ -61,51 +61,56 @@ const getAuthorizedDashboardPage = (targetRoute) => {
   return roleDashboard;
 };
 
+const getPageFromPath = (pathname, search) => {
+  const path = (pathname || '').toLowerCase().trim();
+  const query = (search || '').toLowerCase().trim();
+
+  // Root / Home path always resolves to public home page without authentication
+  if (path === '/' || path === '' || path === '/home' || path === '/index.html') {
+    return 'home';
+  }
+  // Explicit public login page
+  if (path.includes('/login')) {
+    return 'login';
+  }
+  // Public customer dining menu & table QR links
+  if (path.includes('/menu') || query.includes('table=')) {
+    return 'menu';
+  }
+  // Public marketing & info pages
+  if (path.includes('/about')) return 'about';
+  if (path.includes('/gallery')) return 'gallery';
+  if (path.includes('/offer')) return 'offer';
+  if (path.includes('/features')) return 'features';
+  if (path.includes('/performance')) return 'performance';
+  if (path.includes('/security')) return 'security';
+  if (path.includes('/blogs')) return 'blogs';
+  if (path.includes('/contact')) return 'contact';
+
+  // Protected staff dashboards (require authentication)
+  if (path.includes('/receptionist')) {
+    return getAuthorizedDashboardPage('receptionist');
+  }
+  if (path.includes('/chef')) {
+    return getAuthorizedDashboardPage('chef');
+  }
+  if (path.includes('/waiter')) {
+    return getAuthorizedDashboardPage('waiter');
+  }
+  if (path.includes('/manager')) {
+    return getAuthorizedDashboardPage('manager');
+  }
+  if (path.includes('/admin')) {
+    return getAuthorizedDashboardPage('admin');
+  }
+
+  // Default fallback for any unrecognized route is the public Home page
+  return 'home';
+};
+
 export default function App() {
   const [activePage, setActivePageState] = useState(() => {
-    const path = window.location.pathname.toLowerCase();
-    const search = window.location.search.toLowerCase();
-
-    if (path === '/' || path === '' || path === '/home') {
-      return 'home';
-    }
-    if (path.includes('/login')) {
-      return 'login';
-    }
-    // Public customer dining menu QR bypass
-    if (path.includes('/menu') || search.includes('table=')) {
-      return 'menu';
-    }
-    if (path.includes('/about')) return 'about';
-    if (path.includes('/gallery')) return 'gallery';
-    if (path.includes('/offer')) return 'offer';
-    if (path.includes('/features')) return 'features';
-    if (path.includes('/performance')) return 'performance';
-    if (path.includes('/security')) return 'security';
-    if (path.includes('/blogs')) return 'blogs';
-    if (path.includes('/contact')) return 'contact';
-
-    if (path.includes('/receptionist')) {
-      return getAuthorizedDashboardPage('receptionist');
-    }
-    if (path.includes('/chef')) {
-      return getAuthorizedDashboardPage('chef');
-    }
-    if (path.includes('/waiter')) {
-      return getAuthorizedDashboardPage('waiter');
-    }
-    if (path.includes('/manager')) {
-      return getAuthorizedDashboardPage('manager');
-    }
-    if (path.includes('/admin')) {
-      return getAuthorizedDashboardPage('admin');
-    }
-
-    const saved = localStorage.getItem('flavora_active_page');
-    if (saved && ['admin', 'manager', 'chef', 'waiter', 'receptionist'].includes(saved)) {
-      return getAuthorizedDashboardPage(saved);
-    }
-    return (saved && saved !== 'login') ? saved : 'home';
+    return getPageFromPath(window.location.pathname, window.location.search);
   });
 
   const [demoModalOpen, setDemoModalOpen] = useState(false);
@@ -194,42 +199,8 @@ export default function App() {
 
   useEffect(() => {
     const handleUrlRouting = () => {
-      const path = window.location.pathname.toLowerCase();
-      const search = window.location.search.toLowerCase();
-
-      if (path === '/' || path === '' || path === '/home') {
-        setActivePageState('home');
-      } else if (path.includes('/login')) {
-        setActivePageState('login');
-      } else if (path.includes('/menu') || search.includes('table=')) {
-        setActivePageState('menu');
-      } else if (path.includes('/about')) {
-        setActivePageState('about');
-      } else if (path.includes('/gallery')) {
-        setActivePageState('gallery');
-      } else if (path.includes('/offer')) {
-        setActivePageState('offer');
-      } else if (path.includes('/features')) {
-        setActivePageState('features');
-      } else if (path.includes('/performance')) {
-        setActivePageState('performance');
-      } else if (path.includes('/security')) {
-        setActivePageState('security');
-      } else if (path.includes('/blogs')) {
-        setActivePageState('blogs');
-      } else if (path.includes('/contact')) {
-        setActivePageState('contact');
-      } else if (path.includes('/receptionist')) {
-        setActivePageState(getAuthorizedDashboardPage('receptionist'));
-      } else if (path.includes('/chef')) {
-        setActivePageState(getAuthorizedDashboardPage('chef'));
-      } else if (path.includes('/waiter')) {
-        setActivePageState(getAuthorizedDashboardPage('waiter'));
-      } else if (path.includes('/manager')) {
-        setActivePageState(getAuthorizedDashboardPage('manager'));
-      } else if (path.includes('/admin')) {
-        setActivePageState(getAuthorizedDashboardPage('admin'));
-      }
+      const page = getPageFromPath(window.location.pathname, window.location.search);
+      setActivePageState(page);
     };
 
     handleUrlRouting();
