@@ -6,7 +6,6 @@ class ApiConstants {
 
   static String get baseUrl {
     if (_overrideBaseUrl.isNotEmpty) return _overrideBaseUrl;
-
     return 'https://restaurant.speshway.site/api';
   }
 

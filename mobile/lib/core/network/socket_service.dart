@@ -41,15 +41,17 @@ class SocketService {
         joinRoom(_currentUser, isCheckedIn: _isCheckedIn);
         return;
       } else {
-        _socket!.connect();
-        return;
+        try {
+          _socket!.dispose();
+        } catch (_) {}
+        _socket = null;
       }
     }
 
-    final transports = ['websocket', 'polling'];
+    final transports = ['polling', 'websocket'];
 
     _socket = socket_io.io(targetUrl, socket_io.OptionBuilder()
-      .setPath('/socket.io/')
+      .setPath('/socket.io')
       .setTransports(transports)
       .enableAutoConnect()
       .enableReconnection()

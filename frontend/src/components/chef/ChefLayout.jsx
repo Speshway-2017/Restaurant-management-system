@@ -44,9 +44,11 @@ export default function ChefLayout({ setActivePage }) {
     return localStorage.getItem(`flavora_chef_duty_status_${chefAccountKey}`) || localStorage.getItem('flavora_chef_duty_status') || 'LOGGED_IN';
   });
 
+  const [isProcessingDuty, setIsProcessingDuty] = useState(false);
+
   useEffect(() => {
     const syncDutyStatus = () => {
-      const saved = localStorage.getItem(`flavora_chef_duty_status_${chefAccountKey}`) || localStorage.getItem('flavora_chef_duty_status') || 'LOGGED_IN';
+      const saved = localStorage.getItem(`flavora_chef_duty_status_${chefAccountKey}`) || localStorage.getItem('flavora_chef_duty_status') || 'LOGGED_OUT';
       setChefDutyStatus(saved);
     };
     syncDutyStatus();
@@ -54,9 +56,10 @@ export default function ChefLayout({ setActivePage }) {
     // Fetch initial duty & active session status from server
     api.getMyStaffStatus()
       .then(res => {
-        if (res && res.dutyStatus) {
-          setChefDutyStatus(res.dutyStatus);
-          localStorage.setItem(`flavora_chef_duty_status_${chefAccountKey}`, res.dutyStatus);
+        if (res && (res.status || res.dutyStatus)) {
+          const realStatus = (res.status === 'available' || res.dutyStatus === 'LOGGED_IN') ? 'LOGGED_IN' : 'LOGGED_OUT';
+          setChefDutyStatus(realStatus);
+          localStorage.setItem(`flavora_chef_duty_status_${chefAccountKey}`, realStatus);
         }
       })
       .catch(() => {});
@@ -70,21 +73,36 @@ export default function ChefLayout({ setActivePage }) {
   }, [chefAccountKey]);
 
   const handleToggleChefDuty = async () => {
-    const nextStatus = chefDutyStatus === 'LOGGED_IN' ? 'LOGGED_OUT' : 'LOGGED_IN';
-    setChefDutyStatus(nextStatus);
-    localStorage.setItem(`flavora_chef_duty_status_${chefAccountKey}`, nextStatus);
-    window.dispatchEvent(new Event('flavora_chef_duty_updated'));
+    if (isProcessingDuty) return;
+    const isCurrentlyLoggedIn = chefDutyStatus === 'LOGGED_IN';
+    setIsProcessingDuty(true);
 
     try {
-      if (nextStatus === 'LOGGED_IN') {
-        await api.staffCheckIn();
-        showToast('🟢 Chef Status: ON DUTY (Available)');
+      if (!isCurrentlyLoggedIn) {
+        const res = await api.staffCheckIn();
+        if (res && (res.success || res.attendance)) {
+          setChefDutyStatus('LOGGED_IN');
+          localStorage.setItem(`flavora_chef_duty_status_${chefAccountKey}`, 'LOGGED_IN');
+          window.dispatchEvent(new Event('flavora_chef_duty_updated'));
+          showToast('🟢 Chef Status: ON DUTY (Available)');
+        } else {
+          showToast(`⚠️ ${res?.message || 'Unable to check in.'}`);
+        }
       } else {
-        await api.staffCheckOut();
-        showToast('🔴 Chef Status: OFF DUTY (Offline)');
+        const res = await api.staffCheckOut();
+        if (res && (res.success || res.attendance)) {
+          setChefDutyStatus('LOGGED_OUT');
+          localStorage.setItem(`flavora_chef_duty_status_${chefAccountKey}`, 'LOGGED_OUT');
+          window.dispatchEvent(new Event('flavora_chef_duty_updated'));
+          showToast('🔴 Chef Status: OFF DUTY (Offline)');
+        } else {
+          showToast(`⚠️ ${res?.message || 'Unable to check out.'}`);
+        }
       }
     } catch (err) {
-      showToast(nextStatus === 'LOGGED_IN' ? '🟢 Chef Status: ON DUTY' : '🔴 Chef Status: OFF DUTY');
+      showToast(`⚠️ ${err.message || 'Attendance request failed. Please try again.'}`);
+    } finally {
+      setIsProcessingDuty(false);
     }
   };
 

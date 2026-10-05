@@ -13,7 +13,9 @@ const {
 router.use(protect);
 
 router.post('/in', checkIn);
+router.post('/check-in', checkIn);
 router.post('/out', checkOut);
+router.post('/check-out', checkOut);
 router.get('/current', getCurrentAvailability);
 router.get('/history', getAttendanceHistory);
 router.get('/my-status', getMyStatus);

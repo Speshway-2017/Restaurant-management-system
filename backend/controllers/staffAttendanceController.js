@@ -309,7 +309,7 @@ exports.getCurrentAvailability = async (req, res) => {
   }
 };
 
-// @desc    Get Staff Attendance History
+// @desc    Get Staff Attendance History (Grouped by Staff Member + IST Date)
 // @route   GET /api/staff-attendance/history
 // @access  Private (Manager/Admin)
 exports.getAttendanceHistory = async (req, res) => {
@@ -328,18 +328,34 @@ exports.getAttendanceHistory = async (req, res) => {
     if (staffId) {
       query.staffId = staffId;
     }
-    if (status && status !== 'All') {
-      query.status = String(status).toLowerCase();
-    }
     if (search && search.trim()) {
       query.staffName = { $regex: search.trim(), $options: 'i' };
     }
 
-    let sessions = await StaffAttendance.find(query).sort({ createdAt: -1 }).limit(200).lean();
+    const rawSessions = await StaffAttendance.find(query).sort({ createdAt: 1 }).limit(500).lean();
     const now = new Date();
     const { dateStr } = getIstDetails(now);
 
-    // Build operational staff roster query
+    // Group raw sessions by staffId + date
+    const groupedMap = new Map();
+
+    rawSessions.forEach(s => {
+      const sDate = s.date || dateStr;
+      const key = `${String(s.staffId)}_${sDate}`;
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, {
+          staffId: String(s.staffId),
+          staffName: s.staffName,
+          empId: s.empId || '',
+          role: s.role,
+          date: sDate,
+          rawList: []
+        });
+      }
+      groupedMap.get(key).rawList.push(s);
+    });
+
+    // Build operational staff roster query for staff members with 0 sessions
     let userQuery = {
       role: { $nin: ['Admin', 'admin', 'Manager', 'manager', 'Resto Manager', 'resto manager', 'Super Admin', 'super admin'] }
     };
@@ -355,72 +371,129 @@ exports.getAttendanceHistory = async (req, res) => {
     }
 
     const staffUsers = await User.find(userQuery).select('-password').lean();
-    const existingStaffIds = new Set(sessions.map(s => String(s.staffId)));
 
-    // For any operational staff member who doesn't have a recorded session for this query, append their roster entry
+    // Ensure all operational staff users appear for the requested date (or today)
+    const targetQueryDate = (date && String(date).trim()) ? String(date).trim() : dateStr;
     staffUsers.forEach((u) => {
       const uIdStr = String(u._id);
-      if (!existingStaffIds.has(uIdStr)) {
-        const uRole = normalizeRole(u.role);
-        const userStatus = 'offline';
-
-        if (status && status !== 'All') {
-          const reqStat = String(status).toLowerCase();
-          if (reqStat === 'available') return;
-        }
-
-        sessions.push({
-          _id: u._id,
-          staffId: u._id,
+      const key = `${uIdStr}_${targetQueryDate}`;
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, {
+          staffId: uIdStr,
           staffName: u.name,
-          empId: u.empId || `RMS-${String(u._id).slice(-4).toUpperCase()}`,
-          role: uRole,
-          date: date || dateStr,
-          loginAt: null,
-          logoutAt: null,
-          loginTimeFormatted: '—',
-          logoutTimeFormatted: '—',
-          status: userStatus,
-          durationMinutes: 0,
-          durationFormatted: '0m'
+          empId: u.empId || `RMS-${uIdStr.slice(-4).toUpperCase()}`,
+          role: normalizeRole(u.role),
+          date: targetQueryDate,
+          rawList: []
         });
       }
     });
 
-    const formattedSessions = sessions.map(s => {
-      const isCurrentlyActive = s.status === 'available' && !s.logoutAt;
-      let durationStr = s.durationFormatted || '0m';
+    // Format each aggregated daily record
+    const aggregatedRecords = Array.from(groupedMap.values()).map(group => {
+      const sessionsList = group.rawList.sort((a, b) => {
+        const tA = a.loginAt ? new Date(a.loginAt).getTime() : 0;
+        const tB = b.loginAt ? new Date(b.loginAt).getTime() : 0;
+        return tA - tB;
+      });
 
-      if (isCurrentlyActive && s.loginAt) {
-        durationStr = formatDuration(s.loginAt, now) + ' (Active)';
-      } else if (isCurrentlyActive) {
-        durationStr = 'Active';
+      let totalDurationMinutes = 0;
+      let hasActiveSession = false;
+
+      const formattedSessions = sessionsList.map(s => {
+        const isCurrentlyActive = s.status === 'available' && !s.logoutAt;
+        if (isCurrentlyActive) {
+          hasActiveSession = true;
+        }
+
+        let sessionMins = 0;
+        if (s.logoutAt) {
+          const diffMs = Math.max(0, new Date(s.logoutAt).getTime() - new Date(s.loginAt || now).getTime());
+          sessionMins = (typeof s.durationMinutes === 'number' && s.durationMinutes > 0) ? s.durationMinutes : Math.floor(diffMs / 60000);
+        } else if (s.loginAt) {
+          const diffMs = Math.max(0, now.getTime() - new Date(s.loginAt).getTime());
+          sessionMins = Math.floor(diffMs / 60000);
+        }
+
+        totalDurationMinutes += sessionMins;
+
+        const loginFormatted = s.loginTimeFormatted || (s.loginAt ? getIstDetails(new Date(s.loginAt)).formattedTime : '—');
+        const logoutFormatted = isCurrentlyActive ? 'Currently Active' : (s.logoutTimeFormatted || (s.logoutAt ? getIstDetails(new Date(s.logoutAt)).formattedTime : '—'));
+        
+        let durFormatted = formatDuration(s.loginAt, s.logoutAt || now);
+        if (isCurrentlyActive) durFormatted += ' (Active)';
+
+        return {
+          id: String(s._id || s.id),
+          loginAt: s.loginAt,
+          logoutAt: s.logoutAt,
+          loginTimeFormatted: loginFormatted,
+          logoutTimeFormatted: logoutFormatted,
+          durationMinutes: sessionMins,
+          durationFormatted: durFormatted,
+          isCurrentlyActive,
+          summary: `${loginFormatted} – ${logoutFormatted}`
+        };
+      });
+
+      // Filter check for status parameter if specified (available vs offline)
+      if (status && status !== 'All') {
+        const reqStat = String(status).toLowerCase();
+        if (reqStat === 'available' && !hasActiveSession) return null;
+        if (reqStat === 'offline' && hasActiveSession) return null;
       }
 
-      const sessionDate = s.loginAt || now;
-      const { displayDate } = getIstDetails(new Date(sessionDate));
+      // Format total accumulated daily duration
+      const hoursTotal = Math.floor(totalDurationMinutes / 60);
+      const minsTotal = totalDurationMinutes % 60;
+      let totalDurationStr = '0m';
+      if (hoursTotal > 0 && minsTotal > 0) {
+        totalDurationStr = `${hoursTotal}h ${minsTotal}m`;
+      } else if (hoursTotal > 0) {
+        totalDurationStr = `${hoursTotal}h`;
+      } else if (minsTotal > 0) {
+        totalDurationStr = `${minsTotal}m`;
+      }
+
+      if (hasActiveSession && totalDurationMinutes > 0) {
+        totalDurationStr += ' (Active)';
+      } else if (hasActiveSession) {
+        totalDurationStr = 'Active';
+      }
+
+      const sampleDateStr = sessionsList.length > 0 && sessionsList[0].loginAt ? sessionsList[0].loginAt : now;
+      const { displayDate } = getIstDetails(new Date(sampleDateStr));
+
+      // Build fallback single string representations for standard columns
+      const loginSummary = formattedSessions.length > 0
+        ? formattedSessions.map(sf => sf.loginTimeFormatted).join(' | ')
+        : '—';
+      const logoutSummary = formattedSessions.length > 0
+        ? formattedSessions.map(sf => sf.logoutTimeFormatted).join(' | ')
+        : '—';
 
       return {
-        id: String(s._id || s.id),
-        staffId: String(s.staffId),
-        staffName: s.staffName,
-        empId: s.empId || '',
-        role: s.role,
-        date: s.date,
-        displayDate: displayDate,
-        loginAt: s.loginAt,
-        logoutAt: s.logoutAt,
-        loginTimeFormatted: s.loginTimeFormatted || '—',
-        logoutTimeFormatted: isCurrentlyActive ? 'Currently Active' : (s.logoutTimeFormatted || '—'),
-        status: s.status,
-        durationFormatted: durationStr
+        id: `${group.staffId}_${group.date}`,
+        staffId: group.staffId,
+        staffName: group.staffName,
+        empId: group.empId,
+        role: group.role,
+        date: group.date,
+        displayDate,
+        sessions: formattedSessions,
+        totalDurationMinutes,
+        durationFormatted: totalDurationStr,
+        status: hasActiveSession ? 'available' : 'offline',
+        loginTimeFormatted: loginSummary,
+        logoutTimeFormatted: logoutSummary
       };
-    });
+    }).filter(Boolean);
 
     return res.status(200).json({
       success: true,
-      count: formattedSessions.length,
-      history: formattedSessions
+      count: aggregatedRecords.length,
+      history: aggregatedRecords,
+      records: aggregatedRecords
     });
   } catch (error) {
     console.error('Get attendance history error:', error);
