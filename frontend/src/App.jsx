@@ -65,17 +65,17 @@ const getPageFromPath = (pathname, search) => {
   const path = (pathname || '').toLowerCase().trim();
   const query = (search || '').toLowerCase().trim();
 
-  // Root / Home path always resolves to public home page without authentication
-  if (path === '/' || path === '' || path === '/home' || path === '/index.html') {
-    return 'home';
+  // Public customer dining menu & table QR scan links (e.g. /?table=T-01 or /menu?table=T-01)
+  if (path.includes('/menu') || query.includes('table=')) {
+    return 'menu';
   }
   // Explicit public login page
   if (path.includes('/login')) {
     return 'login';
   }
-  // Public customer dining menu & table QR links
-  if (path.includes('/menu') || query.includes('table=')) {
-    return 'menu';
+  // Root / Home path resolves to public home page when no QR query is present
+  if (path === '/' || path === '' || path === '/home' || path === '/index.html') {
+    return 'home';
   }
   // Public marketing & info pages
   if (path.includes('/about')) return 'about';

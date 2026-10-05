@@ -2,19 +2,10 @@ const User = require('../models/User');
 
 const getStaff = async (req, res) => {
   try {
-    let query = {};
-    if (req.user) {
-      const userRole = (req.user.role || '').toLowerCase();
-      if (userRole.includes('manager')) {
-        query = {
-          role: { $ne: 'Admin' },
-          $or: [
-            { managerId: req.user._id },
-            { createdBy: req.user._id }
-          ]
-        };
-      }
-    }
+    // Only return operational staff (Chef, Waiter, Receptionist). Exclude Manager and Admin.
+    const query = {
+      role: { $nin: ['Admin', 'admin', 'Manager', 'manager', 'Resto Manager', 'resto manager', 'Super Admin', 'super admin'] }
+    };
 
     const staff = await User.find(query).select('-password').sort({ createdAt: 1 });
 

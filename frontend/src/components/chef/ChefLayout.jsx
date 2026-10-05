@@ -50,6 +50,17 @@ export default function ChefLayout({ setActivePage }) {
       setChefDutyStatus(saved);
     };
     syncDutyStatus();
+
+    // Fetch initial duty & active session status from server
+    api.getMyStaffStatus()
+      .then(res => {
+        if (res && res.dutyStatus) {
+          setChefDutyStatus(res.dutyStatus);
+          localStorage.setItem(`flavora_chef_duty_status_${chefAccountKey}`, res.dutyStatus);
+        }
+      })
+      .catch(() => {});
+
     window.addEventListener('flavora_chef_duty_updated', syncDutyStatus);
     window.addEventListener('storage', syncDutyStatus);
     return () => {
@@ -58,12 +69,23 @@ export default function ChefLayout({ setActivePage }) {
     };
   }, [chefAccountKey]);
 
-  const handleToggleChefDuty = () => {
+  const handleToggleChefDuty = async () => {
     const nextStatus = chefDutyStatus === 'LOGGED_IN' ? 'LOGGED_OUT' : 'LOGGED_IN';
     setChefDutyStatus(nextStatus);
     localStorage.setItem(`flavora_chef_duty_status_${chefAccountKey}`, nextStatus);
     window.dispatchEvent(new Event('flavora_chef_duty_updated'));
-    showToast(nextStatus === 'LOGGED_IN' ? '🟢 Chef Status: ON DUTY (Logged In)' : '🔴 Chef Status: OFF DUTY (Logged Out)');
+
+    try {
+      if (nextStatus === 'LOGGED_IN') {
+        await api.staffCheckIn();
+        showToast('🟢 Chef Status: ON DUTY (Available)');
+      } else {
+        await api.staffCheckOut();
+        showToast('🔴 Chef Status: OFF DUTY (Offline)');
+      }
+    } catch (err) {
+      showToast(nextStatus === 'LOGGED_IN' ? '🟢 Chef Status: ON DUTY' : '🔴 Chef Status: OFF DUTY');
+    }
   };
 
   // KDS Filters
