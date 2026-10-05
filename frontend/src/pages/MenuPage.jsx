@@ -1436,9 +1436,6 @@ export default function MenuPage({ onOpenDemoModal }) {
                             </div>
                           </div>
                         </div>
-                        <span style={{ fontSize: '0.76rem', backgroundColor: '#DCFCE7', padding: '0.25rem 0.65rem', borderRadius: '8px', color: '#15803D', fontWeight: 800 }}>
-                          👥 {activeTableSession?.partySize || 2} Guests
-                        </span>
                       </div>
                     </div>
                   </div>
@@ -2682,9 +2679,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                           </div>
                         </div>
                       </div>
-                      <span style={{ fontSize: '0.76rem', backgroundColor: '#DCFCE7', padding: '0.25rem 0.65rem', borderRadius: '8px', color: '#15803D', fontWeight: 800 }}>
-                        👥 {activeTableSession?.partySize || 2} Guests
-                      </span>
+
                     </div>
                   </div>
                 </div>

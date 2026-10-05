@@ -17,8 +17,8 @@ const settingsSchema = new mongoose.Schema({
   managerEmail: { type: String, default: 'manager@flavorakitchen.in' },
   managerPhone: { type: String, default: '+91 98765 43210' },
   address: { type: String, default: 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033, India' },
-  weekdayHours: { type: String, default: '11:00 AM – 10:00 PM' },
-  weekendHours: { type: String, default: '10:00 AM – 12:00 AM' },
+  weekdayHours: { type: String, default: '12:00 PM – 11:00 PM' },
+  weekendHours: { type: String, default: '11:00 AM – 12:00 AM' },
   restaurantStatus: { type: String, default: 'open' }, // 'open', 'closed', 'force_open'
   closedMessage: { type: String, default: 'We are currently closed for orders. Please visit during our operating hours!' },
   cleaningDuration: { type: String, default: '10' },

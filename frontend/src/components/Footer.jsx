@@ -200,10 +200,10 @@ export default function Footer({ setActivePage, onOpenBookTable }) {
                 <Clock size={16} className="contact-icon" style={{ marginTop: '3px', flexShrink: 0 }} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                   <div style={{ fontSize: '0.84rem' }}>
-                    <strong style={{ color: '#F2C14E' }}>Mon – Fri:</strong> {settings.weekdayHours || '11:00 AM – 10:00 PM'}
+                    <strong style={{ color: '#F2C14E' }}>Mon – Fri:</strong> {settings.weekdayHours || '12:00 PM – 11:00 PM'}
                   </div>
                   <div style={{ fontSize: '0.84rem' }}>
-                    <strong style={{ color: '#F2C14E' }}>Sat – Sun:</strong> {settings.weekendHours || '10:00 AM – 12:00 AM'}
+                    <strong style={{ color: '#F2C14E' }}>Sat – Sun:</strong> {settings.weekendHours || '11:00 AM – 12:00 AM'}
                   </div>
                   <div style={{ marginTop: '0.35rem' }}>
                     <span style={{
