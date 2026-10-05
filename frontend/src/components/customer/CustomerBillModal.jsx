@@ -671,58 +671,6 @@ export default function CustomerBillModal({
                 )}
               </div>
 
-
-
-              {/* 3. Promo Code / Coupon Section */}
-              <div style={{ marginBottom: '1.15rem' }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.4rem' }}>
-                  <Tag size={14} color="#166534" /> Apply Promo Code / Coupon
-                </label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    type="text"
-                    placeholder="e.g. WELCOME20 or FLAVORA100"
-                    value={couponCodeInput}
-                    onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
-                    style={{
-                      flex: 1,
-                      padding: '0.65rem 0.85rem',
-                      borderRadius: '14px',
-                      border: '1.5px solid #CBD5E1',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    disabled={isValidatingCoupon}
-                    style={{
-                      padding: '0.65rem 1.35rem',
-                      borderRadius: '14px',
-                      backgroundColor: '#0F2A1D',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      fontWeight: 800,
-                      fontSize: '0.82rem',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 10px rgba(15, 42, 29, 0.2)'
-                    }}
-                  >
-                    {isValidatingCoupon ? 'Checking...' : 'Apply'}
-                  </button>
-                </div>
-                {couponMsg && (
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: couponMsg.type === 'success' ? '#15803D' : '#DC2626', marginTop: '0.35rem' }}>
-                    {couponMsg.text}
-                  </div>
-                )}
-              </div>
-
-
-
               {/* 5. Tip Selection Bar */}
               <div style={{ marginBottom: '1.15rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>

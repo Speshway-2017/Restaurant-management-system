@@ -92,13 +92,8 @@ const updateOrderStatus = async (req, res) => {
       if (isBill) {
         socket.notifyBillGenerated(updated);
       } else {
-        const io = socket.getIO();
-        if (io) {
-          io.emit('order_status_updated', { order: updated, status: req.body.status });
-          io.emit('order_updated', { order: updated });
-          if (updated?.table) {
-            io.emit('table_updated', { table: updated.table, status: updated.status });
-          }
+        if (socket.notifyOrderStatusUpdated) {
+          socket.notifyOrderStatusUpdated(updated, { status: req.body.status || updated?.status });
         }
       }
     } catch (sErr) {
