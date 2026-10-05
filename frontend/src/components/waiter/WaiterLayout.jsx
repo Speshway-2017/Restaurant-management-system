@@ -257,22 +257,25 @@ export default function WaiterLayout({ setActivePage }) {
     }
   };
 
+  const [isProcessingDuty, setIsProcessingDuty] = useState(false);
+
   useEffect(() => {
     const syncDutyStatus = () => {
       const current = getSessionUser();
       const currentKey = current?._id || current?.id || accountKey;
-      const saved = localStorage.getItem(`flavora_waiter_duty_status_${currentKey}`) || localStorage.getItem('flavora_waiter_duty_status') || 'LOGGED_IN';
+      const saved = localStorage.getItem(`flavora_waiter_duty_status_${currentKey}`) || localStorage.getItem('flavora_waiter_duty_status') || 'LOGGED_OUT';
       setWaiterDutyStatus(saved);
     };
     syncDutyStatus();
 
     api.getMyStaffStatus()
       .then(res => {
-        if (res && res.dutyStatus) {
+        if (res && (res.status || res.dutyStatus)) {
           const current = getSessionUser();
           const currentKey = current?._id || current?.id || accountKey;
-          setWaiterDutyStatus(res.dutyStatus);
-          localStorage.setItem(`flavora_waiter_duty_status_${currentKey}`, res.dutyStatus);
+          const realStatus = (res.status === 'available' || res.dutyStatus === 'LOGGED_IN') ? 'LOGGED_IN' : 'LOGGED_OUT';
+          setWaiterDutyStatus(realStatus);
+          localStorage.setItem(`flavora_waiter_duty_status_${currentKey}`, realStatus);
         }
       })
       .catch(() => {});
@@ -286,20 +289,40 @@ export default function WaiterLayout({ setActivePage }) {
   }, [accountKey]);
 
   const handleToggleWaiterDuty = async () => {
+    if (isProcessingDuty) return;
     const current = getSessionUser();
     const currentKey = current?._id || current?.id || accountKey;
-    const nextStatus = waiterDutyStatus === 'LOGGED_IN' ? 'LOGGED_OUT' : 'LOGGED_IN';
-    setWaiterDutyStatus(nextStatus);
-    localStorage.setItem(`flavora_waiter_duty_status_${currentKey}`, nextStatus);
-    window.dispatchEvent(new Event('flavora_waiter_duty_updated'));
+    const isCurrentlyLoggedIn = waiterDutyStatus === 'LOGGED_IN';
+    
+    setIsProcessingDuty(true);
 
     try {
-      if (nextStatus === 'LOGGED_IN') {
-        await api.staffCheckIn();
+      if (!isCurrentlyLoggedIn) {
+        const res = await api.staffCheckIn();
+        if (res && (res.success || res.attendance)) {
+          setWaiterDutyStatus('LOGGED_IN');
+          localStorage.setItem(`flavora_waiter_duty_status_${currentKey}`, 'LOGGED_IN');
+          window.dispatchEvent(new Event('flavora_waiter_duty_updated'));
+          showToast('🟢 Waiter Status: ON DUTY (Available)');
+        } else {
+          showToast(`⚠️ ${res?.message || 'Unable to check in.'}`);
+        }
       } else {
-        await api.staffCheckOut();
+        const res = await api.staffCheckOut();
+        if (res && (res.success || res.attendance)) {
+          setWaiterDutyStatus('LOGGED_OUT');
+          localStorage.setItem(`flavora_waiter_duty_status_${currentKey}`, 'LOGGED_OUT');
+          window.dispatchEvent(new Event('flavora_waiter_duty_updated'));
+          showToast('🔴 Waiter Status: OFF DUTY (Offline)');
+        } else {
+          showToast(`⚠️ ${res?.message || 'Unable to check out.'}`);
+        }
       }
-    } catch (e) { }
+    } catch (err) {
+      showToast(`⚠️ ${err.message || 'Attendance request failed. Please try again.'}`);
+    } finally {
+      setIsProcessingDuty(false);
+    }
   };
 
   useEffect(() => {

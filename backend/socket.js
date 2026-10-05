@@ -4,8 +4,12 @@ let io = null;
 
 const initSocket = (httpServer) => {
   io = new Server(httpServer, {
+    path: '/socket.io',
     cors: {
-      origin: '*',
+      origin: (origin, callback) => {
+        // Allow all origins (browsers, mobile apps, desktop apps, Postman)
+        callback(null, true);
+      },
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
       credentials: true
     },
@@ -14,6 +18,8 @@ const initSocket = (httpServer) => {
     pingTimeout: 60000,
     pingInterval: 25000
   });
+
+  console.log('[Socket] Socket.IO server initialized on path /socket.io');
 
   io.engine.on('connection_error', (err) => {
     console.warn('[Socket Engine Connection Error]:', err.req?.url, err.code, err.message);

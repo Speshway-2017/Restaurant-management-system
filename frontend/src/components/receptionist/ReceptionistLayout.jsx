@@ -208,12 +208,25 @@ export default function ReceptionistLayout({ setActivePage }) {
     return localStorage.getItem(`flavora_receptionist_duty_status_${receptionistAccountKey}`) || localStorage.getItem('flavora_receptionist_duty_status') || 'LOGGED_IN';
   });
 
+  const [isProcessingDuty, setIsProcessingDuty] = useState(false);
+
   useEffect(() => {
     const syncDutyStatus = () => {
-      const saved = localStorage.getItem(`flavora_receptionist_duty_status_${receptionistAccountKey}`) || localStorage.getItem('flavora_receptionist_duty_status') || 'LOGGED_IN';
+      const saved = localStorage.getItem(`flavora_receptionist_duty_status_${receptionistAccountKey}`) || localStorage.getItem('flavora_receptionist_duty_status') || 'LOGGED_OUT';
       setReceptionistDutyStatus(saved);
     };
     syncDutyStatus();
+
+    api.getMyStaffStatus()
+      .then(res => {
+        if (res && (res.status || res.dutyStatus)) {
+          const realStatus = (res.status === 'available' || res.dutyStatus === 'LOGGED_IN') ? 'LOGGED_IN' : 'LOGGED_OUT';
+          setReceptionistDutyStatus(realStatus);
+          localStorage.setItem(`flavora_receptionist_duty_status_${receptionistAccountKey}`, realStatus);
+        }
+      })
+      .catch(() => {});
+
     window.addEventListener('flavora_receptionist_duty_updated', syncDutyStatus);
     window.addEventListener('storage', syncDutyStatus);
     return () => {
@@ -222,11 +235,31 @@ export default function ReceptionistLayout({ setActivePage }) {
     };
   }, [receptionistAccountKey]);
 
-  const handleToggleReceptionistDuty = () => {
-    const nextStatus = receptionistDutyStatus === 'LOGGED_IN' ? 'LOGGED_OUT' : 'LOGGED_IN';
-    setReceptionistDutyStatus(nextStatus);
-    localStorage.setItem(`flavora_receptionist_duty_status_${receptionistAccountKey}`, nextStatus);
-    window.dispatchEvent(new Event('flavora_receptionist_duty_updated'));
+  const handleToggleReceptionistDuty = async () => {
+    if (isProcessingDuty) return;
+    const isCurrentlyLoggedIn = receptionistDutyStatus === 'LOGGED_IN';
+    setIsProcessingDuty(true);
+
+    try {
+      if (!isCurrentlyLoggedIn) {
+        const res = await api.staffCheckIn();
+        if (res && (res.success || res.attendance)) {
+          setReceptionistDutyStatus('LOGGED_IN');
+          localStorage.setItem(`flavora_receptionist_duty_status_${receptionistAccountKey}`, 'LOGGED_IN');
+          window.dispatchEvent(new Event('flavora_receptionist_duty_updated'));
+        }
+      } else {
+        const res = await api.staffCheckOut();
+        if (res && (res.success || res.attendance)) {
+          setReceptionistDutyStatus('LOGGED_OUT');
+          localStorage.setItem(`flavora_receptionist_duty_status_${receptionistAccountKey}`, 'LOGGED_OUT');
+          window.dispatchEvent(new Event('flavora_receptionist_duty_updated'));
+        }
+      }
+    } catch (err) {
+    } finally {
+      setIsProcessingDuty(false);
+    }
   };
 
   const [receptionistProfile, setReceptionistProfile] = useState(() => {

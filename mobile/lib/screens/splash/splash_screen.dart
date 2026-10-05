@@ -150,23 +150,26 @@ class _SplashScreenState extends State<SplashScreen>
                   onPressed: () {
                     widget.onComplete();
                   },
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'LOGIN TO CONTINUE',
-                        style: TextStyle(
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'LOGIN TO CONTINUE',
+                          style: TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 20,
-                      ),
-                    ],
+                        SizedBox(width: 8),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 20,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

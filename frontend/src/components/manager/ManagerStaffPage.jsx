@@ -49,11 +49,86 @@ export default function ManagerStaffPage() {
   const [roleFilter, setRoleFilter] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
+  const [viewingStaff, setViewingStaff] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [showStaffPassword, setShowStaffPassword] = useState(false);
   const [phoneWarning, setPhoneWarning] = useState('');
   const [isCheckingPhone, setIsCheckingPhone] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenMenuId(null);
+    };
+    if (openMenuId !== null) {
+      window.addEventListener('click', handleClickOutside);
+    }
+    return () => {
+      window.removeEventListener('click', handleClickOutside);
+    };
+  }, [openMenuId]);
+
+  // Monthly Attendance State for Viewing Staff Modal
+  const [monthlyHistoryList, setMonthlyHistoryList] = useState([]);
+  const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
+
+  const getLast30DaysIst = () => {
+    const dates = [];
+    const now = new Date();
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const optionsDate = { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' };
+      const optionsFullDate = { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' };
+      const parts = new Intl.DateTimeFormat('en-CA', optionsDate).format(d); // YYYY-MM-DD
+      const displayDate = new Intl.DateTimeFormat('en-GB', optionsFullDate).format(d); // 05 Oct 2026
+      dates.push({ dateStr: parts, displayDate });
+    }
+    return dates;
+  };
+
+  useEffect(() => {
+    if (viewingStaff) {
+      setIsLoadingMonthly(true);
+      const stId = viewingStaff.id || viewingStaff._id || viewingStaff.staffId;
+      api.getStaffAttendanceHistory({ staffId: stId })
+        .then(res => {
+          const fetchedHistory = res?.history || res?.records || [];
+          const last30Days = getLast30DaysIst();
+
+          const full30DaysList = last30Days.map(day => {
+            const match = fetchedHistory.find(h => h.date === day.dateStr);
+            if (match) {
+              return {
+                ...match,
+                displayDate: day.displayDate
+              };
+            }
+            return {
+              id: `${stId}_${day.dateStr}`,
+              date: day.dateStr,
+              displayDate: day.displayDate,
+              sessions: [],
+              loginTimeFormatted: '—',
+              logoutTimeFormatted: '—',
+              durationFormatted: '0m',
+              totalDurationMinutes: 0,
+              status: 'offline'
+            };
+          });
+
+          setMonthlyHistoryList(full30DaysList);
+        })
+        .catch(err => {
+          console.warn('Failed to fetch monthly attendance history:', err.message);
+        })
+        .finally(() => {
+          setIsLoadingMonthly(false);
+        });
+    } else {
+      setMonthlyHistoryList([]);
+    }
+  }, [viewingStaff]);
 
   // Staff Availability State
   const [availabilitySummary, setAvailabilitySummary] = useState({
@@ -895,30 +970,49 @@ export default function ManagerStaffPage() {
                 ) : (
                   visibleHistoryList.map((item, index) => {
                     const isAvailable = item.status === 'available';
+                    const hasMultipleSessions = Array.isArray(item.sessions) && item.sessions.length > 0;
                     return (
                       <tr key={item.id || index} style={{ backgroundColor: index % 2 === 0 ? '#FFFFFF' : '#FDFBF7', borderBottom: '1px solid #F4EFEA', fontSize: '0.86rem' }}>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#334155' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#334155', verticalAlign: 'top' }}>
                           {item.displayDate || item.date}
                         </td>
-                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top' }}>
                           <div style={{ fontWeight: 800, color: '#0F2A1D' }}>{item.staffName}</div>
                           {item.empId && <div style={{ fontSize: '0.72rem', color: '#64748B', fontFamily: 'monospace' }}>{item.empId}</div>}
                         </td>
-                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top' }}>
                           <span style={{ fontSize: '0.76rem', fontWeight: 800, backgroundColor: '#F1F5F9', color: '#475569', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
-                            {item.role.toUpperCase()}
+                            {String(item.role || '').toUpperCase()}
                           </span>
                         </td>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#15803D' }}>
-                          {item.loginTimeFormatted}
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#15803D', verticalAlign: 'top' }}>
+                          {hasMultipleSessions ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              {item.sessions.map((s, sIdx) => (
+                                <div key={sIdx}>{s.loginTimeFormatted}</div>
+                              ))}
+                            </div>
+                          ) : (
+                            item.loginTimeFormatted || '—'
+                          )}
                         </td>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: isAvailable ? '#2563EB' : '#475569' }}>
-                          {item.logoutTimeFormatted}
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: isAvailable ? '#2563EB' : '#475569', verticalAlign: 'top' }}>
+                          {hasMultipleSessions ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              {item.sessions.map((s, sIdx) => (
+                                <div key={sIdx} style={{ color: s.isCurrentlyActive ? '#2563EB' : '#475569' }}>
+                                  {s.logoutTimeFormatted}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            item.logoutTimeFormatted || '—'
+                          )}
                         </td>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace', verticalAlign: 'top' }}>
                           {item.durationFormatted}
                         </td>
-                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top' }}>
                           <span style={{
                             fontSize: '0.74rem',
                             fontWeight: 800,
@@ -1064,20 +1158,125 @@ export default function ManagerStaffPage() {
                         {st.shift}
                       </td>
 
-                      <td style={{ padding: '0.85rem 1.25rem', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
+                      <td style={{ padding: '0.85rem 1.25rem', textAlign: 'center', verticalAlign: 'middle', position: 'relative' }}>
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
                           <button
-                            onClick={() => handleOpenEditModal(st)}
-                            style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === st.id ? null : st.id);
+                            }}
+                            style={{
+                              backgroundColor: openMenuId === st.id ? '#0F2A1D' : '#F1F5F9',
+                              color: openMenuId === st.id ? '#FFFFFF' : '#475569',
+                              border: '1px solid #CBD5E1',
+                              borderRadius: '8px',
+                              width: '34px',
+                              height: '34px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                            }}
+                            title="Staff Actions"
                           >
-                            <Edit size={12} /> Edit Shift
+                            <MoreVertical size={16} />
                           </button>
-                          <button
-                            onClick={() => handleDeleteStaff(st.id, st.name)}
-                            style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                          >
-                            <Trash2 size={12} /> Remove
-                          </button>
+
+                          {openMenuId === st.id && (
+                            <div style={{
+                              position: 'absolute',
+                              right: 0,
+                              top: 'calc(100% + 4px)',
+                              backgroundColor: '#FFFFFF',
+                              borderRadius: '12px',
+                              boxShadow: '0 10px 30px rgba(15, 42, 29, 0.18)',
+                              border: '1px solid #E2E8F0',
+                              minWidth: '180px',
+                              zIndex: 9999,
+                              overflow: 'hidden',
+                              padding: '0.4rem 0',
+                              textAlign: 'left'
+                            }}>
+                              <button
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  handleOpenEditModal(st);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.9rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.6rem',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 700,
+                                  color: '#1E293B',
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Edit size={14} color="#2563EB" />
+                                <span>Edit Shift Hours</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  setViewingStaff(st);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.9rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.6rem',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 700,
+                                  color: '#1E293B',
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Eye size={14} color="#059669" />
+                                <span>View All Details</span>
+                              </button>
+
+                              <div style={{ borderTop: '1px solid #F1F5F9', margin: '0.3rem 0' }} />
+
+                              <button
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  handleDeleteStaff(st.id, st.name);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.9rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.6rem',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 700,
+                                  color: '#DC2626',
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Trash2 size={14} color="#DC2626" />
+                                <span>Remove Staff</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1234,6 +1433,191 @@ export default function ManagerStaffPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= VIEW STAFF DETAILS MODAL (WITH 1-MONTH ATTENDANCE LOG) ================= */}
+      {viewingStaff && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.65)',
+          backdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          padding: '1.25rem'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '24px',
+            maxWidth: '760px',
+            width: '100%',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '1.75rem',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.35)',
+            border: '1px solid #EAE3D2',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <button
+              onClick={() => setViewingStaff(null)}
+              style={{ position: 'absolute', right: '1.25rem', top: '1.25rem', border: 'none', background: 'none', cursor: 'pointer', zIndex: 10 }}
+            >
+              <X size={22} color="#64748B" />
+            </button>
+
+            {/* Header Section */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '16px',
+                backgroundColor: '#0F2A1D',
+                color: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.3rem',
+                fontWeight: 900
+              }}>
+                {viewingStaff.name ? viewingStaff.name.slice(0, 2).toUpperCase() : 'ST'}
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0F2A1D' }}>
+                    {viewingStaff.name}
+                  </h3>
+                  <span style={{ fontWeight: 800, backgroundColor: '#FFF5ED', color: '#92400E', padding: '0.15rem 0.65rem', borderRadius: '6px', border: '1px solid #FDE68A', fontSize: '0.76rem' }}>
+                    {viewingStaff.role}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#64748B', fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                  {viewingStaff.empId || `RMS-${String(viewingStaff.id).slice(-4)}`} • {viewingStaff.shift || '09:00 AM – 05:00 PM'}
+                </div>
+              </div>
+            </div>
+
+            {/* Profile Info Pills */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem', backgroundColor: '#F8FAFC', padding: '0.85rem 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', fontSize: '0.8rem' }}>
+              <div>
+                <span style={{ color: '#64748B', fontWeight: 600 }}>Email: </span>
+                <span style={{ fontWeight: 800, color: '#334155' }}>{viewingStaff.email || '—'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#64748B', fontWeight: 600 }}>Mobile: </span>
+                <span style={{ fontWeight: 800, color: '#334155' }}>{viewingStaff.phone ? `+91 ${viewingStaff.phone}` : '—'}</span>
+              </div>
+            </div>
+
+            {/* 1-Month Attendance Log Title & Badges */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Calendar size={18} color="#0F2A1D" />
+                <span>1-Month Attendance Log (Past 30 Days)</span>
+              </div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, backgroundColor: '#F1F5F9', color: '#475569', padding: '0.25rem 0.6rem', borderRadius: '8px' }}>
+                Total 30 Days Report
+              </span>
+            </div>
+
+            {/* Scrollable 30-Day Table */}
+            <div style={{ flex: 1, overflowY: 'auto', maxHeight: '340px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.84rem' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
+                  <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '0.75rem 1rem' }}>DATE (IST)</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>IN → OUT SESSIONS</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>LOGGED HOURS</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingMonthly ? (
+                    <tr>
+                      <td colSpan="4" style={{ padding: '2.5rem', textAlign: 'center', color: '#64748B' }}>
+                        <RefreshCw size={22} className="spin" style={{ display: 'block', margin: '0 auto 0.4rem auto' }} />
+                        <span>Fetching 1-month attendance log...</span>
+                      </td>
+                    </tr>
+                  ) : monthlyHistoryList.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: '#94A3B8' }}>
+                        No attendance records found for this period
+                      </td>
+                    </tr>
+                  ) : (
+                    monthlyHistoryList.map((item, idx) => {
+                      const isAvailable = item.status === 'available';
+                      const hasSessions = Array.isArray(item.sessions) && item.sessions.length > 0;
+                      return (
+                        <tr key={item.id || idx} style={{ backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FDFBF7', borderBottom: '1px solid #F4EFEA' }}>
+                          <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: '#334155', verticalAlign: 'top' }}>
+                            {item.displayDate || item.date}
+                          </td>
+                          <td style={{ padding: '0.7rem 1rem', fontWeight: 800, color: '#15803D', verticalAlign: 'top' }}>
+                            {hasSessions ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                {item.sessions.map((s, sIdx) => (
+                                  <div key={sIdx} style={{ fontSize: '0.8rem', color: s.isCurrentlyActive ? '#2563EB' : '#15803D' }}>
+                                    {s.loginTimeFormatted} – {s.logoutTimeFormatted}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#94A3B8', fontWeight: 600 }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '0.7rem 1rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace', verticalAlign: 'top' }}>
+                            {item.durationFormatted || '0m'}
+                          </td>
+                          <td style={{ padding: '0.7rem 1rem', verticalAlign: 'top' }}>
+                            <span style={{
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                              backgroundColor: isAvailable ? '#DCFCE7' : (hasSessions ? '#F1F5F9' : '#F8FAFC'),
+                              color: isAvailable ? '#15803D' : (hasSessions ? '#475569' : '#94A3B8'),
+                              padding: '0.15rem 0.55rem',
+                              borderRadius: '9999px',
+                              border: '1px solid ' + (isAvailable ? '#86EFAC' : '#CBD5E1')
+                            }}>
+                              {isAvailable ? '● Available' : (hasSessions ? '⚪ Offline' : 'Rest / Off')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = viewingStaff;
+                  setViewingStaff(null);
+                  handleOpenEditModal(target);
+                }}
+                style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', padding: '0.6rem 1.1rem', borderRadius: '10px', fontSize: '0.84rem', fontWeight: 800, cursor: 'pointer', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Edit size={14} color="#2563EB" />
+                <span>Edit Shift</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingStaff(null)}
+                style={{ backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.6rem 1.4rem', borderRadius: '10px', fontSize: '0.84rem', fontWeight: 800, cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
