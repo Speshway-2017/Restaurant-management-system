@@ -33,7 +33,7 @@ class SocketService {
 
     final targetUrl = ApiConstants.socketUrl;
     if (kDebugMode) {
-      print('[Socket] Initiating socket connection to: $targetUrl');
+      print('[Socket] Connecting to: $targetUrl');
     }
 
     if (_socket != null) {
@@ -61,26 +61,32 @@ class SocketService {
 
     _socket!.onConnect((_) {
       if (kDebugMode) {
-        print('[Socket] Connected successfully (ID: ${_socket!.id})');
+        print('[Socket] Connected: ${_socket!.id}');
       }
       joinRoom(_currentUser, isCheckedIn: _isCheckedIn);
     });
 
-    _socket!.onDisconnect((_) {
+    _socket!.onDisconnect((reason) {
       if (kDebugMode) {
-        print('[Socket] Connection lost/disconnected');
+        print('[Socket] Disconnected: $reason');
       }
     });
 
     _socket!.onConnectError((err) {
       if (kDebugMode) {
-        print('[Socket] Connection Error: $err');
+        print('[Socket] Connection error: $err');
+      }
+    });
+
+    _socket!.onReconnectAttempt((attempt) {
+      if (kDebugMode) {
+        print('[Socket] Reconnecting: attempt $attempt');
       }
     });
 
     _socket!.onError((err) {
       if (kDebugMode) {
-        print('[Socket] Socket Error: $err');
+        print('[Socket] Error: $err');
       }
     });
 

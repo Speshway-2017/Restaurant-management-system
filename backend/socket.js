@@ -7,10 +7,22 @@ const initSocket = (httpServer) => {
     path: '/socket.io',
     cors: {
       origin: (origin, callback) => {
-        // Allow all origins (browsers, mobile apps, desktop apps, Postman)
-        callback(null, true);
+        // Allow request if no origin header is present (e.g. mobile apps, curl, Postman, server-to-server)
+        if (!origin) return callback(null, true);
+
+        // Allowed production & localhost development origins (any dynamic port)
+        const isProduction = origin === 'https://restaurant.speshway.site' ||
+                             origin.endsWith('.speshway.site');
+        const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
+        if (isProduction || isLocalhost) {
+          return callback(null, true);
+        }
+
+        console.warn(`[Socket CORS] Origin rejected: ${origin}`);
+        return callback(new Error('CORS not allowed by Socket.IO server'));
       },
-      methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true
     },
     transports: ['polling', 'websocket'],
@@ -26,7 +38,21 @@ const initSocket = (httpServer) => {
   });
 
   io.on('connection', (socket) => {
-    console.log(`[Socket] New connection established: ID=${socket.id}, Transport=${socket.conn?.transport?.name || 'unknown'}`);
+    console.log(`[Socket] New connection: ID=${socket.id}, Transport=${socket.conn?.transport?.name || 'unknown'}`);
+
+    if (socket.conn) {
+      socket.conn.on('upgrade', (transport) => {
+        console.log(`[Socket] Transport upgraded to ${transport.name} for ID=${socket.id}`);
+      });
+    }
+
+    socket.on('disconnect', (reason) => {
+      console.log(`[Socket] Disconnect: ID=${socket.id}, Reason=${reason}`);
+    });
+
+    socket.on('error', (err) => {
+      console.error(`[Socket] Error on ID=${socket.id}:`, err);
+    });
 
     // Client joins room based on role & identity
     socket.on('join', (data = {}) => {
@@ -54,8 +80,6 @@ const initSocket = (httpServer) => {
         console.warn('Socket join error:', err.message);
       }
     });
-
-    socket.on('disconnect', () => {});
   });
 
   return io;

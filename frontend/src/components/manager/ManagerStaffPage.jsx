@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical,
   ShieldCheck, Mail, Phone, RefreshCw, Eye, EyeOff, Ban, AlertCircle, Calendar, Filter,
-  Flame, Utensils, Award
+  Flame, Utensils, Award, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { onSocketEvent } from '../../services/socket';
@@ -72,32 +72,135 @@ export default function ManagerStaffPage() {
   const [monthlyHistoryList, setMonthlyHistoryList] = useState([]);
   const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
 
-  const getLast30DaysIst = () => {
+  const getCurrentIstMonthStr = () => {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit' });
+      return formatter.format(new Date()); // 'YYYY-MM'
+    } catch (e) {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+  };
+
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentIstMonthStr());
+
+  useEffect(() => {
+    if (viewingStaff) {
+      setSelectedMonth(getCurrentIstMonthStr());
+    }
+  }, [viewingStaff]);
+
+  const getDaysInMonthIst = (monthStr) => {
+    if (!monthStr || !monthStr.includes('-')) return [];
+    const [yearStr, mStr] = monthStr.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(mStr, 10);
+
+    const totalDays = new Date(year, month, 0).getDate();
     const dates = [];
-    const now = new Date();
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const optionsDate = { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' };
-      const optionsFullDate = { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' };
-      const parts = new Intl.DateTimeFormat('en-CA', optionsDate).format(d); // YYYY-MM-DD
-      const displayDate = new Intl.DateTimeFormat('en-GB', optionsFullDate).format(d); // 05 Oct 2026
-      dates.push({ dateStr: parts, displayDate });
+
+    for (let day = totalDays; day >= 1; day--) {
+      const dayFormattedStr = String(day).padStart(2, '0');
+      const dateStr = `${yearStr}-${mStr.padStart(2, '0')}-${dayFormattedStr}`;
+      
+      const dObj = new Date(year, month - 1, day);
+      const displayDate = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }).format(dObj);
+
+      dates.push({ dateStr, displayDate });
     }
     return dates;
+  };
+
+  const formatMonthYearLabel = (monthStr) => {
+    if (!monthStr || !monthStr.includes('-')) return monthStr || '';
+    const [yearStr, mStr] = monthStr.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(mStr, 10);
+    const dObj = new Date(year, month - 1, 1);
+    return new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', month: 'long', year: 'numeric' }).format(dObj);
+  };
+
+  const handlePrevMonth = () => {
+    if (!selectedMonth || !selectedMonth.includes('-')) return;
+    const [yStr, mStr] = selectedMonth.split('-');
+    let year = parseInt(yStr, 10);
+    let month = parseInt(mStr, 10) - 1;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    }
+    setSelectedMonth(`${year}-${String(month).padStart(2, '0')}`);
+  };
+
+  const handleNextMonth = () => {
+    if (!selectedMonth || !selectedMonth.includes('-')) return;
+    const currentIstMonth = getCurrentIstMonthStr();
+    if (selectedMonth >= currentIstMonth) return;
+
+    const [yStr, mStr] = selectedMonth.split('-');
+    let year = parseInt(yStr, 10);
+    let month = parseInt(mStr, 10) + 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+    const nextStr = `${year}-${String(month).padStart(2, '0')}`;
+    if (nextStr <= currentIstMonth) {
+      setSelectedMonth(nextStr);
+    }
+  };
+
+  const normalizeDateStr = (rawDateStr, fallbackLoginAt) => {
+    if (!rawDateStr && fallbackLoginAt) {
+      try {
+        const d = new Date(fallbackLoginAt);
+        if (!isNaN(d.getTime())) {
+          return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+        }
+      } catch (e) {}
+    }
+    if (!rawDateStr) return '';
+    const str = String(rawDateStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+
+    const ddmmyyyyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (ddmmyyyyMatch) {
+      return `${ddmmyyyyMatch[3]}-${ddmmyyyyMatch[2].padStart(2, '0')}-${ddmmyyyyMatch[1].padStart(2, '0')}`;
+    }
+
+    try {
+      const parsed = new Date(str);
+      if (!isNaN(parsed.getTime())) {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(parsed);
+      }
+    } catch (e) {}
+
+    return str;
   };
 
   useEffect(() => {
     if (viewingStaff) {
       setIsLoadingMonthly(true);
-      const stId = viewingStaff.id || viewingStaff._id || viewingStaff.staffId;
-      api.getStaffAttendanceHistory({ staffId: stId })
+      const stId = String(viewingStaff._id || viewingStaff.staffId || viewingStaff.id || '');
+      const targetMonth = selectedMonth || getCurrentIstMonthStr();
+
+      api.getStaffAttendanceHistory({ staffId: stId, month: targetMonth })
         .then(res => {
           const fetchedHistory = res?.history || res?.records || [];
-          const last30Days = getLast30DaysIst();
+          const monthDays = getDaysInMonthIst(targetMonth);
 
-          const full30DaysList = last30Days.map(day => {
-            const match = fetchedHistory.find(h => h.date === day.dateStr);
+          const fullMonthList = monthDays.map(day => {
+            const match = fetchedHistory.find(h => {
+              if (!h) return false;
+              const hDateNorm = normalizeDateStr(h.date, h.loginAt || (h.sessions && h.sessions[0] && h.sessions[0].loginAt));
+              return hDateNorm === day.dateStr;
+            });
+
             if (match) {
               return {
                 ...match,
@@ -117,7 +220,7 @@ export default function ManagerStaffPage() {
             };
           });
 
-          setMonthlyHistoryList(full30DaysList);
+          setMonthlyHistoryList(fullMonthList);
         })
         .catch(err => {
           console.warn('Failed to fetch monthly attendance history:', err.message);
@@ -128,7 +231,7 @@ export default function ManagerStaffPage() {
     } else {
       setMonthlyHistoryList([]);
     }
-  }, [viewingStaff]);
+  }, [viewingStaff, selectedMonth]);
 
   // Staff Availability State
   const [availabilitySummary, setAvailabilitySummary] = useState({
@@ -176,6 +279,8 @@ export default function ManagerStaffPage() {
       const data = await api.getStaff();
       if (Array.isArray(data)) {
         const mapped = data.map((stf, idx) => ({
+          _id: String(stf._id || stf.id || ''),
+          staffId: String(stf._id || stf.id || ''),
           id: stf._id || stf.id || idx + 1,
           empId: stf.empId || `RMSW-0${idx + 1}`,
           name: stf.name || 'Staff Member',
@@ -250,6 +355,41 @@ export default function ManagerStaffPage() {
         fetchAttendanceHistory();
       }
       
+      // Auto-refetch monthly log for open staff details modal
+      if (viewingStaff) {
+        const viewingId = String(viewingStaff._id || viewingStaff.staffId || viewingStaff.id || '');
+        const updatedId = String(payload?.staffId || payload?.id || payload?.userId || '');
+        if (!updatedId || viewingId === updatedId) {
+          const targetMonth = selectedMonth || getCurrentIstMonthStr();
+          api.getStaffAttendanceHistory({ staffId: viewingId, month: targetMonth })
+            .then(res => {
+              const fetchedHistory = res?.history || res?.records || [];
+              const monthDays = getDaysInMonthIst(targetMonth);
+              const fullMonthList = monthDays.map(day => {
+                const match = fetchedHistory.find(h => {
+                  if (!h) return false;
+                  const hDateNorm = normalizeDateStr(h.date, h.loginAt || (h.sessions && h.sessions[0] && h.sessions[0].loginAt));
+                  return hDateNorm === day.dateStr;
+                });
+                if (match) return { ...match, displayDate: day.displayDate };
+                return {
+                  id: `${viewingId}_${day.dateStr}`,
+                  date: day.dateStr,
+                  displayDate: day.displayDate,
+                  sessions: [],
+                  loginTimeFormatted: '—',
+                  logoutTimeFormatted: '—',
+                  durationFormatted: '0m',
+                  totalDurationMinutes: 0,
+                  status: 'offline'
+                };
+              });
+              setMonthlyHistoryList(fullMonthList);
+            })
+            .catch(() => {});
+        }
+      }
+
       if (payload && payload.staffName) {
         showToast(`🔔 Staff Status Update: ${payload.staffName} is now ${String(payload.status).toUpperCase()}`);
       }
@@ -264,7 +404,7 @@ export default function ManagerStaffPage() {
       if (unsub2) unsub2();
       if (unsub3) unsub3();
     };
-  }, [historyFilters.date]);
+  }, [historyFilters.date, viewingStaff, selectedMonth]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -516,9 +656,9 @@ export default function ManagerStaffPage() {
           <div className="page-breadcrumb-bar">
             <span>Dashboard</span>
             <span className="crumb-sep">›</span>
-            <span className="crumb-current">Staff Attendance & Availability</span>
+            <span className="crumb-current">Staff Management</span>
           </div>
-          <h1 className="admin-page-title" style={{ margin: 0 }}>Staff Availability & Duty Tracking</h1>
+          <h1 className="admin-page-title" style={{ margin: 0 }}>Staff Management</h1>
           <p className="admin-page-subtitle" style={{ margin: '0.2rem 0 0 0' }}>Real-time Chef & Waiter login/logout status, active working hours, and shift history logs.</p>
         </div>
 
@@ -662,7 +802,7 @@ export default function ManagerStaffPage() {
           }}
         >
           <UserCheck size={18} />
-          <span>Real-Time Staff Availability</span>
+          <span>Staff Availability</span>
         </button>
 
         <button
@@ -682,7 +822,7 @@ export default function ManagerStaffPage() {
           }}
         >
           <Calendar size={18} />
-          <span>Attendance Session History</span>
+          <span>Attendance History</span>
         </button>
 
         <button
@@ -702,7 +842,7 @@ export default function ManagerStaffPage() {
           }}
         >
           <Users size={18} />
-          <span>Staff Roster & Account Shifts</span>
+          <span>Staff Roster</span>
         </button>
       </div>
 
@@ -770,18 +910,21 @@ export default function ManagerStaffPage() {
                 return (
                   <div
                     key={st.id}
+                    onClick={() => setViewingStaff(st)}
                     style={{
                       backgroundColor: '#FFFFFF',
                       borderRadius: '16px',
                       border: '1.5px solid ' + (isAvailable ? '#BBF7D0' : '#E2E8F0'),
                       padding: '1.1rem 1.25rem',
                       boxShadow: isAvailable ? '0 4px 16px rgba(34, 197, 94, 0.06)' : '0 2px 8px rgba(0,0,0,0.02)',
-                      position: 'relative'
+                      position: 'relative',
+                      cursor: 'pointer'
                     }}
+                    title="Click to view full monthly attendance log"
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                       <div>
-                        <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0F2A1D' }}>{st.name}</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0F2A1D', textDecoration: 'underline decoration-dotted' }}>{st.name}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', fontFamily: 'monospace' }}>{st.empId || 'RMS-01'}</div>
                       </div>
                       <span style={{
@@ -994,8 +1137,12 @@ export default function ManagerStaffPage() {
                         <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#334155', verticalAlign: 'top' }}>
                           {item.displayDate || item.date}
                         </td>
-                        <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top' }}>
-                          <div style={{ fontWeight: 800, color: '#0F2A1D' }}>{item.staffName}</div>
+                        <td 
+                          onClick={() => setViewingStaff(item)}
+                          style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top', cursor: 'pointer' }}
+                          title="Click to view full monthly attendance log"
+                        >
+                          <div style={{ fontWeight: 800, color: '#0F2A1D', textDecoration: 'underline decoration-dotted' }}>{item.staffName}</div>
                           {item.empId && <div style={{ fontSize: '0.72rem', color: '#64748B', fontFamily: 'monospace' }}>{item.empId}</div>}
                         </td>
                         <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top' }}>
@@ -1148,8 +1295,12 @@ export default function ManagerStaffPage() {
                         position: 'relative'
                       }}
                     >
-                      <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'middle' }}>
-                        <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.9rem' }}>{st.name}</div>
+                      <td 
+                        onClick={() => setViewingStaff(st)}
+                        style={{ padding: '0.85rem 1.25rem', verticalAlign: 'middle', cursor: 'pointer' }}
+                        title="Click to view full monthly attendance log"
+                      >
+                        <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.9rem', textDecoration: 'underline decoration-dotted' }}>{st.name}</div>
                         <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, fontFamily: 'monospace' }}>{st.empId || `RMSW-0${st.id}`}</div>
                       </td>
 
@@ -1532,18 +1683,40 @@ export default function ManagerStaffPage() {
               </div>
             </div>
 
-            {/* 1-Month Attendance Log Title & Badges */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            {/* Month-Wise Attendance Log Title & Month Navigation Controls */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <Calendar size={18} color="#0F2A1D" />
-                <span>1-Month Attendance Log (Past 30 Days)</span>
+                <span>Attendance Log ({formatMonthYearLabel(selectedMonth)})</span>
               </div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 800, backgroundColor: '#F1F5F9', color: '#475569', padding: '0.25rem 0.6rem', borderRadius: '8px' }}>
-                Total 30 Days Report
-              </span>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#F8FAFC', padding: '0.25rem 0.5rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  title="Previous Month"
+                  style={{ border: 'none', background: '#FFFFFF', padding: '0.3rem 0.55rem', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.76rem', fontWeight: 800, color: '#334155', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                >
+                  <ChevronLeft size={16} />
+                  <span>Prev</span>
+                </button>
+                <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#0F2A1D', minWidth: '115px', textAlign: 'center' }}>
+                  {formatMonthYearLabel(selectedMonth)}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  disabled={selectedMonth >= getCurrentIstMonthStr()}
+                  title={selectedMonth >= getCurrentIstMonthStr() ? "Cannot navigate into future months" : "Next Month"}
+                  style={{ border: 'none', background: selectedMonth >= getCurrentIstMonthStr() ? '#E2E8F0' : '#FFFFFF', padding: '0.3rem 0.55rem', borderRadius: '6px', cursor: selectedMonth >= getCurrentIstMonthStr() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.76rem', fontWeight: 800, color: selectedMonth >= getCurrentIstMonthStr() ? '#94A3B8' : '#334155', boxShadow: selectedMonth >= getCurrentIstMonthStr() ? 'none' : '0 1px 2px rgba(0,0,0,0.05)', opacity: selectedMonth >= getCurrentIstMonthStr() ? 0.6 : 1 }}
+                >
+                  <span>Next</span>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
 
-            {/* Scrollable 30-Day Table */}
+            {/* Scrollable Month Table */}
             <div style={{ flex: 1, overflowY: 'auto', maxHeight: '340px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
               <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.84rem' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
@@ -1559,7 +1732,7 @@ export default function ManagerStaffPage() {
                     <tr>
                       <td colSpan="4" style={{ padding: '2.5rem', textAlign: 'center', color: '#64748B' }}>
                         <RefreshCw size={22} className="spin" style={{ display: 'block', margin: '0 auto 0.4rem auto' }} />
-                        <span>Fetching 1-month attendance log...</span>
+                        <span>Fetching {formatMonthYearLabel(selectedMonth)} attendance log...</span>
                       </td>
                     </tr>
                   ) : monthlyHistoryList.length === 0 ? (
@@ -1603,7 +1776,7 @@ export default function ManagerStaffPage() {
                               borderRadius: '9999px',
                               border: '1px solid ' + (isAvailable ? '#86EFAC' : '#CBD5E1')
                             }}>
-                              {isAvailable ? '● Available' : (hasSessions ? '⚪ Offline' : 'Rest / Off')}
+                              {isAvailable ? '● Available' : (hasSessions ? '⚪ Offline' : 'Not Checked In')}
                             </span>
                           </td>
                         </tr>

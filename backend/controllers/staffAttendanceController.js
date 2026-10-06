@@ -40,6 +40,45 @@ const normalizeRole = (roleStr = '') => {
   return 'staff';
 };
 
+const normalizeToIstDateStr = (dateVal, loginAtObj) => {
+  if (loginAtObj) {
+    try {
+      const d = new Date(loginAtObj);
+      if (!isNaN(d.getTime())) {
+        return getIstDetails(d).dateStr;
+      }
+    } catch (e) {}
+  }
+  if (!dateVal) return getIstDetails(new Date()).dateStr;
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
+    return getIstDetails(dateVal).dateStr;
+  }
+
+  const str = String(dateVal).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  const ddmmyyyy = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (ddmmyyyy) {
+    return `${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2, '0')}-${ddmmyyyy[1].padStart(2, '0')}`;
+  }
+
+  const yyyymmdd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (yyyymmdd) {
+    return `${yyyymmdd[1]}-${yyyymmdd[2].padStart(2, '0')}-${yyyymmdd[3].padStart(2, '0')}`;
+  }
+
+  try {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return getIstDetails(parsed).dateStr;
+    }
+  } catch (e) {}
+
+  return str;
+};
+
 // @desc    Staff Check IN (Duty Available)
 // @route   POST /api/staff-attendance/in
 // @access  Private (Staff)
@@ -254,13 +293,11 @@ exports.getCurrentAvailability = async (req, res) => {
       const isAvailable = Boolean(latestSession && latestSession.status === 'available' && !latestSession.logoutAt);
 
       // Check if latest session belongs to TODAY in IST
-      const isTodaySession = Boolean(latestSession && latestSession.date === todayStr);
+      const isTodaySession = Boolean(latestSession && normalizeToIstDateStr(latestSession.date, latestSession.loginAt) === todayStr);
 
       // Find all sessions recorded TODAY for calculating total duration logged today
-      const todaySessions = await StaffAttendance.find({
-        staffId: u._id,
-        date: todayStr
-      }).lean();
+      const allStaffSessions = await StaffAttendance.find({ staffId: u._id }).lean();
+      const todaySessions = allStaffSessions.filter(s => normalizeToIstDateStr(s.date, s.loginAt) === todayStr);
 
       let totalMinsToday = 0;
       todaySessions.forEach(s => {
@@ -341,46 +378,121 @@ exports.getCurrentAvailability = async (req, res) => {
 // @access  Private (Manager/Admin)
 exports.getAttendanceHistory = async (req, res) => {
   try {
-    const { date, role, staffId, status, search } = req.query;
+    const { date, role, staffId, status, search, month } = req.query;
     const now = new Date();
     const { dateStr } = getIstDetails(now);
-    const targetQueryDate = (date && String(date).trim()) ? String(date).trim() : dateStr;
 
-    // 1. Fetch raw attendance sessions for the target date
-    const query = {
-      role: { $nin: ['manager', 'admin', 'resto manager', 'super admin'] },
-      date: targetQueryDate
-    };
-    if (role && role !== 'All') {
-      query.role = normalizeRole(role);
+    const mongoose = require('mongoose');
+
+    // 1. Safely resolve staffId (handle Mongo ObjectId, empId, or string id)
+    let targetStaffId = null;
+    let targetUserObj = null;
+    if (staffId && String(staffId).trim() !== '' && String(staffId).trim().toLowerCase() !== 'undefined' && String(staffId).trim().toLowerCase() !== 'null') {
+      const trimmed = String(staffId).trim();
+      if (mongoose.Types.ObjectId.isValid(trimmed)) {
+        targetStaffId = trimmed;
+        targetUserObj = await User.findById(trimmed).select('_id empId name').lean();
+      }
+      if (!targetUserObj) {
+        const queryOr = [
+          { empId: trimmed },
+          { empId: { $regex: new RegExp(trimmed + '$', 'i') } },
+          { name: { $regex: new RegExp(trimmed, 'i') } }
+        ];
+        if (mongoose.Types.ObjectId.isValid(trimmed)) {
+          queryOr.unshift({ _id: trimmed });
+        }
+        targetUserObj = await User.findOne({ $or: queryOr }).select('_id empId name').lean();
+        if (targetUserObj) {
+          targetStaffId = String(targetUserObj._id);
+        }
+      }
     }
-    if (staffId) {
-      query.staffId = staffId;
+
+    const isSpecificDate = date && String(date).trim() !== '' && String(date).trim().toLowerCase() !== 'all';
+    const monthStr = month && String(month).trim() !== '' && String(month).trim().toLowerCase() !== 'all' ? String(month).trim() : null;
+
+    let targetQueryDate = null;
+    if (isSpecificDate) {
+      targetQueryDate = normalizeToIstDateStr(String(date).trim());
+    } else if (!monthStr && !targetStaffId) {
+      targetQueryDate = dateStr;
+    }
+
+    // 2. Build MongoDB query
+    const andConditions = [
+      { role: { $nin: ['manager', 'admin', 'resto manager', 'super admin'] } }
+    ];
+
+    if (targetStaffId) {
+      const staffConditions = [
+        { staffId: targetStaffId },
+        { staffId: String(targetStaffId) }
+      ];
+      if (mongoose.Types.ObjectId.isValid(targetStaffId)) {
+        staffConditions.push({ staffId: new mongoose.Types.ObjectId(targetStaffId) });
+      }
+      if (targetUserObj) {
+        if (targetUserObj.empId) {
+          staffConditions.push({ empId: targetUserObj.empId });
+        }
+        if (targetUserObj.name) {
+          const escapedName = targetUserObj.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          staffConditions.push({ staffName: { $regex: new RegExp('^' + escapedName + '$', 'i') } });
+        }
+      }
+      andConditions.push({ $or: staffConditions });
+    }
+
+    if (targetQueryDate) {
+      const parts = targetQueryDate.split('-');
+      let altDateStr = targetQueryDate;
+      if (parts.length === 3 && parts[0].length === 4) {
+        altDateStr = `${parts[2]}-${parts[1]}-${parts[0]}`; // DD-MM-YYYY
+      }
+      andConditions.push({
+        $or: [
+          { date: targetQueryDate },
+          { date: altDateStr }
+        ]
+      });
+    } else if (monthStr) {
+      const [mYear, mNum] = monthStr.split('-');
+      const monthInt = parseInt(mNum, 10);
+      const yearInt = parseInt(mYear, 10);
+      const mNumPad = String(monthInt).padStart(2, '0');
+
+      const daysInMonth = new Date(yearInt, monthInt, 0).getDate();
+      const startDateStr = `${mYear}-${mNumPad}-01`;
+      const endDateStr = `${mYear}-${mNumPad}-${String(daysInMonth).padStart(2, '0')}`;
+
+      const altMonthStr = `${mNumPad}-${mYear}`;
+      const altMonthStr2 = `${monthInt}-${mYear}`;
+
+      const startOfMonth = new Date(Date.UTC(yearInt, monthInt - 1, 1, 0, 0, 0));
+      const endOfMonth = new Date(Date.UTC(yearInt, monthInt, 0, 23, 59, 59, 999));
+
+      andConditions.push({
+        $or: [
+          { date: { $gte: startDateStr, $lte: endDateStr } },
+          { date: { $regex: new RegExp('^' + monthStr) } },
+          { date: { $regex: new RegExp('-' + altMonthStr + '$') } },
+          { date: { $regex: new RegExp('-' + altMonthStr2 + '$') } },
+          { loginAt: { $gte: startOfMonth, $lte: endOfMonth } }
+        ]
+      });
+    }
+
+    if (role && role !== 'All') {
+      andConditions.push({ role: normalizeRole(role) });
     }
     if (search && search.trim()) {
-      query.staffName = { $regex: search.trim(), $options: 'i' };
+      andConditions.push({ staffName: { $regex: search.trim(), $options: 'i' } });
     }
 
-    const rawSessions = await StaffAttendance.find(query).sort({ createdAt: 1 }).limit(500).lean();
+    const query = { $and: andConditions };
 
-    // Group raw sessions by staffId for the selected target date
-    const groupedMap = new Map();
-
-    rawSessions.forEach(s => {
-      const sDate = s.date || targetQueryDate;
-      const key = `${String(s.staffId)}_${sDate}`;
-      if (!groupedMap.has(key)) {
-        groupedMap.set(key, {
-          staffId: String(s.staffId),
-          staffName: s.staffName,
-          empId: s.empId || '',
-          role: s.role,
-          date: sDate,
-          rawList: []
-        });
-      }
-      groupedMap.get(key).rawList.push(s);
-    });
+    const rawSessions = await StaffAttendance.find(query).sort({ createdAt: 1 }).limit(2000).lean();
 
     // 2. Fetch ALL operational staff (Left Join master roster: Waiter, Chef, Receptionist)
     let userQuery = {
@@ -393,40 +505,108 @@ exports.getAttendanceHistory = async (req, res) => {
     if (search && search.trim()) {
       userQuery.name = { $regex: search.trim(), $options: 'i' };
     }
-    if (staffId) {
-      userQuery._id = staffId;
+    if (targetStaffId) {
+      userQuery._id = targetStaffId;
     }
 
     const staffUsers = await User.find(userQuery).select('-password').lean();
 
-    // Ensure all operational staff users appear for the requested date (even with 0 sessions)
-    staffUsers.forEach((u) => {
-      const uIdStr = String(u._id);
-      const key = `${uIdStr}_${targetQueryDate}`;
+    const userByIdMap = new Map();
+    const userByEmpIdMap = new Map();
+    const userByNameMap = new Map();
+
+    staffUsers.forEach(u => {
+      const uId = String(u._id);
+      userByIdMap.set(uId, u);
+      if (u.empId) userByEmpIdMap.set(String(u.empId).toUpperCase(), u);
+      if (u.name) userByNameMap.set(String(u.name).toLowerCase().trim(), u);
+    });
+
+    // Group raw sessions by canonical staffId and normalized IST date (YYYY-MM-DD)
+    const groupedMap = new Map();
+
+    rawSessions.forEach(s => {
+      const sDate = normalizeToIstDateStr(s.date, s.loginAt);
+      const sStaffIdStr = String(s.staffId);
+      const sEmpIdStr = String(s.empId || '').toUpperCase();
+      const sNameStr = String(s.staffName || '').toLowerCase().trim();
+
+      const matchedUser = userByIdMap.get(sStaffIdStr) || 
+                          userByEmpIdMap.get(sEmpIdStr) || 
+                          userByNameMap.get(sNameStr);
+
+      const canonicalStaffId = targetStaffId || (matchedUser ? String(matchedUser._id) : sStaffIdStr);
+      const canonicalStaffName = matchedUser ? matchedUser.name : (s.staffName || 'Staff Member');
+      const canonicalEmpId = matchedUser ? (matchedUser.empId || `RMS-${canonicalStaffId.slice(-4).toUpperCase()}`) : (s.empId || '');
+      const canonicalRole = matchedUser ? normalizeRole(matchedUser.role) : normalizeRole(s.role);
+
+      const key = `${canonicalStaffId}_${sDate}`;
       if (!groupedMap.has(key)) {
         groupedMap.set(key, {
-          staffId: uIdStr,
-          staffName: u.name,
-          empId: u.empId || `RMS-${uIdStr.slice(-4).toUpperCase()}`,
-          role: normalizeRole(u.role),
-          date: targetQueryDate,
+          staffId: canonicalStaffId,
+          staffName: canonicalStaffName,
+          empId: canonicalEmpId,
+          role: canonicalRole,
+          date: sDate,
           rawList: []
         });
       }
+      groupedMap.get(key).rawList.push(s);
     });
 
-    // Format display date helper for target date
-    let formattedDisplayDate = targetQueryDate;
-    try {
-      const parts = targetQueryDate.split('-');
-      if (parts.length === 3) {
-        const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-        formattedDisplayDate = getIstDetails(dObj).displayDate;
+    // Ensure operational staff users appear for the requested date if a single target date is specified
+    if (targetQueryDate) {
+      staffUsers.forEach((u) => {
+        const uIdStr = String(u._id);
+        const key = `${uIdStr}_${targetQueryDate}`;
+        if (!groupedMap.has(key)) {
+          groupedMap.set(key, {
+            staffId: uIdStr,
+            staffName: u.name,
+            empId: u.empId || `RMS-${uIdStr.slice(-4).toUpperCase()}`,
+            role: normalizeRole(u.role),
+            date: targetQueryDate,
+            rawList: []
+          });
+        }
+      });
+    }
+
+    // Populate all calendar dates for target staff member when month view is requested
+    if (monthStr && targetStaffId) {
+      const [mYear, mNum] = monthStr.split('-');
+      const monthInt = parseInt(mNum, 10);
+      const yearInt = parseInt(mYear, 10);
+      const daysInMonth = new Date(yearInt, monthInt, 0).getDate();
+      const mNumPad = String(monthInt).padStart(2, '0');
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayStr = `${mYear}-${mNumPad}-${String(day).padStart(2, '0')}`;
+        const key = `${targetStaffId}_${dayStr}`;
+        if (!groupedMap.has(key)) {
+          const matchedU = targetUserObj || userByIdMap.get(targetStaffId);
+          groupedMap.set(key, {
+            staffId: targetStaffId,
+            staffName: matchedU ? matchedU.name : (targetUserObj ? targetUserObj.name : 'Staff Member'),
+            empId: matchedU ? (matchedU.empId || `RMS-${targetStaffId.slice(-4).toUpperCase()}`) : '',
+            role: matchedU ? normalizeRole(matchedU.role) : 'staff',
+            date: dayStr,
+            rawList: []
+          });
+        }
       }
-    } catch (e) {}
+    }
 
     // 3. Aggregate each staff member's sessions and status
     const aggregatedRecords = Array.from(groupedMap.values()).map(group => {
+      let formattedDisplayDate = group.date;
+      try {
+        const parts = String(group.date).split('-');
+        if (parts.length === 3) {
+          const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          formattedDisplayDate = getIstDetails(dObj).displayDate;
+        }
+      } catch (e) {}
       const sessionsList = group.rawList.sort((a, b) => {
         const tA = a.loginAt ? new Date(a.loginAt).getTime() : 0;
         const tB = b.loginAt ? new Date(b.loginAt).getTime() : 0;
@@ -529,6 +709,16 @@ exports.getAttendanceHistory = async (req, res) => {
         logoutTimeFormatted: logoutSummary
       };
     }).filter(Boolean);
+
+    console.log(`[Attendance History] staffId: ${staffId || 'All'}, month: ${month || 'None'}, date: ${date || 'None'}, rawSessions count: ${rawSessions.length}, grouped records count: ${aggregatedRecords.length}`);
+
+    if (targetUserObj && targetUserObj.name && targetUserObj.name.toLowerCase().includes('venky')) {
+      const venkyOct5 = rawSessions.filter(s => normalizeToIstDateStr(s.date, s.loginAt) === '2026-10-05');
+      console.log(`[Attendance Debug] Venky / ${targetUserObj.empId || 'RMSW-01'} 2026-10-05 matching sessions: ${venkyOct5.length}`);
+      venkyOct5.forEach(s => {
+        console.log(`  -> Session ID: ${s._id}, loginAt: ${s.loginAt}, logoutAt: ${s.logoutAt}, date: ${s.date}, staffId: ${s.staffId}`);
+      });
+    }
 
     return res.status(200).json({
       success: true,

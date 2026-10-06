@@ -23,8 +23,42 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
     return () => window.removeEventListener('click', handleOutsideClick);
   }, []);
 
-  const defaultAdminStaff = [];
-  const defaultManagerStaff = [];
+  const defaultManagerStaff = [
+    {
+      _id: 'mgr_ram_default',
+      id: 'RMSM-01',
+      empId: 'RMSM-01',
+      name: 'Manager Ram',
+      email: 'manager1@rms.com',
+      role: 'Manager',
+      phone: '+91 98765 12345',
+      documentUrl: '',
+      status: 'Active',
+      rating: '4.9 ★',
+      checkInTime: '09:00 AM',
+      checkOutTime: '06:00 PM',
+      scheduledShift: '09:00 AM – 06:00 PM (Morning)',
+      hoursLogged: '9h 00m',
+      attendanceStatus: 'On Time'
+    },
+    {
+      _id: 'mgr_kiran_default',
+      id: 'RMSM-02',
+      empId: 'RMSM-02',
+      name: 'Manager Kiran',
+      email: 'manager2@rms.com',
+      role: 'Manager',
+      phone: '+91 98765 54321',
+      documentUrl: '',
+      status: 'Active',
+      rating: '4.8 ★',
+      checkInTime: '01:00 PM',
+      checkOutTime: '10:00 PM',
+      scheduledShift: '01:00 PM – 10:00 PM (Evening)',
+      hoursLogged: '9h 00m',
+      attendanceStatus: 'On Time'
+    }
+  ];
 
   const [staffMembers, setStaffMembers] = useState([]);
 
@@ -40,12 +74,18 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
 
   const fetchStaff = () => {
     Promise.all([
-      api.getStaff().catch(() => []),
+      api.getStaff({ includeAll: true }).catch(() => []),
       api.getOrders().catch(() => [])
     ]).then(([data, fetchedOrders]) => {
-      if (data && data.length > 0) {
+      let rawData = Array.isArray(data) ? data : [];
+      const hasManager = rawData.some(st => (st.role || '').toLowerCase().includes('manager'));
+      if (!hasManager) {
+        rawData = [...defaultManagerStaff, ...rawData];
+      }
+
+      if (rawData && rawData.length > 0) {
         const roleCounters = {};
-        setStaffMembers(data.map((stf) => {
+        setStaffMembers(rawData.map((stf) => {
           const role = stf.role || (isManagerMode ? 'Waiter' : 'Manager');
           let prefix = 'RMSM';
           if (role.toLowerCase().includes('waiter')) prefix = 'RMSW';
@@ -123,7 +163,6 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
             phone: stf.phone || '+91 98000 00000',
             documentUrl: stf.documentUrl || '',
             status: stf.status || 'Active',
-            ordersHandled: (stf.ordersHandled && Number(stf.ordersHandled) > 0) ? Number(stf.ordersHandled) : realOrdersHandled,
             rating: '4.9 ★',
             checkInTime: stf.checkInTime || '09:45 AM',
             checkOutTime: stf.checkOutTime || '07:15 PM',
@@ -519,7 +558,6 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
                   <th>Staff Name</th>
                   <th>Email & Contact</th>
                   <th>Assigned Role</th>
-                  <th>Orders Handled</th>
                   <th>Performance</th>
                   <th>Status</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
@@ -528,7 +566,7 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
               <tbody>
                 {filteredStaff.length === 0 ? (
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748B' }}>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748B' }}>
                       <Users size={36} color="#CBD5E1" style={{ marginBottom: '0.5rem' }} />
                       <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>No staff members found</div>
                       <div style={{ fontSize: '0.8rem' }}>Try clearing your search or add a new staff member.</div>
@@ -548,7 +586,6 @@ export default function AdminStaffPage({ subTab = 'staff-accounts' }) {
                       <td>
                         {getRoleBadge(stf.role)}
                       </td>
-                      <td style={{ fontWeight: 700 }}>{stf.ordersHandled} Orders</td>
                       <td style={{ color: '#FF8A00', fontWeight: 700 }}>{stf.rating}</td>
                       <td>
                         <span className={`status-badge-unified ${(stf.status === 'Suspended' || stf.status === 'Inactive') ? 'is-cancelled' : 'is-ready'}`}>

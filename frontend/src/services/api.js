@@ -152,7 +152,12 @@ export const api = {
   createReservation: (data) => request('/reservations', { method: 'POST', body: JSON.stringify(data) }),
 
   // Staff API
-  getStaff: () => request('/staff'),
+  getStaff: (params) => {
+    if (!params) return request('/staff');
+    if (typeof params === 'string') return request(`/staff?role=${encodeURIComponent(params)}`);
+    const searchParams = new URLSearchParams(params).toString();
+    return request(`/staff?${searchParams}`);
+  },
   createStaff: (data) => request('/staff', { method: 'POST', body: JSON.stringify(data) }),
   updateStaff: (id, data) => request(`/staff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStaff: (id) => request(`/staff/${id}`, { method: 'DELETE' }),
@@ -376,8 +381,14 @@ export const api = {
   }),
   getStaffWorkload: () => request('/staff/workload'),
 
-  // Staff Management API
-  getStaff: () => request('/staff'),
+  getStaff: (params = {}) => {
+    if (typeof params === 'string') return request(`/staff?role=${encodeURIComponent(params)}`);
+    const query = new URLSearchParams();
+    if (params.role) query.append('role', params.role);
+    if (params.includeAll) query.append('includeAll', params.includeAll);
+    const qStr = query.toString();
+    return request(`/staff${qStr ? `?${qStr}` : ''}`);
+  },
   createStaff: (data) => request('/staff', { method: 'POST', body: JSON.stringify(data) }),
   updateStaff: (id, data) => request(`/staff/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStaff: (id) => request(`/staff/${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -394,6 +405,7 @@ export const api = {
     if (params.status) query.append('status', params.status);
     if (params.search) query.append('search', params.search);
     if (params.staffId) query.append('staffId', params.staffId);
+    if (params.month) query.append('month', params.month);
     const qStr = query.toString();
     return request(`/staff-attendance/history${qStr ? `?${qStr}` : ''}`);
   },
