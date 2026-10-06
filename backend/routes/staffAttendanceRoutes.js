@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
+const { protect, optionalAuth } = require('../middleware/authMiddleware');
 const {
   checkIn,
   checkOut,
@@ -9,15 +9,12 @@ const {
   getMyStatus
 } = require('../controllers/staffAttendanceController');
 
-// All endpoints require authentication token
-router.use(protect);
-
-router.post('/in', checkIn);
-router.post('/check-in', checkIn);
-router.post('/out', checkOut);
-router.post('/check-out', checkOut);
-router.get('/current', getCurrentAvailability);
-router.get('/history', getAttendanceHistory);
-router.get('/my-status', getMyStatus);
+router.post('/in', protect, checkIn);
+router.post('/check-in', protect, checkIn);
+router.post('/out', protect, checkOut);
+router.post('/check-out', protect, checkOut);
+router.get('/current', optionalAuth, getCurrentAvailability);
+router.get('/history', optionalAuth, getAttendanceHistory);
+router.get('/my-status', protect, getMyStatus);
 
 module.exports = router;

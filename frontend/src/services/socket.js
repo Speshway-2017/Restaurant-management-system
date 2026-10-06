@@ -8,14 +8,18 @@ export const getSocket = () => {
       ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
       : 'http://localhost:5000';
 
+    console.log('[Socket] Connecting to:', backendUrl);
+
     socket = io(backendUrl, {
+      path: '/socket.io',
       transports: ['polling', 'websocket'],
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: 15,
       reconnectionDelay: 1000
     });
 
     socket.on('connect', () => {
+      console.log('[Socket] Connected:', socket.id);
       // Re-join rooms upon connection/reconnection
       try {
         const raw = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
@@ -24,6 +28,18 @@ export const getSocket = () => {
           joinSocketRooms(user);
         }
       } catch (e) { }
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn('[Socket] Connection error:', err.message || err);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket] Disconnected:', reason);
+    });
+
+    socket.on('reconnect_attempt', (attempt) => {
+      console.log('[Socket] Reconnecting: attempt', attempt);
     });
   }
   return socket;

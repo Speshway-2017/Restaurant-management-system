@@ -1,26 +1,50 @@
 const User = require('../models/User');
+const authService = require('../services/authService');
 
 const getStaff = async (req, res) => {
   try {
-    // Only return operational staff (Chef, Waiter, Receptionist). Exclude Manager and Admin.
-    const query = {
-      role: { $nin: ['Admin', 'admin', 'Manager', 'manager', 'Resto Manager', 'resto manager', 'Super Admin', 'super admin'] }
-    };
+    // Ensure default manager accounts exist in DB
+    await authService.ensureDefaultUsersExist();
+
+    const { role, includeAll } = req.query;
+
+    let query = {};
+
+    if (includeAll === 'true' || role === 'all') {
+      query = {
+        role: { $nin: ['Admin', 'admin', 'Super Admin', 'super admin'] }
+      };
+    } else if (role && role.toLowerCase().includes('manager')) {
+      query = {
+        role: { $regex: 'manager', $options: 'i' }
+      };
+    } else if (role && role.toLowerCase() === 'operational') {
+      query = {
+        role: { $nin: ['Admin', 'admin', 'Manager', 'manager', 'Resto Manager', 'resto manager', 'Super Admin', 'super admin'] }
+      };
+    } else {
+      // Default: Return all non-admin staff users (Managers, Waiters, Chefs, Receptionists)
+      query = {
+        role: { $nin: ['Admin', 'admin', 'Super Admin', 'super admin'] }
+      };
+    }
 
     const staff = await User.find(query).select('-password').sort({ createdAt: 1 });
 
     const roleCounters = {};
     const formattedStaff = staff.map((member) => {
-      const role = member.role || 'Manager';
-      let prefix = 'RMSM';
+      const uRole = member.role || 'Waiter';
+      let prefix = 'RMSW';
 
-      if (role.toLowerCase().includes('waiter')) {
+      if (uRole.toLowerCase().includes('manager')) {
+        prefix = 'RMSM';
+      } else if (uRole.toLowerCase().includes('waiter')) {
         prefix = 'RMSW';
-      } else if (role.toLowerCase().includes('chef')) {
+      } else if (uRole.toLowerCase().includes('chef')) {
         prefix = 'RMSC';
-      } else if (role.toLowerCase().includes('receptionist') || role.toLowerCase().includes('cashier')) {
+      } else if (uRole.toLowerCase().includes('receptionist') || uRole.toLowerCase().includes('cashier')) {
         prefix = 'RMSR';
-      } else if (role.toLowerCase().includes('admin')) {
+      } else if (uRole.toLowerCase().includes('admin')) {
         prefix = 'RMSA';
       }
 
