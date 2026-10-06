@@ -11,6 +11,10 @@ class UserAvatarWidget extends StatelessWidget {
   final Color? backgroundColor;
   final Color? textColor;
   final Border? border;
+  final bool showStatusDot;
+  final bool isCheckedIn;
+  final Color? statusDotColor;
+  final Color dotBorderColor;
 
   const UserAvatarWidget({
     super.key,
@@ -20,6 +24,10 @@ class UserAvatarWidget extends StatelessWidget {
     this.backgroundColor,
     this.textColor,
     this.border,
+    this.showStatusDot = false,
+    this.isCheckedIn = true,
+    this.statusDotColor,
+    this.dotBorderColor = const Color(0xFF2B150E),
   });
 
   String _fullUrl(String path) {
@@ -96,7 +104,7 @@ class UserAvatarWidget extends StatelessWidget {
       childContent = _buildInitials(initial, defaultText);
     }
 
-    return Container(
+    final avatarCircle = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -108,6 +116,33 @@ class UserAvatarWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         child: childContent,
       ),
+    );
+
+    if (!showStatusDot) {
+      return avatarCircle;
+    }
+
+    final dotColor = statusDotColor ?? (isCheckedIn ? const Color(0xFF10B981) : const Color(0xFFEF4444));
+    final dotSize = (radius * 0.55).clamp(10.0, 16.0);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatarCircle,
+        Positioned(
+          right: 1,
+          bottom: 1,
+          child: Container(
+            width: dotSize,
+            height: dotSize,
+            decoration: BoxDecoration(
+              color: dotColor,
+              shape: BoxShape.circle,
+              border: Border.all(color: dotBorderColor, width: 2),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

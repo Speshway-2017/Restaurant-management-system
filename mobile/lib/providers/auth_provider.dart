@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../core/network/api_client.dart';
 import '../core/storage/storage_service.dart';
@@ -115,10 +115,36 @@ class AuthProvider with ChangeNotifier {
           notifyListeners();
         }
       }
+      await fetchAttendanceStatus();
     } catch (e) {
       // If 401, logout
       if (e.toString().contains('401') || e.toString().contains('Unauthorized')) {
         await logout();
+      }
+    }
+  }
+
+  Future<void> fetchAttendanceStatus() async {
+    try {
+      final res = await ApiClient.get(ApiConstants.staffMyStatus);
+      if (kDebugMode) {
+        print('[Attendance] fetchAttendanceStatus response: $res');
+      }
+      if (res is Map<String, dynamic> && _user != null) {
+        final isCheckedIn = res['isCheckedIn'] == true || res['status'] == 'available' || res['dutyStatus'] == 'LOGGED_IN';
+        final statusStr = isCheckedIn ? 'Present' : 'Checked Out';
+        if (_user!.attendanceStatus != statusStr) {
+          _user = UserModel.fromJson({
+            ..._user!.toJson(),
+            'attendanceStatus': statusStr,
+          });
+          await StorageService.saveUser(_user!);
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[Attendance] Error fetching my status: $e');
       }
     }
   }
@@ -151,27 +177,87 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<bool> checkIn() async {
-    final nowStr = _formatCurrentTime();
-    final success = await updateProfile({
-      'attendanceStatus': 'Present',
-      'checkInTime': nowStr,
-    });
-    if (success) {
-      SocketService.updateCheckInStatus(true);
+    if (kDebugMode) {
+      print('[Attendance] Check IN button clicked');
+      print('[Attendance] API URL: ${ApiConstants.baseUrl}${ApiConstants.staffCheckIn}');
+      print('[Attendance] User ID: ${_user?.id}');
+      print('[Attendance] Role: ${_user?.role}');
     }
-    return success;
+
+    try {
+      final res = await ApiClient.post(ApiConstants.staffCheckIn);
+      if (kDebugMode) {
+        print('[Attendance] Check IN response: $res');
+      }
+
+      if (res is Map<String, dynamic> && (res['success'] == true || res['attendance'] != null)) {
+        if (_user != null) {
+          final nowStr = _formatCurrentTime();
+          _user = UserModel.fromJson({
+            ..._user!.toJson(),
+            'attendanceStatus': 'Present',
+            'checkInTime': nowStr,
+          });
+          await StorageService.saveUser(_user!);
+        }
+        SocketService.updateCheckInStatus(true);
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = (res is Map && res.containsKey('message')) ? res['message'] : 'Check IN failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[Attendance] Check IN error: $e');
+      }
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> checkOut() async {
-    final nowStr = _formatCurrentTime();
-    final success = await updateProfile({
-      'attendanceStatus': 'Checked Out',
-      'checkOutTime': nowStr,
-    });
-    if (success) {
-      SocketService.updateCheckInStatus(false);
+    if (kDebugMode) {
+      print('[Attendance] Check OUT button clicked');
+      print('[Attendance] API URL: ${ApiConstants.baseUrl}${ApiConstants.staffCheckOut}');
+      print('[Attendance] User ID: ${_user?.id}');
+      print('[Attendance] Role: ${_user?.role}');
     }
-    return success;
+
+    try {
+      final res = await ApiClient.post(ApiConstants.staffCheckOut);
+      if (kDebugMode) {
+        print('[Attendance] Check OUT response: $res');
+      }
+
+      if (res is Map<String, dynamic> && (res['success'] == true || res['attendance'] != null)) {
+        if (_user != null) {
+          final nowStr = _formatCurrentTime();
+          _user = UserModel.fromJson({
+            ..._user!.toJson(),
+            'attendanceStatus': 'Checked Out',
+            'checkOutTime': nowStr,
+          });
+          await StorageService.saveUser(_user!);
+        }
+        SocketService.updateCheckInStatus(false);
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = (res is Map && res.containsKey('message')) ? res['message'] : 'Check OUT failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[Attendance] Check OUT error: $e');
+      }
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
   }
 
   String _formatCurrentTime() {

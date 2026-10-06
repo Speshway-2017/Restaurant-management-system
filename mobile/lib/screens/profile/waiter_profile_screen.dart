@@ -22,8 +22,8 @@ class WaiterProfileScreen extends StatelessWidget {
     final branch = user?.branch ?? '';
     final dept = user?.department ?? '';
     final shift = user?.scheduledShift ?? '';
+    final isCheckedIn = user?.isCheckedIn ?? true;
     final status = user?.status ?? '';
-    final attendance = user?.attendanceStatus ?? '';
     final assigned = user?.assignedTables ?? [];
 
     final nameStr = user?.name ?? 'Waiter Staff';
@@ -33,7 +33,8 @@ class WaiterProfileScreen extends StatelessWidget {
     final deptStr = dept.isNotEmpty ? dept : 'Floor Operations';
     final shiftStr = shift.isNotEmpty ? shift : 'General Shift';
     final statusStr = status.isNotEmpty ? status : 'Active';
-    final attendanceStr = attendance.isNotEmpty ? attendance : 'Present';
+    final attendanceStr = isCheckedIn ? 'Present' : 'Checked Out';
+    final attendanceColor = isCheckedIn ? const Color(0xFF10B981) : const Color(0xFFEF4444);
     final hoursStr = user?.calculatedShiftHours ?? _calculateShiftHours(shiftStr, user?.hoursLogged);
     final tablesStr = assigned.isNotEmpty ? assigned.join(', ') : 'All Floor Tables (Auto-Sync)';
 
@@ -218,7 +219,7 @@ class WaiterProfileScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         _buildStatusStat('Account Status', statusStr, Icons.verified_user, Colors.green),
-                        _buildStatusStat('Attendance', attendanceStr, Icons.check_circle_outline, const Color(0xFF10B981)),
+                        _buildStatusStat('Attendance', attendanceStr, isCheckedIn ? Icons.check_circle_outline : Icons.highlight_off_rounded, attendanceColor),
                         _buildStatusStat('Hours Logged', hoursStr, Icons.access_time_rounded, Colors.orange),
                       ],
                     ),
