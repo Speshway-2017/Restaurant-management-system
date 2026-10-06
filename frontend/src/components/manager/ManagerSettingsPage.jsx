@@ -37,7 +37,7 @@ export default function ManagerSettingsPage() {
       managerEmail: sessionUser?.email || '',
       managerPhone: sessionUser?.phone || '',
       address: branding.address || 'Plot No. 42, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
-      weekdayHours: branding.weekdayHours || '12:00 PM – 11:00 PM',
+      weekdayHours: branding.weekdayHours || '10:00 AM – 6:00 PM',
       weekendHours: branding.weekendHours || '11:00 AM – 12:00 AM',
       restaurantStatus: branding.restaurantStatus || 'open', // 'open', 'closed', 'force_open'
       closedMessage: branding.closedMessage || 'The restaurant is currently closed for orders. Please visit during our operating hours!',
@@ -255,13 +255,13 @@ export default function ManagerSettingsPage() {
                 className="form-control" 
                 value={settingsData.weekdayHours} 
                 onChange={(e) => setSettingsData({ ...settingsData, weekdayHours: e.target.value })}
-                placeholder="e.g. 12:00 PM – 11:00 PM"
+                placeholder="e.g. 10:00 AM – 6:00 PM"
                 style={{ fontWeight: 700, color: '#0F2A1D', backgroundColor: '#FFFFFF' }}
                 required 
               />
               <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.45rem', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700, alignSelf: 'center' }}>Presets:</span>
-                {['12:00 PM – 11:00 PM', '11:00 AM – 10:00 PM', '09:00 AM – 09:00 PM', '08:00 AM – 11:00 PM'].map(preset => (
+                {['10:00 AM – 6:00 PM', '12:00 PM – 11:00 PM', '11:00 AM – 10:00 PM', '09:00 AM – 09:00 PM', '08:00 AM – 11:00 PM'].map(preset => (
                   <button
                     key={preset}
                     type="button"

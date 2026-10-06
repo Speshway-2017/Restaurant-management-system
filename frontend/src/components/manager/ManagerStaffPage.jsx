@@ -140,10 +140,19 @@ export default function ManagerStaffPage() {
   const [currentAvailabilityList, setCurrentAvailabilityList] = useState([]);
   const [availabilityFilter, setAvailabilityFilter] = useState('All'); // 'All', 'available', 'offline', 'chef', 'waiter'
 
+  const getTodayIstDateStr = () => {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
+      return formatter.format(new Date());
+    } catch (e) {
+      return new Date().toISOString().split('T')[0];
+    }
+  };
+
   // Attendance History State
   const [historyList, setHistoryList] = useState([]);
   const [historyFilters, setHistoryFilters] = useState({
-    date: '', // Default to all dates so all staff attendance session details are displayed
+    date: getTodayIstDateStr(), // Default to Today in Asia/Kolkata (IST)
     role: 'All',
     status: 'All',
     search: ''
@@ -232,22 +241,30 @@ export default function ManagerStaffPage() {
   // Real-Time Socket Listener for Staff Availability & Attendance Events
   useEffect(() => {
     const handleStaffUpdate = (payload) => {
-      console.log('⚡ Socket event received: staff availability updated', payload);
+      console.log('[Attendance] staffAttendanceUpdated received:', payload);
       fetchCurrentAvailability();
-      fetchAttendanceHistory();
+      
+      const todayStr = getTodayIstDateStr();
+      // Only refetch history if viewing Today or if date filter is unset
+      if (!historyFilters.date || historyFilters.date === todayStr) {
+        fetchAttendanceHistory();
+      }
+      
       if (payload && payload.staffName) {
-        showToast(`🔔 Staff Status Update: ${payload.staffName} is now ${payload.status.toUpperCase()}`);
+        showToast(`🔔 Staff Status Update: ${payload.staffName} is now ${String(payload.status).toUpperCase()}`);
       }
     };
 
     const unsub1 = onSocketEvent('staffAvailabilityUpdated', handleStaffUpdate);
     const unsub2 = onSocketEvent('staff_attendance_updated', handleStaffUpdate);
+    const unsub3 = onSocketEvent('staffAttendanceUpdated', handleStaffUpdate);
 
     return () => {
       if (unsub1) unsub1();
       if (unsub2) unsub2();
+      if (unsub3) unsub3();
     };
-  }, []);
+  }, [historyFilters.date]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -892,7 +909,8 @@ export default function ManagerStaffPage() {
                 >
                   <option value="All">All Statuses</option>
                   <option value="available">Available (Active)</option>
-                  <option value="offline">Offline (Completed)</option>
+                  <option value="offline">Offline (Ended)</option>
+                  <option value="not_checked_in">Not Checked In</option>
                 </select>
               </div>
 
@@ -1016,13 +1034,13 @@ export default function ManagerStaffPage() {
                           <span style={{
                             fontSize: '0.74rem',
                             fontWeight: 800,
-                            backgroundColor: isAvailable ? '#DCFCE7' : '#F1F5F9',
-                            color: isAvailable ? '#15803D' : '#64748B',
-                            padding: '0.2rem 0.6rem',
+                            backgroundColor: isAvailable ? '#DCFCE7' : (item.status === 'not_checked_in' ? '#FEF2F2' : '#F1F5F9'),
+                            color: isAvailable ? '#15803D' : (item.status === 'not_checked_in' ? '#DC2626' : '#64748B'),
+                            padding: '0.2rem 0.65rem',
                             borderRadius: '9999px',
-                            border: '1px solid ' + (isAvailable ? '#86EFAC' : '#CBD5E1')
+                            border: '1px solid ' + (isAvailable ? '#86EFAC' : (item.status === 'not_checked_in' ? '#FCA5A5' : '#CBD5E1'))
                           }}>
-                            {isAvailable ? '● Available (Active)' : '⚪ Offline (Ended)'}
+                            {isAvailable ? '● Available (Active)' : (item.status === 'not_checked_in' ? '🔴 Not Checked In' : '⚪ Offline (Ended)')}
                           </span>
                         </td>
                       </tr>
