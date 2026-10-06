@@ -47,6 +47,7 @@ exports.checkIn = async (req, res) => {
   try {
     const user = req.user;
     if (!user) {
+      console.warn('[Attendance] Check IN attempt failed: User not authenticated');
       return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
 
@@ -55,7 +56,11 @@ exports.checkIn = async (req, res) => {
     const empId = user.empId || `RMS-${String(staffId).slice(-4).toUpperCase()}`;
     const role = normalizeRole(user.role);
 
-    // 1. Prevent duplicate active sessions
+    console.log(`[Attendance] Check IN request received`);
+    console.log(`[Attendance] Authenticated user: ${staffName} (${staffId})`);
+    console.log(`[Attendance] Role: ${role}`);
+
+    // 1. Prevent duplicate active sessions by returning active state instead of failing
     let existingActiveSession = await StaffAttendance.findOne({
       staffId,
       status: 'available',
@@ -63,8 +68,9 @@ exports.checkIn = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (existingActiveSession) {
-      return res.status(400).json({
-        success: false,
+      console.log(`[Attendance] User ${staffName} is already checked in. Returning active session.`);
+      return res.status(200).json({
+        success: true,
         message: 'Staff member is already checked in.',
         alreadyActive: true,
         attendance: existingActiveSession
@@ -88,6 +94,8 @@ exports.checkIn = async (req, res) => {
       logoutTimeFormatted: ''
     });
 
+    console.log(`[Attendance] Attendance record created: ID=${attendance._id}, Staff=${staffName}, Status=available`);
+
     // 3. Update User document fields
     try {
       await User.findByIdAndUpdate(staffId, {
@@ -105,6 +113,8 @@ exports.checkIn = async (req, res) => {
         empId,
         role,
         status: 'available',
+        action: 'checkIn',
+        timestamp: now.toISOString(),
         loginAt: now,
         logoutAt: null,
         loginTimeFormatted: formattedTime,
@@ -112,6 +122,8 @@ exports.checkIn = async (req, res) => {
       };
       io.emit('staffAvailabilityUpdated', socketPayload);
       io.emit('staff_attendance_updated', socketPayload);
+      io.emit('staffAttendanceUpdated', socketPayload);
+      console.log(`[Attendance] staffAttendanceUpdated emitted for ${staffName} (${role}): AVAILABLE`);
     }
 
     return res.status(201).json({
@@ -132,10 +144,18 @@ exports.checkOut = async (req, res) => {
   try {
     const user = req.user;
     if (!user) {
+      console.warn('[Attendance] Check OUT attempt failed: User not authenticated');
       return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
 
     const staffId = user._id;
+    const staffName = user.name || 'Staff Member';
+    const role = normalizeRole(user.role);
+
+    console.log(`[Attendance] Check OUT request received`);
+    console.log(`[Attendance] Authenticated user: ${staffName} (${staffId})`);
+    console.log(`[Attendance] Role: ${role}`);
+
     const now = new Date();
     const { dateStr, formattedTime } = getIstDetails(now);
 
@@ -147,6 +167,7 @@ exports.checkOut = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (!session) {
+      console.warn(`[Attendance] Check OUT failed: No active attendance session found for ${staffName}`);
       return res.status(400).json({
         success: false,
         message: 'No active attendance session found.'
@@ -166,6 +187,8 @@ exports.checkOut = async (req, res) => {
     session.durationFormatted = durationFormatted;
     await session.save();
 
+    console.log(`[Attendance] Attendance record updated: ID=${session._id}, Staff=${staffName}, Status=offline, Duration=${durationFormatted}`);
+
     // 3. Update User document fields
     try {
       await User.findByIdAndUpdate(staffId, {
@@ -183,6 +206,8 @@ exports.checkOut = async (req, res) => {
         empId: session.empId,
         role: session.role,
         status: 'offline',
+        action: 'checkOut',
+        timestamp: now.toISOString(),
         loginAt: session.loginAt,
         logoutAt: now,
         logoutTimeFormatted: formattedTime,
@@ -191,6 +216,8 @@ exports.checkOut = async (req, res) => {
       };
       io.emit('staffAvailabilityUpdated', socketPayload);
       io.emit('staff_attendance_updated', socketPayload);
+      io.emit('staffAttendanceUpdated', socketPayload);
+      console.log(`[Attendance] staffAttendanceUpdated emitted for ${staffName} (${role}): OFFLINE`);
     }
 
     return res.status(200).json({
@@ -315,13 +342,15 @@ exports.getCurrentAvailability = async (req, res) => {
 exports.getAttendanceHistory = async (req, res) => {
   try {
     const { date, role, staffId, status, search } = req.query;
+    const now = new Date();
+    const { dateStr } = getIstDetails(now);
+    const targetQueryDate = (date && String(date).trim()) ? String(date).trim() : dateStr;
 
+    // 1. Fetch raw attendance sessions for the target date
     const query = {
-      role: { $nin: ['manager', 'admin', 'resto manager', 'super admin'] }
+      role: { $nin: ['manager', 'admin', 'resto manager', 'super admin'] },
+      date: targetQueryDate
     };
-    if (date && String(date).trim()) {
-      query.date = String(date).trim();
-    }
     if (role && role !== 'All') {
       query.role = normalizeRole(role);
     }
@@ -333,14 +362,12 @@ exports.getAttendanceHistory = async (req, res) => {
     }
 
     const rawSessions = await StaffAttendance.find(query).sort({ createdAt: 1 }).limit(500).lean();
-    const now = new Date();
-    const { dateStr } = getIstDetails(now);
 
-    // Group raw sessions by staffId + date
+    // Group raw sessions by staffId for the selected target date
     const groupedMap = new Map();
 
     rawSessions.forEach(s => {
-      const sDate = s.date || dateStr;
+      const sDate = s.date || targetQueryDate;
       const key = `${String(s.staffId)}_${sDate}`;
       if (!groupedMap.has(key)) {
         groupedMap.set(key, {
@@ -355,7 +382,7 @@ exports.getAttendanceHistory = async (req, res) => {
       groupedMap.get(key).rawList.push(s);
     });
 
-    // Build operational staff roster query for staff members with 0 sessions
+    // 2. Fetch ALL operational staff (Left Join master roster: Waiter, Chef, Receptionist)
     let userQuery = {
       role: { $nin: ['Admin', 'admin', 'Manager', 'manager', 'Resto Manager', 'resto manager', 'Super Admin', 'super admin'] }
     };
@@ -372,8 +399,7 @@ exports.getAttendanceHistory = async (req, res) => {
 
     const staffUsers = await User.find(userQuery).select('-password').lean();
 
-    // Ensure all operational staff users appear for the requested date (or today)
-    const targetQueryDate = (date && String(date).trim()) ? String(date).trim() : dateStr;
+    // Ensure all operational staff users appear for the requested date (even with 0 sessions)
     staffUsers.forEach((u) => {
       const uIdStr = String(u._id);
       const key = `${uIdStr}_${targetQueryDate}`;
@@ -389,7 +415,17 @@ exports.getAttendanceHistory = async (req, res) => {
       }
     });
 
-    // Format each aggregated daily record
+    // Format display date helper for target date
+    let formattedDisplayDate = targetQueryDate;
+    try {
+      const parts = targetQueryDate.split('-');
+      if (parts.length === 3) {
+        const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        formattedDisplayDate = getIstDetails(dObj).displayDate;
+      }
+    } catch (e) {}
+
+    // 3. Aggregate each staff member's sessions and status
     const aggregatedRecords = Array.from(groupedMap.values()).map(group => {
       const sessionsList = group.rawList.sort((a, b) => {
         const tA = a.loginAt ? new Date(a.loginAt).getTime() : 0;
@@ -436,11 +472,20 @@ exports.getAttendanceHistory = async (req, res) => {
         };
       });
 
-      // Filter check for status parameter if specified (available vs offline)
+      // STATUS PRIORITY:
+      // 1. Active session -> 'available'
+      // 2. Has completed attendance sessions -> 'offline'
+      // 3. No attendance sessions for selected date -> 'not_checked_in'
+      const computedStatus = hasActiveSession
+        ? 'available'
+        : (formattedSessions.length > 0 ? 'offline' : 'not_checked_in');
+
+      // Filter check for status query parameter if specified
       if (status && status !== 'All') {
         const reqStat = String(status).toLowerCase();
-        if (reqStat === 'available' && !hasActiveSession) return null;
-        if (reqStat === 'offline' && hasActiveSession) return null;
+        if (reqStat.includes('avail') && computedStatus !== 'available') return null;
+        if (reqStat.includes('off') && computedStatus !== 'offline') return null;
+        if (reqStat.includes('not') && computedStatus !== 'not_checked_in') return null;
       }
 
       // Format total accumulated daily duration
@@ -461,10 +506,6 @@ exports.getAttendanceHistory = async (req, res) => {
         totalDurationStr = 'Active';
       }
 
-      const sampleDateStr = sessionsList.length > 0 && sessionsList[0].loginAt ? sessionsList[0].loginAt : now;
-      const { displayDate } = getIstDetails(new Date(sampleDateStr));
-
-      // Build fallback single string representations for standard columns
       const loginSummary = formattedSessions.length > 0
         ? formattedSessions.map(sf => sf.loginTimeFormatted).join(' | ')
         : '—';
@@ -479,11 +520,11 @@ exports.getAttendanceHistory = async (req, res) => {
         empId: group.empId,
         role: group.role,
         date: group.date,
-        displayDate,
+        displayDate: formattedDisplayDate,
         sessions: formattedSessions,
         totalDurationMinutes,
         durationFormatted: totalDurationStr,
-        status: hasActiveSession ? 'available' : 'offline',
+        status: computedStatus,
         loginTimeFormatted: loginSummary,
         logoutTimeFormatted: logoutSummary
       };
