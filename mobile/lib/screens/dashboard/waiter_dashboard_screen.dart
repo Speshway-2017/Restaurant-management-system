@@ -127,6 +127,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
       _selectedActiveOrderIndex = 0;
     }
 
+    final isCheckedIn = user?.isCheckedIn ?? true;
     final firstName = (user?.name ?? 'Waiter').split(' ')[0];
     final empIdVal = user?.empId ?? '';
     final userIdVal = user?.id ?? '';
@@ -212,34 +213,19 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // User Avatar with Online Status Indicator
+                    // User Avatar with Online Status Indicator (Green = Checked In, Red = Checked Out)
                     GestureDetector(
                       onTap: () => _showProfilePopup(context),
-                      child: Stack(
-                        children: [
-                          UserAvatarWidget(
-                            avatarUrl: user?.avatarUrl,
-                            name: firstName,
-                            radius: 22,
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.3),
-                                width: 1.5),
-                          ),
-                          Positioned(
-                            right: 1,
-                            bottom: 1,
-                            child: Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981), // Online Green
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                    color: const Color(0xFF2B150E), width: 2),
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: UserAvatarWidget(
+                        avatarUrl: user?.avatarUrl,
+                        name: firstName,
+                        radius: 22,
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1.5),
+                        showStatusDot: true,
+                        isCheckedIn: isCheckedIn,
+                        dotBorderColor: const Color(0xFF0F2A1D),
                       ),
                     ),
                   ],
@@ -1466,6 +1452,9 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                   radius: 20,
                   border:
                       Border.all(color: const Color(0xFFE87524), width: 1.5),
+                  showStatusDot: true,
+                  isCheckedIn: user?.isCheckedIn ?? true,
+                  dotBorderColor: Colors.white,
                 ),
                 const SizedBox(width: 10),
                 Expanded(

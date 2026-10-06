@@ -49,4 +49,11 @@ class ApiConstants {
   // Settings & Health Endpoint
   static const String getSettings = '/settings';
   static const String healthCheck = '/settings';
+
+  // Staff Attendance Endpoints
+  static const String staffCheckIn = '/staff-attendance/in';
+  static const String staffCheckOut = '/staff-attendance/out';
+  static const String staffMyStatus = '/staff-attendance/my-status';
+  static const String staffAttendanceCurrent = '/staff-attendance/current';
+  static const String staffAttendanceHistory = '/staff-attendance/history';
 }
