@@ -289,8 +289,11 @@ exports.getCurrentAvailability = async (req, res) => {
       // Find latest attendance session for this staff member
       const latestSession = await StaffAttendance.findOne({ staffId: u._id }).sort({ createdAt: -1 }).lean();
 
-      // Active status means latest session exists, has status 'available', and logoutAt is null
-      const isAvailable = Boolean(latestSession && latestSession.status === 'available' && !latestSession.logoutAt);
+      // Active status means latest session exists, has status 'available', and logoutAt is null, OR user status is Active / Present
+      const isAvailable = Boolean(
+        (latestSession && latestSession.status === 'available' && !latestSession.logoutAt) ||
+        (u.attendanceStatus === 'Present' && u.status === 'Active')
+      );
 
       // Check if latest session belongs to TODAY in IST
       const isTodaySession = Boolean(latestSession && normalizeToIstDateStr(latestSession.date, latestSession.loginAt) === todayStr);
@@ -353,8 +356,9 @@ exports.getCurrentAvailability = async (req, res) => {
 
     // Summary Counts
     const totalStaff = resultList.length;
-    const availableChefs = resultList.filter(s => s.normRole === 'chef' && s.status === 'available').length;
-    const availableWaiters = resultList.filter(s => s.normRole === 'waiter' && s.status === 'available').length;
+    const availableChefs = resultList.filter(s => (s.normRole === 'chef' || String(s.role || '').toLowerCase().includes('chef')) && s.status === 'available').length;
+    const availableWaiters = resultList.filter(s => (s.normRole === 'waiter' || String(s.role || '').toLowerCase().includes('waiter')) && s.status === 'available').length;
+    const availableReceptionists = resultList.filter(s => (s.normRole === 'receptionist' || String(s.role || '').toLowerCase().includes('reception') || String(s.role || '').toLowerCase().includes('host')) && s.status === 'available').length;
     const offlineStaff = resultList.filter(s => s.status === 'offline').length;
 
     return res.status(200).json({
@@ -363,6 +367,7 @@ exports.getCurrentAvailability = async (req, res) => {
         totalStaff,
         availableChefs,
         availableWaiters,
+        availableReceptionists,
         offlineStaff
       },
       staff: resultList

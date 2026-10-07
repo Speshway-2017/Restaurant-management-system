@@ -3,6 +3,8 @@ import { Table2, Plus, Sparkles, RefreshCw, CheckCircle2, User, Clock, UtensilsC
 import { api } from '../../services/api';
 import { clearTableSessionStorage } from '../../utils/orderUtils';
 import { groupTablesForFloorPlan } from '../../utils/floorPlanUtils';
+import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
+import { getBillingDetails, formatMoney } from '../../utils/billingUtils';
 
 const BASE_DEFAULT_TABLES = [
   { id: 1, num: 'T-01', zone: 'Main Dining', cap: 4, status: 'Available' },
@@ -20,6 +22,8 @@ const BASE_DEFAULT_TABLES = [
 ];
 
 export default function WaiterTablesPage() {
+  const brandingContext = useRestaurantBranding ? useRestaurantBranding() : null;
+  const branding = brandingContext?.branding;
   const [tables, setTables] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -256,12 +260,9 @@ export default function WaiterTablesPage() {
   const handleConfirmPayment = async (order) => {
     try {
       const orderId = order._id || order.id || order.orderId;
-      const tableNum = order.table || order.tableNumber || 'T-01';
-      const originalTotal = Number(order.originalTotal || order.originalAmount || order.total || order.totalAmount || 0);
-      const discountAmount = appliedCoupon ? Number(appliedCoupon.discountAmount || 0) : Number(order.discountAmount || 0);
-      const finalAmount = appliedCoupon ? Number(appliedCoupon.finalAmount || (originalTotal - discountAmount)) : (order.finalAmount !== undefined ? Number(order.finalAmount) : originalTotal);
-      const couponCode = appliedCoupon ? appliedCoupon.code : (order.couponCode || '');
+      const details = getBillingDetails(order, branding);
       const tipVal = Number(tipInput || 0);
+      const customerPaidAmount = details.grandTotal + tipVal;
 
       // 1. Update Order in Backend & Memory (Payment Confirmed -> Paid)
       await api.updateOrderStatus(orderId, 'Paid', {
@@ -269,15 +270,22 @@ export default function WaiterTablesPage() {
         payment: 'Completed',
         paymentStatus: 'Paid',
         paymentMethod: paymentMethod,
-        originalTotal: originalTotal,
-        originalAmount: originalTotal,
-        couponCode: couponCode,
-        discountAmount: discountAmount,
-        finalAmount: finalAmount,
-        total: finalAmount,
-        totalAmount: finalAmount,
+        subtotal: details.subtotal,
+        originalTotal: details.subtotal,
+        originalAmount: details.subtotal,
+        gstRate: `${details.totalGstRate}%`,
+        cgstRate: details.cgstRate,
+        sgstRate: details.sgstRate,
+        cgstAmount: details.cgstAmount,
+        sgstAmount: details.sgstAmount,
+        gstAmount: details.gstAmount,
+        grandTotal: details.grandTotal,
+        finalAmount: details.grandTotal,
+        total: details.grandTotal,
+        totalAmount: details.grandTotal,
         tip: tipVal,
-        tipAmount: tipVal
+        tipAmount: tipVal,
+        customerPaidAmount: customerPaidAmount
       }).catch(() => { });
 
       setOrders(prev => prev.map(o => (o._id === orderId || o.id === orderId) ? { ...o, status: 'Completed', payment: 'Completed' } : o));
@@ -1057,33 +1065,55 @@ export default function WaiterTablesPage() {
                   )}
                 </div>
 
-                <div style={{ backgroundColor: '#F0FDF4', padding: '0.85rem', borderRadius: '12px', border: '1px solid #86EFAC', marginBottom: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 900, color: '#166534' }}>
-                    <span>Food Bill Total:</span>
-                    <span>₹{billingOrder.total || 0}</span>
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 600, marginTop: '0.2rem' }}>
-                    *Includes all applicable GST Taxes. Food bill recorded as restaurant revenue.
-                  </div>
-                </div>
+                {(() => {
+                  const details = getBillingDetails(billingOrder, branding);
+                  const { subtotal, cgstAmount, sgstAmount, gstAmount, grandTotal, cgstLabel, sgstLabel } = details;
 
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button
-                    onClick={() => {
-                      setPaymentModalOrder(billingOrder);
-                      setBillingOrder(null);
-                    }}
-                    style={{ flex: 1, backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
-                  >
-                    💳 Process Customer Payment (₹{billingOrder.total || 0})
-                  </button>
-                  <button
-                    onClick={() => setBillingOrder(null)}
-                    style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.65rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
-                  >
-                    Close
-                  </button>
-                </div>
+                  return (
+                    <>
+                      <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', border: '1px solid #CBD5E1', marginBottom: '1rem', fontSize: '0.82rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', color: '#475569' }}>
+                          <span>Subtotal:</span>
+                          <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(subtotal)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', color: '#475569' }}>
+                          <span>{cgstLabel}:</span>
+                          <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(cgstAmount)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', color: '#475569' }}>
+                          <span>{sgstLabel}:</span>
+                          <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(sgstAmount)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', color: '#475569', fontWeight: 700 }}>
+                          <span>GST:</span>
+                          <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(gstAmount)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.05rem', fontWeight: 900, color: '#166534', borderTop: '1px dashed #CBD5E1', paddingTop: '0.4rem', marginTop: '0.4rem' }}>
+                          <span>Grand Total:</span>
+                          <span>₹{formatMoney(grandTotal)}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          onClick={() => {
+                            setPaymentModalOrder(billingOrder);
+                            setBillingOrder(null);
+                          }}
+                          style={{ flex: 1, backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.65rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
+                        >
+                          💳 Process Customer Payment (₹{formatMoney(grandTotal)})
+                        </button>
+                        <button
+                          onClick={() => setBillingOrder(null)}
+                          style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.65rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -1106,15 +1136,35 @@ export default function WaiterTablesPage() {
                   </button>
                 </div>
 
-                <div style={{ textAlign: 'center', backgroundColor: '#F8FAFC', padding: '1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0', marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Food Bill Amount (Restaurant Revenue)</div>
-                  <div style={{ fontSize: '2rem', fontWeight: 900, color: '#166534', fontFamily: 'var(--font-heading)', margin: '0.2rem 0' }}>
-                    ₹{paymentModalOrder.total || 0}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
-                    Customer: <b>{paymentModalOrder.customer || 'Guest Diner'}</b>
-                  </div>
-                </div>
+                {(() => {
+                  const details = getBillingDetails(paymentModalOrder, branding);
+                  const { subtotal, cgstAmount, sgstAmount, gstAmount, grandTotal, cgstLabel, sgstLabel } = details;
+
+                  return (
+                    <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '14px', border: '1px solid #E2E8F0', marginBottom: '1rem', fontSize: '0.84rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', color: '#475569' }}>
+                        <span>Subtotal:</span>
+                        <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(subtotal)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', color: '#475569' }}>
+                        <span>{cgstLabel}:</span>
+                        <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(cgstAmount)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', color: '#475569' }}>
+                        <span>{sgstLabel}:</span>
+                        <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(sgstAmount)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', color: '#475569', fontWeight: 700 }}>
+                        <span>GST:</span>
+                        <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(gstAmount)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 900, color: '#166534', borderTop: '1px dashed #CBD5E1', paddingTop: '0.4rem', marginTop: '0.4rem' }}>
+                        <span>Grand Total:</span>
+                        <span>₹{formatMoney(grandTotal)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Customer Tip Section */}
                 <div style={{ marginBottom: '1.15rem', backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '12px', border: '1.5px solid #E2E8F0' }}>

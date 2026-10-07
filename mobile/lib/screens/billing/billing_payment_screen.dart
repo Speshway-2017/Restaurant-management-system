@@ -75,26 +75,32 @@ class _BillingPaymentScreenState extends State<BillingPaymentScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Food Subtotal'),
-                        Text('₹${subtotal.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const Text('Subtotal'),
+                        Text('₹${subtotal % 1 == 0 ? subtotal.toStringAsFixed(0) : subtotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
-                    if (discount > 0) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Coupon Discount (${widget.order.couponCode})', style: const TextStyle(color: AppColors.accentGreen)),
-                          Text('-₹${discount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.accentGreen)),
-                        ],
-                      ),
-                    ],
                     const SizedBox(height: 6),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('GST ($gstPctStr%)', style: const TextStyle(color: AppColors.textSecondary)),
-                        Text('₹${gst.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text('CGST @ ${((gstRate / 2) * 100).toStringAsFixed(((gstRate / 2) * 100) % 1 == 0 ? 0 : 1)}%', style: const TextStyle(color: AppColors.textSecondary)),
+                        Text('₹${(gst / 2) % 1 == 0 ? (gst / 2).toStringAsFixed(0) : (gst / 2).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('SGST @ ${((gstRate / 2) * 100).toStringAsFixed(((gstRate / 2) * 100) % 1 == 0 ? 0 : 1)}%', style: const TextStyle(color: AppColors.textSecondary)),
+                        Text('₹${(gst / 2) % 1 == 0 ? (gst / 2).toStringAsFixed(0) : (gst / 2).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('GST ($gstPctStr%)', style: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                        Text('₹${gst % 1 == 0 ? gst.toStringAsFixed(0) : gst.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
                     if (_tipAmount > 0) ...[

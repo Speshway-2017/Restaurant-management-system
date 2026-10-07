@@ -7,6 +7,7 @@ import { api } from '../../services/api';
 import { useRestaurantBranding } from '../../context/RestaurantBrandingContext';
 import { onSocketEvent } from '../../services/socket';
 import { clearTableSessionStorage } from '../../utils/orderUtils';
+import { getBillingDetails, formatMoney } from '../../utils/billingUtils';
 
 export default function CustomerBillModal({
   activeOrder,
@@ -159,19 +160,25 @@ export default function CustomerBillModal({
 
   const items = (showInvoice && paidReceiptDetails?.items) ? paidReceiptDetails.items : activeItemsList;
 
-  // Requirement 2: Exclude cancelled items from billing subtotal, GST, discounts, and total payable
-  const nonCancelledItems = items.filter(it => it && it.status !== 'CANCELLED' && it.status !== 'Cancelled' && !it.isCancelled);
+  // Derive single source of truth billing details
+  const targetOrderForBilling = currentOrder || activeOrder;
+  const billingDetails = getBillingDetails(targetOrderForBilling, branding);
+  const {
+    subtotal: foodTotal,
+    totalGstRate,
+    cgstRate,
+    sgstRate,
+    cgstAmount,
+    sgstAmount,
+    gstAmount,
+    cgstLabel,
+    sgstLabel,
+    gstLabel,
+    nonCancelledItems
+  } = billingDetails;
 
-  const calculatedFoodTotal = nonCancelledItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
-  const foodTotal = (showInvoice && paidReceiptDetails?.foodTotal !== undefined)
-    ? paidReceiptDetails.foodTotal
-    : (currentOrder?.subtotal !== undefined && currentOrder?.subtotal > 0 ? Number(currentOrder.subtotal) : calculatedFoodTotal);
-
-  // Dynamic GST Tax calculation (configurable via Admin Settings)
-  const gstRate = dynamicGstRate;
-  const calculatedGst = Math.round(foodTotal * gstRate);
-  const gstAmount = (showInvoice && paidReceiptDetails?.gstAmount !== undefined) ? paidReceiptDetails.gstAmount : calculatedGst;
-  const gstPctLabel = (showInvoice && paidReceiptDetails?.gstPctLabel !== undefined) ? paidReceiptDetails.gstPctLabel : Math.round(gstRate * 100);
+  const gstRate = totalGstRate / 100;
+  const gstPctLabel = totalGstRate;
 
   // Discount
   const couponDiscount = (showInvoice && paidReceiptDetails?.couponDiscount !== undefined)
@@ -184,7 +191,7 @@ export default function CustomerBillModal({
   const netAmount = Math.max(0, foodTotal - couponDiscount);
   const grandTotal = (showInvoice && paidReceiptDetails?.grandTotal !== undefined)
     ? paidReceiptDetails.grandTotal
-    : Math.max(0, netAmount + gstAmount + tipAmount);
+    : Number((foodTotal + gstAmount + tipAmount).toFixed(2));
 
   const handleApplyCoupon = async () => {
     if (!couponCodeInput.trim()) return;
@@ -251,15 +258,18 @@ export default function CustomerBillModal({
         originalTotal: foodTotal,
         originalAmount: foodTotal,
         subtotal: foodTotal,
+        gstRate: `${totalGstRate}%`,
+        cgstRate: cgstRate,
+        sgstRate: sgstRate,
+        cgstAmount: cgstAmount,
+        sgstAmount: sgstAmount,
         gstAmount: gstAmount,
-        totalBeforeDiscount: totalBeforeDiscount,
-        discountAmount: totalDiscount,
-        couponCode: appliedCoupon?.code || '',
+        grandTotal: grandTotal,
+        finalAmount: grandTotal,
+        total: grandTotal,
         tip: tipAmount,
         tipAmount: tipAmount,
         customerPaidAmount: grandTotal,
-        finalAmount: grandTotal,
-        total: grandTotal,
         table: activeTableStr,
         transactionId: `TXN-${Date.now().toString().slice(-8)}`,
         paidAt: new Date().toISOString()
@@ -510,28 +520,30 @@ export default function CustomerBillModal({
                 {/* Calculations */}
                 <div style={{ borderTop: '2px dashed #CBD5E1', paddingTop: '0.85rem', fontSize: '0.82rem', color: '#334155' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                    <span>Food Subtotal</span>
-                    <span>₹{foodTotal}</span>
+                    <span>Subtotal</span>
+                    <span>₹{formatMoney(foodTotal)}</span>
                   </div>
-                  {couponDiscount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#15803D', fontWeight: 700, marginBottom: '0.35rem' }}>
-                      <span>Coupon Discount ({paidReceiptDetails?.couponCode || appliedCoupon?.code})</span>
-                      <span>-₹{couponDiscount}</span>
-                    </div>
-                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                    <span>GST ({gstPctLabel}%)</span>
-                    <span>+₹{gstAmount}</span>
+                    <span>{cgstLabel}</span>
+                    <span>₹{formatMoney(cgstAmount)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <span>{sgstLabel}</span>
+                    <span>₹{formatMoney(sgstAmount)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontWeight: 700 }}>
+                    <span>GST</span>
+                    <span>₹{formatMoney(gstAmount)}</span>
                   </div>
                   {tipAmount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#B45309', fontWeight: 700, marginBottom: '0.35rem' }}>
                       <span>Staff Tip / Gratuity</span>
-                      <span>+₹{tipAmount}</span>
+                      <span>+₹{formatMoney(tipAmount)}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.05rem', fontWeight: 900, color: '#0F2A1D', borderTop: '1.5px solid #E2E8F0', paddingTop: '0.65rem', marginTop: '0.5rem' }}>
                     <span>Grand Total Paid</span>
-                    <span style={{ color: '#166534' }}>₹{grandTotal}</span>
+                    <span style={{ color: '#166534' }}>₹{formatMoney(grandTotal)}</span>
                   </div>
                 </div>
               </div>
@@ -740,38 +752,29 @@ export default function CustomerBillModal({
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#475569' }}>
-                  <span>Food / Subtotal ({nonCancelledItems.length} items):</span>
-                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{foodTotal}</span>
+                  <span>Subtotal</span>
+                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(foodTotal)}</span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#475569' }}>
-                  <span>GST ({gstPctLabel}%):</span>
-                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>+₹{gstAmount}</span>
+                  <span>{cgstLabel}</span>
+                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(cgstAmount)}</span>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem', color: '#0F2A1D', fontWeight: 800, borderTop: '1px dashed #CBD5E1', paddingTop: '0.4rem' }}>
-                  <span>Total Before Discount:</span>
-                  <span>₹{foodTotal + gstAmount}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#475569' }}>
+                  <span>{sgstLabel}</span>
+                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(sgstAmount)}</span>
                 </div>
 
-                {couponDiscount > 0 && (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#DC2626', fontWeight: 800 }}>
-                      <span>Coupon Discount ({appliedCoupon?.code}):</span>
-                      <span>-₹{couponDiscount}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#0F2A1D', fontWeight: 900, borderTop: '1px solid #E2E8F0', paddingTop: '0.4rem' }}>
-                      <span>Amount After Discount:</span>
-                      <span>₹{netAmount + gstAmount}</span>
-                    </div>
-                  </>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#475569', fontWeight: 700 }}>
+                  <span>GST</span>
+                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(gstAmount)}</span>
+                </div>
 
                 {tipAmount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#EA580C', fontWeight: 800 }}>
                     <span>Customer Tip:</span>
-                    <span>+₹{tipAmount}</span>
+                    <span>+₹{formatMoney(tipAmount)}</span>
                   </div>
                 )}
 

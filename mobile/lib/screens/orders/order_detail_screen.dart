@@ -720,10 +720,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 final originalTotal = currentOrd.calculatedSubtotal > 0 ? currentOrd.calculatedSubtotal : (currentOrd.totalAmount > 0 ? currentOrd.totalAmount : 0.0);
 
                 final gstAmount = currentOrd.getGstAmount(gstRate);
-                final gstPctStr = (originalTotal > 0 && gstAmount > 0)
-                    ? (gstAmount / originalTotal * 100).round().toString()
-                    : (gstRate * 100).toStringAsFixed((gstRate * 100) % 1 == 0 ? 0 : 1);
-
                 final finalBill = originalTotal + gstAmount;
                 final tip = currentOrd.tipAmount;
 
@@ -759,37 +755,54 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. Total Bill
+                          // 1. Subtotal
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
-                                'Total Bill:',
+                                'Subtotal:',
                                 style: TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w700),
                               ),
                               Text(
-                                '₹${originalTotal.toStringAsFixed(0)}',
+                                '₹${originalTotal % 1 == 0 ? originalTotal.toStringAsFixed(0) : originalTotal.toStringAsFixed(2)}',
                                 style: const TextStyle(color: Color(0xFF334155), fontSize: 15, fontWeight: FontWeight.w800),
                               ),
                             ],
                           ),
 
-                          // 2. GST
+                          // 2. CGST
                           const SizedBox(height: 10),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'GST ($gstPctStr%):',
+                                'CGST @ ${((gstRate / 2) * 100).toStringAsFixed(((gstRate / 2) * 100) % 1 == 0 ? 0 : 1)}%:',
                                 style: const TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w700),
                               ),
                               Text(
-                                '+₹${gstAmount.toStringAsFixed(0)}',
+                                '₹${(gstAmount / 2) % 1 == 0 ? (gstAmount / 2).toStringAsFixed(0) : (gstAmount / 2).toStringAsFixed(2)}',
                                 style: const TextStyle(color: Color(0xFF475569), fontSize: 15, fontWeight: FontWeight.w800),
                               ),
                             ],
                           ),
 
+                          // 3. SGST
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'SGST @ ${((gstRate / 2) * 100).toStringAsFixed(((gstRate / 2) * 100) % 1 == 0 ? 0 : 1)}%:',
+                                style: const TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w700),
+                              ),
+                              Text(
+                                '₹${(gstAmount / 2) % 1 == 0 ? (gstAmount / 2).toStringAsFixed(0) : (gstAmount / 2).toStringAsFixed(2)}',
+                                style: const TextStyle(color: Color(0xFF475569), fontSize: 15, fontWeight: FontWeight.w800),
+                              ),
+                            ],
+                          ),
+
+                          
                           // 5. Final Bill (Food + GST)
                           const SizedBox(height: 10),
                           Container(
@@ -801,7 +814,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
-                                  'Final Bill : ',
+                                  'Grand Total : ',
                                   style: TextStyle(color: Color(0xFF0F2A1D), fontSize: 14, fontWeight: FontWeight.w900),
                                 ),
                                 Text(

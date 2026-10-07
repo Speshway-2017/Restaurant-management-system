@@ -250,6 +250,28 @@ class OrderService {
     const assignedWaiterName = (targetTableDoc && targetTableDoc.assignedWaiterName) || data.waiterName || '';
     const resolvedTableId = targetTableDoc ? targetTableDoc._id.toString() : (data.tableId || '');
 
+    // Fetch active Admin Settings for GST calculation
+    const Settings = require('../models/Settings');
+    let activeSettings = null;
+    try {
+      activeSettings = await Settings.findOne({}).sort({ updatedAt: -1 });
+    } catch (e) {}
+
+    const rawAdminGst = activeSettings?.gstRate || '5%';
+    const adminGstNum = parseFloat(String(rawAdminGst).replace(/[^0-9.]/g, '')) || 5;
+
+    const activeIncomingItems = newIncomingItems.filter(it => it && it.status !== 'CANCELLED' && !it.isCancelled);
+    const calculatedSubtotal = activeIncomingItems.reduce((sum, it) => sum + (Number(it.price || 0) * Number(it.quantity || 1)), 0);
+    const subtotalVal = data.subtotal !== undefined && Number(data.subtotal) >= 0 ? Number(data.subtotal) : calculatedSubtotal;
+
+    const cgstRateVal = adminGstNum / 2;
+    const sgstRateVal = adminGstNum / 2;
+    const cgstAmtVal = Number(((subtotalVal * cgstRateVal) / 100).toFixed(2));
+    const sgstAmtVal = Number(((subtotalVal * sgstRateVal) / 100).toFixed(2));
+    const gstAmtVal = Number((cgstAmtVal + sgstAmtVal).toFixed(2));
+    const tipVal = Number(data.tipAmount ?? data.tip ?? 0);
+    const grandTotalVal = Number((subtotalVal + gstAmtVal + tipVal).toFixed(2));
+
     const orderData = {
       orderId: orderId,
       table: formattedTable,
@@ -267,7 +289,21 @@ class OrderService {
       waiterId: assignedWaiterId,
       waiterName: assignedWaiterName,
       items: newIncomingItems,
-      total: Number(data.total || data.totalAmount || 0),
+      subtotal: subtotalVal,
+      originalTotal: subtotalVal,
+      originalAmount: subtotalVal,
+      gstRate: `${adminGstNum}%`,
+      cgstRate: cgstRateVal,
+      sgstRate: sgstRateVal,
+      cgstAmount: cgstAmtVal,
+      sgstAmount: sgstAmtVal,
+      gstAmount: gstAmtVal,
+      grandTotal: grandTotalVal,
+      total: grandTotalVal,
+      totalAmount: grandTotalVal,
+      finalAmount: grandTotalVal,
+      tip: tipVal,
+      tipAmount: tipVal,
       status: 'Placed',
       payment: data.payment || 'Pending',
       paymentStatus: data.paymentStatus || data.payment || 'Pending',
@@ -443,6 +479,81 @@ class OrderService {
       }
     }
 
+    // Fetch active Admin Settings for GST calculation
+    const Settings = require('../models/Settings');
+    let activeSettings = null;
+    try {
+      activeSettings = await Settings.findOne({}).sort({ updatedAt: -1 });
+    } catch (e) {}
+
+    const rawAdminGst = activeSettings?.gstRate || '5%';
+    const adminGstNum = parseFloat(String(rawAdminGst).replace(/[^0-9.]/g, '')) || 5;
+
+    const isAlreadyBillStored = Boolean(
+      existingOrder?.isBillGenerated ||
+      existingOrder?.billGenerated ||
+      existingOrder?.status === 'Completed' ||
+      existingOrder?.status === 'Bill Generated' ||
+      existingOrder?.status === 'Paid' ||
+      existingOrder?.payment === 'Paid' ||
+      existingOrder?.paymentStatus === 'Paid' ||
+      existingOrder?.payment === 'Awaiting Payment' ||
+      existingOrder?.paymentStatus === 'Awaiting Payment'
+    );
+
+    // Determine GST rate: preserve stored rate for historical/already-billed orders
+    let totalGstRateNum = adminGstNum;
+    if (isAlreadyBillStored && existingOrder?.gstRate !== undefined && existingOrder?.gstRate !== null) {
+      const parsedStored = parseFloat(String(existingOrder.gstRate).replace(/[^0-9.]/g, ''));
+      if (!isNaN(parsedStored) && parsedStored >= 0) {
+        totalGstRateNum = parsedStored;
+      }
+    } else if (fullOrderData.gstRate !== undefined && fullOrderData.gstRate !== null) {
+      const parsedPayload = parseFloat(String(fullOrderData.gstRate).replace(/[^0-9.]/g, ''));
+      if (!isNaN(parsedPayload) && parsedPayload >= 0) {
+        totalGstRateNum = parsedPayload;
+      }
+    }
+
+    const cgstRateNum = (isAlreadyBillStored && existingOrder?.cgstRate !== undefined && existingOrder?.cgstRate !== null)
+      ? Number(existingOrder.cgstRate)
+      : (fullOrderData.cgstRate !== undefined && fullOrderData.cgstRate !== null ? Number(fullOrderData.cgstRate) : totalGstRateNum / 2);
+
+    const sgstRateNum = (isAlreadyBillStored && existingOrder?.sgstRate !== undefined && existingOrder?.sgstRate !== null)
+      ? Number(existingOrder.sgstRate)
+      : (fullOrderData.sgstRate !== undefined && fullOrderData.sgstRate !== null ? Number(fullOrderData.sgstRate) : totalGstRateNum / 2);
+
+    const itemsList = fullOrderData.items || existingOrder?.items || [];
+    const activeItems = itemsList.filter(it => it && it.status !== 'CANCELLED' && it.status !== 'Cancelled' && !it.isCancelled);
+    const calculatedSubtotal = activeItems.reduce((sum, it) => sum + (Number(it.price || 0) * Number(it.quantity || 1)), 0);
+
+    const subtotal = (isAlreadyBillStored && existingOrder?.subtotal !== undefined && existingOrder?.subtotal !== null && Number(existingOrder.subtotal) >= 0)
+      ? Number(existingOrder.subtotal)
+      : (fullOrderData.subtotal !== undefined && fullOrderData.subtotal !== null && Number(fullOrderData.subtotal) >= 0
+        ? Number(fullOrderData.subtotal)
+        : calculatedSubtotal);
+
+    const cgstAmount = (isAlreadyBillStored && existingOrder?.cgstAmount !== undefined && existingOrder?.cgstAmount !== null)
+      ? Number(existingOrder.cgstAmount)
+      : (fullOrderData.cgstAmount !== undefined && fullOrderData.cgstAmount !== null
+        ? Number(fullOrderData.cgstAmount)
+        : Number(((subtotal * cgstRateNum) / 100).toFixed(2)));
+
+    const sgstAmount = (isAlreadyBillStored && existingOrder?.sgstAmount !== undefined && existingOrder?.sgstAmount !== null)
+      ? Number(existingOrder.sgstAmount)
+      : (fullOrderData.sgstAmount !== undefined && fullOrderData.sgstAmount !== null
+        ? Number(fullOrderData.sgstAmount)
+        : Number(((subtotal * sgstRateNum) / 100).toFixed(2)));
+
+    const gstAmount = (isAlreadyBillStored && existingOrder?.gstAmount !== undefined && existingOrder?.gstAmount !== null)
+      ? Number(existingOrder.gstAmount)
+      : (fullOrderData.gstAmount !== undefined && fullOrderData.gstAmount !== null
+        ? Number(fullOrderData.gstAmount)
+        : Number((cgstAmount + sgstAmount).toFixed(2)));
+
+    const tipVal = Number(fullOrderData.tipAmount ?? fullOrderData.tip ?? existingOrder?.tipAmount ?? existingOrder?.tip ?? 0);
+    const grandTotal = Number((subtotal + gstAmount + tipVal).toFixed(2));
+
     const txnId = fullOrderData.transactionId || (isPaid ? `TXN-${Date.now().toString().slice(-8)}` : '');
     const paidTimestamp = fullOrderData.paidAt || (isPaid ? new Date() : null);
 
@@ -454,19 +565,25 @@ class OrderService {
       paymentStatus: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.paymentStatus || 'Pending')),
       isBillGenerated: isBillGenerated || existingOrder?.isBillGenerated || false,
       billGenerated: isBillGenerated || existingOrder?.billGenerated || false,
-      ...(fullOrderData.originalTotal !== undefined && { originalTotal: Number(fullOrderData.originalTotal) }),
-      ...(fullOrderData.originalAmount !== undefined && { originalAmount: Number(fullOrderData.originalAmount) }),
-      ...(fullOrderData.subtotal !== undefined && { subtotal: Number(fullOrderData.subtotal) }),
-      ...(fullOrderData.gstAmount !== undefined && { gstAmount: Number(fullOrderData.gstAmount) }),
-      ...(fullOrderData.totalBeforeDiscount !== undefined && { totalBeforeDiscount: Number(fullOrderData.totalBeforeDiscount) }),
+      subtotal: subtotal,
+      originalTotal: subtotal,
+      originalAmount: subtotal,
+      gstRate: `${totalGstRateNum}%`,
+      cgstRate: cgstRateNum,
+      sgstRate: sgstRateNum,
+      cgstAmount: cgstAmount,
+      sgstAmount: sgstAmount,
+      gstAmount: gstAmount,
+      grandTotal: grandTotal,
+      finalAmount: grandTotal,
+      total: grandTotal,
+      totalAmount: grandTotal,
+      tip: tipVal,
+      tipAmount: tipVal,
+      customerPaidAmount: fullOrderData.customerPaidAmount !== undefined ? Number(fullOrderData.customerPaidAmount) : grandTotal,
       ...(fullOrderData.couponCode !== undefined && { couponCode: String(fullOrderData.couponCode) }),
       ...(fullOrderData.discountAmount !== undefined && { discountAmount: Number(fullOrderData.discountAmount) }),
-      ...(fullOrderData.amountAfterDiscount !== undefined && { amountAfterDiscount: Number(fullOrderData.amountAfterDiscount) }),
-      ...(fullOrderData.tip !== undefined && { tip: Number(fullOrderData.tip) }),
-      ...(fullOrderData.tipAmount !== undefined && { tipAmount: Number(fullOrderData.tipAmount) }),
-      ...(fullOrderData.customerPaidAmount !== undefined && { customerPaidAmount: Number(fullOrderData.customerPaidAmount) }),
       ...(fullOrderData.paymentMethod !== undefined && { paymentMethod: String(fullOrderData.paymentMethod) }),
-      ...(fullOrderData.finalAmount !== undefined && { finalAmount: Number(fullOrderData.finalAmount), total: Number(fullOrderData.finalAmount) }),
       transactionId: txnId,
       ...(paidTimestamp && { paidAt: paidTimestamp })
     };

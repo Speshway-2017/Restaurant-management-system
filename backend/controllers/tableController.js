@@ -276,7 +276,7 @@ const generateTableQr = async (req, res) => {
     if (!frontendBase || frontendBase.trim() === '') {
       const isLocalhost = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
       if (isLocalhost) {
-        frontendBase = 'http://192.168.1.4:5173';
+        frontendBase = 'https://restaurant.speshway.site';
       } else {
         const protocol = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
         frontendBase = `${protocol}://${req.hostname}`;
