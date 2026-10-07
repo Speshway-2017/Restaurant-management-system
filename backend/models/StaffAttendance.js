@@ -8,6 +8,7 @@ const staffAttendanceSchema = new mongoose.Schema({
   loginAt: { type: Date, required: true, default: Date.now },
   logoutAt: { type: Date, default: null },
   status: { type: String, enum: ['available', 'offline'], default: 'available' },
+  autoCheckout: { type: Boolean, default: false },
   date: { type: String, required: true }, // YYYY-MM-DD in Asia/Kolkata IST
   loginTimeFormatted: { type: String, default: '' }, // e.g. "09:32 AM"
   logoutTimeFormatted: { type: String, default: '' }, // e.g. "06:15 PM"

@@ -634,10 +634,14 @@ exports.getAttendanceHistory = async (req, res) => {
         totalDurationMinutes += sessionMins;
 
         const loginFormatted = s.loginTimeFormatted || (s.loginAt ? getIstDetails(new Date(s.loginAt)).formattedTime : '—');
-        const logoutFormatted = isCurrentlyActive ? 'Currently Active' : (s.logoutTimeFormatted || (s.logoutAt ? getIstDetails(new Date(s.logoutAt)).formattedTime : '—'));
+        let logoutFormatted = isCurrentlyActive ? 'Currently Active' : (s.logoutTimeFormatted || (s.logoutAt ? getIstDetails(new Date(s.logoutAt)).formattedTime : '—'));
+        if (s.autoCheckout && !logoutFormatted.includes('Auto Checkout')) {
+          logoutFormatted += ' (Auto Checkout)';
+        }
         
-        let durFormatted = formatDuration(s.loginAt, s.logoutAt || now);
-        if (isCurrentlyActive) durFormatted += ' (Active)';
+        let durFormatted = s.durationFormatted || formatDuration(s.loginAt, s.logoutAt || now);
+        if (isCurrentlyActive && !durFormatted.includes('Active')) durFormatted += ' (Active)';
+        if (s.autoCheckout && !durFormatted.includes('Auto Checkout')) durFormatted += ' (Auto Checkout)';
 
         return {
           id: String(s._id || s.id),
@@ -648,6 +652,7 @@ exports.getAttendanceHistory = async (req, res) => {
           durationMinutes: sessionMins,
           durationFormatted: durFormatted,
           isCurrentlyActive,
+          autoCheckout: Boolean(s.autoCheckout),
           summary: `${loginFormatted} – ${logoutFormatted}`
         };
       });
@@ -763,3 +768,17 @@ exports.getMyStatus = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error checking status', error: error.message });
   }
 };
+
+// @desc    Trigger Midnight IST Auto Checkout Manually (Manager/Admin/Test)
+// @route   POST /api/staff-attendance/trigger-auto-checkout
+// @access  Public / Private
+exports.triggerAutoCheckout = async (req, res) => {
+  try {
+    const { performAutoCheckout } = require('../services/autoCheckoutService');
+    const result = await performAutoCheckout();
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Auto checkout execution failed', error: error.message });
+  }
+};
+

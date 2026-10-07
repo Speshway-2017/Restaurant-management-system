@@ -1753,11 +1753,19 @@ export default function ManagerStaffPage() {
                           <td style={{ padding: '0.7rem 1rem', fontWeight: 800, color: '#15803D', verticalAlign: 'top' }}>
                             {hasSessions ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                {item.sessions.map((s, sIdx) => (
-                                  <div key={sIdx} style={{ fontSize: '0.8rem', color: s.isCurrentlyActive ? '#2563EB' : '#15803D' }}>
-                                    {s.loginTimeFormatted} – {s.logoutTimeFormatted}
-                                  </div>
-                                ))}
+                                {item.sessions.map((s, sIdx) => {
+                                  const isAuto = s.autoCheckout || (s.logoutTimeFormatted && String(s.logoutTimeFormatted).includes('Auto Checkout'));
+                                  return (
+                                    <div key={sIdx} style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', color: s.isCurrentlyActive ? '#2563EB' : (isAuto ? '#D97706' : '#15803D') }}>
+                                      <span>{s.loginTimeFormatted} – {s.logoutTimeFormatted}</span>
+                                      {isAuto && (
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 800, backgroundColor: '#FEF3C7', color: '#B45309', padding: '0.05rem 0.4rem', borderRadius: '4px', border: '1px solid #FDE68A' }}>
+                                          Auto Checkout
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             ) : (
                               <span style={{ color: '#94A3B8', fontWeight: 600 }}>—</span>

@@ -73,8 +73,10 @@ const initSocket = (httpServer) => {
             socket.join(`waiters_all_${managerId}`);
           }
         }
-        if (userId) {
-          socket.join(`user_${userId}`);
+        const targetStaffId = data.staffId || userId;
+        if (targetStaffId) {
+          socket.join(`user_${targetStaffId}`);
+          socket.join(`staff:${targetStaffId}`);
         }
       } catch (err) {
         console.warn('Socket join error:', err.message);
