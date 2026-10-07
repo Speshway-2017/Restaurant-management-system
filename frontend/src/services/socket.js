@@ -4,15 +4,24 @@ let socket = null;
 
 export const getSocket = () => {
   if (!socket) {
-    const backendUrl = import.meta.env?.VITE_API_URL
-      ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
-      : 'http://localhost:5000';
+    let backendUrl;
+    if (import.meta.env?.VITE_SOCKET_URL) {
+      backendUrl = import.meta.env.VITE_SOCKET_URL;
+    } else if (import.meta.env?.VITE_API_URL) {
+      backendUrl = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
+    } else if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      backendUrl = window.location.origin;
+    } else {
+      const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+      backendUrl = `http://${hostname}:5000`;
+    }
 
     console.log('[Socket] Connecting to:', backendUrl);
 
     socket = io(backendUrl, {
       path: '/socket.io',
       transports: ['polling', 'websocket'],
+      withCredentials: true,
       reconnection: true,
       reconnectionAttempts: 15,
       reconnectionDelay: 1000

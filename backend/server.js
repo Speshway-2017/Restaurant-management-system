@@ -10,12 +10,16 @@ connectDB();
 
 const http = require('http');
 const { initSocket } = require('./socket');
+const { initAutoCheckoutJob } = require('./services/autoCheckoutService');
 
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 
 // Initialize Socket.io
 initSocket(server);
+
+// Initialize Midnight IST Attendance Auto Checkout Job
+initAutoCheckoutJob();
 
 server.listen(PORT, () => {
   console.log(`🚀 Backend running with Socket.io on port ${PORT}`);

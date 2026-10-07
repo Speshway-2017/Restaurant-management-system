@@ -10,6 +10,7 @@ import MagneticButton from '../components/MagneticButton';
 import InfiniteSlider from '../components/InfiniteSlider';
 import KineticCenterBuild from '../components/KineticCenterBuild';
 import Cta2 from '../components/Cta2';
+import ThreeDImage from '../components/ThreeDImage';
 import { findItemInCatalog, calculateCartTotal } from '../utils/menuRegistry';
 import { useRestaurantBranding } from '../context/RestaurantBrandingContext';
 import { isRestaurantOpenNow } from '../utils/restaurantTimings';
@@ -781,18 +782,12 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
             </button>
           </div>
 
-          <div style={{ textAlign: 'center', position: 'relative' }}>
-            <img
+          <div style={{ position: 'relative' }}>
+            <ThreeDImage
               src="/restaurant_ambience.png"
               alt="Restaurant Ambience"
-              style={{
-                width: '100%',
-                maxHeight: '340px',
-                objectFit: 'cover',
-                borderRadius: '20px',
-                border: '2px solid rgba(255, 255, 255, 0.15)',
-                boxShadow: '0 16px 36px rgba(0, 0, 0, 0.4)'
-              }}
+              maxHeight="360px"
+              borderRadius="22px"
             />
           </div>
         </div>
