@@ -393,13 +393,17 @@ export default function AdminSettingsPage({ subTab = 'settings-profile', isManag
             </div>
 
             <div className="admin-form-group">
-              <label className="form-label">Default GST Tax Rate (%)</label>
+              <label className="form-label">Total GST Tax Rate (%) *</label>
               <input 
                 type="text" 
                 className="form-control" 
+                placeholder="e.g. 5%, 10%, 18%"
                 value={settingsData.gstRate} 
                 onChange={(e) => setSettingsData({ ...settingsData, gstRate: e.target.value })}
               />
+              <small style={{ color: '#64748B', fontSize: '0.75rem', marginTop: '0.2rem', display: 'block' }}>
+                Enter total GST rate. System automatically splits it equally between CGST and SGST.
+              </small>
             </div>
 
             <div className="admin-form-group">

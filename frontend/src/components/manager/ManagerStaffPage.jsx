@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical,
   ShieldCheck, Mail, Phone, RefreshCw, Eye, EyeOff, Ban, AlertCircle, Calendar, Filter,
-  Flame, Utensils, Award, ChevronLeft, ChevronRight
+  Flame, Utensils, Award, ChevronLeft, ChevronRight, Building2
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { onSocketEvent } from '../../services/socket';
@@ -238,6 +238,7 @@ export default function ManagerStaffPage() {
     totalStaff: 0,
     availableChefs: 0,
     availableWaiters: 0,
+    availableReceptionists: 0,
     offlineStaff: 0
   });
   const [currentAvailabilityList, setCurrentAvailabilityList] = useState([]);
@@ -301,13 +302,35 @@ export default function ManagerStaffPage() {
     try {
       const res = await api.getStaffAvailabilityCurrent();
       if (res && res.success) {
-        setAvailabilitySummary(res.summary || {
-          totalStaff: 0,
-          availableChefs: 0,
-          availableWaiters: 0,
-          offlineStaff: 0
+        const staffList = res.staff || [];
+        setCurrentAvailabilityList(staffList);
+
+        const recCount = staffList.filter(s => 
+          (s.normRole === 'receptionist' || String(s.role || '').toLowerCase().includes('reception') || String(s.role || '').toLowerCase().includes('host')) && 
+          s.status === 'available'
+        ).length;
+
+        const chefCount = staffList.filter(s => 
+          (s.normRole === 'chef' || String(s.role || '').toLowerCase().includes('chef')) && 
+          s.status === 'available'
+        ).length;
+
+        const waiterCount = staffList.filter(s => 
+          (s.normRole === 'waiter' || String(s.role || '').toLowerCase().includes('waiter')) && 
+          s.status === 'available'
+        ).length;
+
+        const offlineCount = staffList.filter(s => s.status === 'offline').length;
+
+        setAvailabilitySummary({
+          totalStaff: staffList.length,
+          availableChefs: (res.summary && res.summary.availableChefs !== undefined) ? res.summary.availableChefs : chefCount,
+          availableWaiters: (res.summary && res.summary.availableWaiters !== undefined) ? res.summary.availableWaiters : waiterCount,
+          availableReceptionists: (res.summary && typeof res.summary.availableReceptionists === 'number' && res.summary.availableReceptionists > 0) 
+            ? res.summary.availableReceptionists 
+            : recCount,
+          offlineStaff: (res.summary && res.summary.offlineStaff !== undefined) ? res.summary.offlineStaff : offlineCount
         });
-        setCurrentAvailabilityList(res.staff || []);
       }
     } catch (err) {
       console.warn("Failed to fetch staff availability:", err.message);
@@ -763,20 +786,24 @@ export default function ManagerStaffPage() {
           <div style={{ fontSize: '0.75rem', color: '#1D4ED8', marginTop: '0.2rem', fontWeight: 600 }}>Serving Dining Guests</div>
         </div>
 
-        {/* OFFLINE STAFF */}
-        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', padding: '1.1rem 1.25rem', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+        {/* AVAILABLE RECEPTIONISTS */}
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1px solid #E9D5FF', padding: '1.1rem 1.25rem', boxShadow: '0 2px 10px rgba(126, 34, 206, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase' }}>OFFLINE STAFF</span>
-            <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Clock size={18} color="#94A3B8" />
+            <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#6B21A8', letterSpacing: '0.04em', textTransform: 'uppercase' }}>AVAILABLE RECEPTIONISTS</span>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Building2 size={18} color="#7E22CE" />
             </div>
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#475569' }}>
-            {availabilitySummary.offlineStaff}
+          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#6B21A8', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {availabilitySummary.availableReceptionists || 0}
+            <span style={{ fontSize: '0.75rem', backgroundColor: '#9333EA', color: '#FFFFFF', padding: '0.1rem 0.5rem', borderRadius: '9999px', fontWeight: 800 }}>
+              ● DESK ACTIVE
+            </span>
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '0.2rem', fontWeight: 600 }}>Logged Out / Shift Rest</div>
+          <div style={{ fontSize: '0.75rem', color: '#7E22CE', marginTop: '0.2rem', fontWeight: 600 }}>Front Desk & Reservations</div>
         </div>
       </div>
+
 
       {/* ================= MAIN NAVIGATION TABS ================= */}
       <div style={{
@@ -871,7 +898,8 @@ export default function ManagerStaffPage() {
                 { id: 'available', label: '🟢 Available Now' },
                 { id: 'offline', label: '⚪ Offline' },
                 { id: 'chef', label: '👨‍🍳 Chefs' },
-                { id: 'waiter', label: '🤵 Waiters' }
+                { id: 'waiter', label: '🤵 Waiters' },
+                { id: 'receptionist', label: '🛎️ Receptionists' }
               ].map(f => (
                 <button
                   key={f.id}

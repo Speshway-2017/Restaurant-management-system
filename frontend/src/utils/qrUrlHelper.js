@@ -18,10 +18,9 @@ export const getFrontendBaseUrl = () => {
     const hostname = window.location.hostname;
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
 
-    // Local development only: allow mobile scanning on local Wi-Fi IP
+    // Even during local admin management, customer-scanned QR links MUST point to the deployed URL link without local port
     if (isLocalhost) {
-      const port = window.location.port ? `:${window.location.port}` : ':5173';
-      return `${window.location.protocol}//192.168.1.4${port}`;
+      return 'https://restaurant.speshway.site';
     }
 
     // Production / Deployed environment (e.g. restaurant.speshway.site)
