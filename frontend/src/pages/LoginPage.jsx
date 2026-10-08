@@ -13,6 +13,9 @@ export default function LoginPage({ setActivePage }) {
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -122,6 +125,12 @@ export default function LoginPage({ setActivePage }) {
     e.preventDefault();
     setErrorMessage('');
     setIsLoggingIn(true);
+
+    if (!acceptedTerms) {
+      setErrorMessage('Please accept the Terms & Conditions and Privacy Policy to proceed.');
+      setIsLoggingIn(false);
+      return;
+    }
 
     if (!emailOrPhone || !password) {
       setErrorMessage('Invalid email or password.');
@@ -356,7 +365,7 @@ export default function LoginPage({ setActivePage }) {
               required
             />
 
-            <div className="flex-row" style={{ marginTop: '0.2rem', marginBottom: '1rem' }}>
+            <div className="flex-row" style={{ marginTop: '0.2rem', marginBottom: '0.6rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <input
                   type="checkbox"
@@ -376,6 +385,32 @@ export default function LoginPage({ setActivePage }) {
               >
                 Forgot password?
               </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '1.25rem' }}>
+              <input
+                type="checkbox"
+                id="terms_privacy_check"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                style={{ accentColor: '#1E4636', cursor: 'pointer', marginTop: '3px', width: '16px', height: '16px' }}
+              />
+              <label htmlFor="terms_privacy_check" style={{ cursor: 'pointer', fontSize: '0.82rem', color: '#475569', lineHeight: '1.4' }}>
+                I accept the{' '}
+                <span
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowTermsModal(true); }}
+                  style={{ color: '#1E4636', textDecoration: 'underline', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Terms &amp; Conditions
+                </span>{' '}
+                and{' '}
+                <span
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPrivacyModal(true); }}
+                  style={{ color: '#1E4636', textDecoration: 'underline', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Privacy Policy
+                </span>
+              </label>
             </div>
 
             <button type="submit" disabled={isLoggingIn} className="button-submit">
@@ -770,6 +805,162 @@ export default function LoginPage({ setActivePage }) {
                 </div>
               )}
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TERMS & CONDITIONS MODAL ==================== */}
+      {showTermsModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 42, 29, 0.65)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '24px',
+            maxWidth: '560px',
+            width: '100%',
+            maxHeight: '85vh',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
+            border: '1.5px solid #0F2A1D',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{
+              backgroundColor: '#0F2A1D',
+              padding: '1.25rem 1.5rem',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0
+            }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#FFFFFF' }}>
+                Terms &amp; Conditions
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                style={{ backgroundColor: 'rgba(255, 255, 255, 0.12)', border: 'none', color: '#FFFFFF', padding: '0.4rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: '1.5rem', overflowY: 'auto', fontSize: '0.88rem', color: '#334155', lineHeight: 1.6 }}>
+              <h4 style={{ color: '#0F2A1D', marginTop: 0, fontSize: '1rem', fontWeight: 700 }}>1. Acceptance of Terms</h4>
+              <p>By accessing and logging into the Flavora Kitchen Restaurant Management System, you agree to comply with and be bound by these Terms &amp; Conditions.</p>
+              <h4 style={{ color: '#0F2A1D', fontSize: '1rem', fontWeight: 700 }}>2. Account Usage &amp; Security</h4>
+              <p>Users are responsible for keeping login credentials confidential and for all actions taken under their accounts within their designated branch or role.</p>
+              <h4 style={{ color: '#0F2A1D', fontSize: '1rem', fontWeight: 700 }}>3. System Integrity &amp; Data Protection</h4>
+              <p>All data, order logs, billing information, and staff records processed by Flavora RMS are proprietary and protected under system security protocols.</p>
+            </div>
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAcceptedTerms(true);
+                  setShowTermsModal(false);
+                }}
+                style={{
+                  backgroundColor: '#0F2A1D',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '0.6rem 1.25rem',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Accept &amp; Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== PRIVACY POLICY MODAL ==================== */}
+      {showPrivacyModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 42, 29, 0.65)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '24px',
+            maxWidth: '560px',
+            width: '100%',
+            maxHeight: '85vh',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
+            border: '1.5px solid #0F2A1D',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{
+              backgroundColor: '#0F2A1D',
+              padding: '1.25rem 1.5rem',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0
+            }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#FFFFFF' }}>
+                Privacy Policy
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPrivacyModal(false)}
+                style={{ backgroundColor: 'rgba(255, 255, 255, 0.12)', border: 'none', color: '#FFFFFF', padding: '0.4rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: '1.5rem', overflowY: 'auto', fontSize: '0.88rem', color: '#334155', lineHeight: 1.6 }}>
+              <h4 style={{ color: '#0F2A1D', marginTop: 0, fontSize: '1rem', fontWeight: 700 }}>1. Information Collection</h4>
+              <p>Flavora RMS collects essential user information such as name, email address, contact numbers, and operational activity logs to facilitate system functionalities.</p>
+              <h4 style={{ color: '#0F2A1D', fontSize: '1rem', fontWeight: 700 }}>2. Data Utilization</h4>
+              <p>Your data is strictly utilized for user authentication, staff attendance records, order processing, and system optimization. We do not sell or monetize user personal information.</p>
+              <h4 style={{ color: '#0F2A1D', fontSize: '1rem', fontWeight: 700 }}>3. Data Security</h4>
+              <p>We employ industry-standard encryption protocols to protect sensitive data stored within our servers and user sessions.</p>
+            </div>
+            <div style={{ padding: '1.5rem', borderTop: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAcceptedTerms(true);
+                  setShowPrivacyModal(false);
+                }}
+                style={{
+                  backgroundColor: '#0F2A1D',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '0.6rem 1.25rem',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Accept &amp; Close
+              </button>
             </div>
           </div>
         </div>

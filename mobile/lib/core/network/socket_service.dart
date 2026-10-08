@@ -48,7 +48,7 @@ class SocketService {
       }
     }
 
-    final transports = ['polling', 'websocket'];
+    final transports = ['websocket', 'polling'];
 
     _socket = socket_io.io(targetUrl, socket_io.OptionBuilder()
       .setPath('/socket.io')

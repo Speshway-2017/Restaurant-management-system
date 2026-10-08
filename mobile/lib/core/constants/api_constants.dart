@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConstants {
   // ─────────────────────────────────────────────────────────────────────────
   // Backend Base URL — single source of truth across Web and Mobile.
@@ -6,6 +8,12 @@ class ApiConstants {
 
   static String get baseUrl {
     if (_overrideBaseUrl.isNotEmpty) return _overrideBaseUrl;
+    if (kIsWeb) {
+      final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
+      if (host == 'localhost' || host == '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.')) {
+        return 'http://$host:5000/api';
+      }
+    }
     return 'https://restaurant.speshway.site/api';
   }
 

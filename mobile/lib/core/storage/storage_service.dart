@@ -36,6 +36,7 @@ class StorageService {
 
   static const String _keyRingtone = 'flavora_ringtone_tone';
   static const String _keySoundEnabled = 'flavora_sound_enabled';
+  static const String _keyOnboardingCompleted = 'onboarding_completed';
 
   static Future<void> saveRingtone(String ringtone) async {
     final prefs = await SharedPreferences.getInstance();
@@ -55,6 +56,16 @@ class StorageService {
   static Future<bool> getSoundEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_keySoundEnabled) ?? true;
+  }
+
+  static Future<void> setOnboardingCompleted(bool completed) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyOnboardingCompleted, completed);
+  }
+
+  static Future<bool> isOnboardingCompleted() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyOnboardingCompleted) ?? false;
   }
 
   static Future<void> clearSession() async {

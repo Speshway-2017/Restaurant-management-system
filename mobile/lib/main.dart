@@ -11,6 +11,9 @@ import 'screens/splash/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_navigation_screen.dart';
 
+import 'screens/onboarding/onboarding_screen.dart';
+import 'services/onboarding_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -92,6 +95,25 @@ class _FlavoraWaiterAppState extends State<FlavoraWaiterApp> {
       return const MainNavigationScreen();
     }
 
-    return const LoginScreen();
+    return FutureBuilder<bool>(
+      future: OnboardingService.isOnboardingCompleted(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            backgroundColor: Color(0xFFFDF8EE),
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFF0F4D3A)),
+            ),
+          );
+        }
+
+        final completed = snapshot.data ?? false;
+        if (!completed) {
+          return const OnboardingScreen();
+        }
+
+        return const LoginScreen();
+      },
+    );
   }
 }

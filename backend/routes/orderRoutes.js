@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { optionalAuth } = require('../middleware/authMiddleware');
+const { protect, optionalAuth, requireWaiterRole } = require('../middleware/authMiddleware');
 const {
   getOrders,
   createOrder,
@@ -29,8 +29,8 @@ router.post('/:id/cancel-request', requestOrderCancellation);
 router.patch('/:id/claim', claimOrder);
 router.patch('/:id/chef-accept', chefAcceptOrder);
 router.patch('/:id/chef-status', chefUpdateStatus);
-router.patch('/:id/waiter-accept', waiterAcceptOrder);
-router.patch('/:id/waiter-status', waiterUpdateStatus);
+router.patch('/:id/waiter-accept', protect, requireWaiterRole, waiterAcceptOrder);
+router.patch('/:id/waiter-status', protect, requireWaiterRole, waiterUpdateStatus);
 router.patch('/:id/status', updateOrderStatus);
 router.patch('/:id/items/status', updateOrderItemStatus);
 router.delete('/all', clearAllOrders);
