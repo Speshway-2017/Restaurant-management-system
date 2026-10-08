@@ -5,7 +5,7 @@ import {
   Flame, Utensils, Award, ChevronLeft, ChevronRight, Building2
 } from 'lucide-react';
 import { api } from '../../services/api';
-import { onSocketEvent } from '../../services/socket';
+import { getSocket, joinSocketRooms, onSocketEvent } from '../../services/socket';
 
 const format24to12 = (time24) => {
   if (!time24) return '';
@@ -366,24 +366,97 @@ export default function ManagerStaffPage() {
     fetchAttendanceHistory();
   }, [historyFilters.date, historyFilters.role, historyFilters.status, historyFilters.search]);
 
+  // Refs for tracking active filters and modal state without re-binding socket listeners
+  const historyFiltersRef = React.useRef(historyFilters);
+  const viewingStaffRef = React.useRef(viewingStaff);
+  const selectedMonthRef = React.useRef(selectedMonth);
+
+  React.useEffect(() => { historyFiltersRef.current = historyFilters; }, [historyFilters]);
+  React.useEffect(() => { viewingStaffRef.current = viewingStaff; }, [viewingStaff]);
+  React.useEffect(() => { selectedMonthRef.current = selectedMonth; }, [selectedMonth]);
+
   // Real-Time Socket Listener for Staff Availability & Attendance Events
   useEffect(() => {
+    const socket = getSocket();
+
+    // Ensure manager joins socket rooms upon mount
+    try {
+      const rawUser = sessionStorage.getItem('flavora_user_data') || localStorage.getItem('flavora_user_data');
+      if (rawUser) {
+        joinSocketRooms(JSON.parse(rawUser));
+      }
+    } catch (e) {}
+
     const handleStaffUpdate = (payload) => {
-      console.log('[Attendance] staffAttendanceUpdated received:', payload);
+      console.log('[Attendance] staffAttendanceUpdated received in Manager Staff page:', payload);
+      
+      const updatedStaffId = String(payload?.staffId || payload?.id || payload?.userId || '');
+
+      // 1. Immediate local React state update for zero-latency card & counter re-render
+      if (updatedStaffId) {
+        setCurrentAvailabilityList(prevList => {
+          const nextList = prevList.map(st => {
+            const stId = String(st.staffId || st.id || st._id || '');
+            if (stId === updatedStaffId) {
+              const isAvail = payload.status === 'available';
+              return {
+                ...st,
+                status: payload.status,
+                loginTimeFormatted: payload.loginTimeFormatted || st.loginTimeFormatted,
+                logoutTimeFormatted: isAvail ? 'Currently Active' : (payload.logoutTimeFormatted || st.logoutTimeFormatted),
+                totalWorkingHoursToday: payload.durationFormatted || st.totalWorkingHoursToday,
+                loginAt: payload.loginAt || st.loginAt,
+                logoutAt: payload.logoutAt || st.logoutAt,
+                activeSession: isAvail
+              };
+            }
+            return st;
+          });
+
+          // Recalculate all staff counters immediately
+          const recCount = nextList.filter(s => 
+            (s.normRole === 'receptionist' || String(s.role || '').toLowerCase().includes('reception') || String(s.role || '').toLowerCase().includes('host')) && 
+            s.status === 'available'
+          ).length;
+
+          const chefCount = nextList.filter(s => 
+            (s.normRole === 'chef' || String(s.role || '').toLowerCase().includes('chef')) && 
+            s.status === 'available'
+          ).length;
+
+          const waiterCount = nextList.filter(s => 
+            (s.normRole === 'waiter' || String(s.role || '').toLowerCase().includes('waiter')) && 
+            s.status === 'available'
+          ).length;
+
+          const offlineCount = nextList.filter(s => s.status === 'offline').length;
+
+          setAvailabilitySummary({
+            totalStaff: nextList.length,
+            availableChefs: chefCount,
+            availableWaiters: waiterCount,
+            availableReceptionists: recCount,
+            offlineStaff: offlineCount
+          });
+
+          return nextList;
+        });
+      }
+
+      // 2. Authoritative backend refetch from database source of truth
       fetchCurrentAvailability();
       
       const todayStr = getTodayIstDateStr();
-      // Only refetch history if viewing Today or if date filter is unset
-      if (!historyFilters.date || historyFilters.date === todayStr) {
+      const currentHistDate = historyFiltersRef.current?.date;
+      if (!currentHistDate || currentHistDate === todayStr) {
         fetchAttendanceHistory();
       }
       
       // Auto-refetch monthly log for open staff details modal
-      if (viewingStaff) {
-        const viewingId = String(viewingStaff._id || viewingStaff.staffId || viewingStaff.id || '');
-        const updatedId = String(payload?.staffId || payload?.id || payload?.userId || '');
-        if (!updatedId || viewingId === updatedId) {
-          const targetMonth = selectedMonth || getCurrentIstMonthStr();
+      if (viewingStaffRef.current) {
+        const viewingId = String(viewingStaffRef.current._id || viewingStaffRef.current.staffId || viewingStaffRef.current.id || '');
+        if (!updatedStaffId || viewingId === updatedStaffId) {
+          const targetMonth = selectedMonthRef.current || getCurrentIstMonthStr();
           api.getStaffAttendanceHistory({ staffId: viewingId, month: targetMonth })
             .then(res => {
               const fetchedHistory = res?.history || res?.records || [];
@@ -418,16 +491,25 @@ export default function ManagerStaffPage() {
       }
     };
 
+    const handleReconnect = () => {
+      console.log('[Socket] Reconnected! Resyncing staff availability from backend API...');
+      fetchCurrentAvailability();
+      fetchAttendanceHistory();
+    };
+
     const unsub1 = onSocketEvent('staffAvailabilityUpdated', handleStaffUpdate);
     const unsub2 = onSocketEvent('staff_attendance_updated', handleStaffUpdate);
     const unsub3 = onSocketEvent('staffAttendanceUpdated', handleStaffUpdate);
+
+    socket.on('connect', handleReconnect);
 
     return () => {
       if (unsub1) unsub1();
       if (unsub2) unsub2();
       if (unsub3) unsub3();
+      socket.off('connect', handleReconnect);
     };
-  }, [historyFilters.date, viewingStaff, selectedMonth]);
+  }, []);
 
   const [formData, setFormData] = useState({
     name: '',

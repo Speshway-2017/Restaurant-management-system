@@ -41,43 +41,47 @@ const normalizeRole = (roleStr = '') => {
 };
 
 /**
- * Calculates the previous IST date string (YYYY-MM-DD)
+ * Calculates the exact 12:00 AM (00:00:00.000 IST) Date object for the calendar day after dateStr (YYYY-MM-DD)
  */
-const getPreviousIstDateStr = (refDate = new Date()) => {
-  const prevIst = new Date(refDate.getTime() - 24 * 60 * 60 * 1000);
-  return getIstDetails(prevIst).dateStr;
+const getMidnightIstDateOfNextDay = (dateStr) => {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const now = new Date();
+    const istDate = getIstDetails(now).dateStr;
+    const [y, m, d] = istDate.split('-').map(Number);
+    const nextDayUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0);
+    return new Date(nextDayUtcMs - (5.5 * 60 * 60 * 1000));
+  }
+  const [y, m, d] = dateStr.split('-').map(Number);
+  // Date.UTC(y, m-1, d+1, 0, 0, 0) is 00:00:00 UTC of next day.
+  // IST is UTC+5:30. Subtracting 5.5 hours (19800000 ms) yields 00:00:00.000 IST of next day.
+  const nextDayUtcMs = Date.UTC(y, m - 1, d + 1, 0, 0, 0);
+  return new Date(nextDayUtcMs - (5.5 * 60 * 60 * 1000));
 };
 
 /**
  * Perform Midnight Automatic Attendance Checkout for Operational Roles ONLY (Waiter, Chef, Receptionist)
+ * Triggered when IST Calendar Date changes (at 00:00 IST).
  * Idempotent: Safe to execute multiple times.
  */
 const performAutoCheckout = async () => {
   try {
     const now = new Date();
     const currentIst = getIstDetails(now);
-    const previousIstDateStr = getPreviousIstDateStr(now);
 
     console.log(`[AutoCheckout] Executing midnight IST attendance auto-checkout check at ${now.toISOString()} (IST: ${currentIst.dateStr} ${currentIst.formattedTime})`);
-    console.log(`[AutoCheckout] Target previous IST date for auto-checkout: ${previousIstDateStr}`);
 
-    // Operational roles ONLY: waiter, chef, receptionist.
-    // Exclude manager and admin.
+    // Operational roles ONLY: waiter, chef, receptionist. Exclude manager and admin.
     const operationalRoles = ['waiter', 'chef', 'receptionist'];
 
-    // Find all StaffAttendance records where status="available", role in waiter/chef/receptionist, date <= previousIstDateStr (or previous IST date), logoutAt=null
+    // 1. Find all StaffAttendance records where status="available", role in waiter/chef/receptionist, date < currentIstDateStr, logoutAt=null
     const activeSessions = await StaffAttendance.find({
       status: 'available',
       logoutAt: null,
       role: { $in: operationalRoles },
-      date: { $lte: previousIstDateStr }
+      date: { $lt: currentIst.dateStr }
     });
 
-    console.log(`[AutoCheckout] Found ${activeSessions.length} active operational session(s) pending auto-checkout.`);
-
-    if (activeSessions.length === 0) {
-      return { success: true, count: 0, checkedOutSessions: [] };
-    }
+    console.log(`[AutoCheckout] Found ${activeSessions.length} active operational session(s) pending auto-checkout from prior IST dates.`);
 
     const io = getIO();
     const checkedOutSessions = [];
@@ -88,31 +92,33 @@ const performAutoCheckout = async () => {
         continue;
       }
 
-      const loginAtDate = session.loginAt || now;
-      const diffMs = Math.max(0, now.getTime() - new Date(loginAtDate).getTime());
-      const durationMinutes = Math.floor(diffMs / 60000);
-      const durationFormatted = formatDuration(loginAtDate, now);
+      // Calculate exact 12:00 AM IST of the day following session.date
+      const midnightLogoutAt = getMidnightIstDateOfNextDay(session.date);
+      const loginAtDate = session.loginAt ? new Date(session.loginAt) : midnightLogoutAt;
 
-      // 1. Update StaffAttendance session record
-      session.logoutAt = now;
-      session.logoutTimeFormatted = currentIst.formattedTime; // e.g. "12:00 AM"
+      const diffMs = Math.max(0, midnightLogoutAt.getTime() - loginAtDate.getTime());
+      const durationMinutes = Math.floor(diffMs / 60000);
+      const durationFormatted = formatDuration(loginAtDate, midnightLogoutAt);
+
+      // Update StaffAttendance session record (preserve original date, logoutAt = 12:00 AM IST of next day)
+      session.logoutAt = midnightLogoutAt;
+      session.logoutTimeFormatted = '12:00 AM';
       session.status = 'offline';
       session.autoCheckout = true;
       session.durationMinutes = durationMinutes;
-      session.durationFormatted = `${durationFormatted} (Auto Checkout)`;
+      session.durationFormatted = durationFormatted;
 
       await session.save();
 
-      console.log(`[AutoCheckout] Automatically checked out staff: ${session.staffName} (${session.role}, ID: ${session.staffId}), Duration: ${durationFormatted}`);
+      console.log(`[AutoCheckout] Automatically checked out staff: ${session.staffName} (${session.role}, ID: ${session.staffId}), Date: ${session.date}, Duration: ${durationFormatted}, LogoutAt: ${midnightLogoutAt.toISOString()}`);
 
-      // 2. Update corresponding User document attendance/availability fields
+      // Update corresponding User document attendance/availability fields
       try {
         const userObj = await User.findById(session.staffId);
         if (userObj) {
           userObj.attendanceStatus = 'Offline';
           userObj.hoursLogged = session.durationFormatted;
 
-          // Push persistent notification to User.notifications
           if (!Array.isArray(userObj.notifications)) {
             userObj.notifications = [];
           }
@@ -120,7 +126,7 @@ const performAutoCheckout = async () => {
             id: `auto_checkout_${session._id}_${now.getTime()}`,
             title: "Attendance Auto Checkout",
             message: "Your attendance was automatically checked out at 12:00 AM because the workday has ended.",
-            time: currentIst.formattedTime,
+            time: '12:00 AM',
             read: false,
             createdAt: now
           });
@@ -131,13 +137,13 @@ const performAutoCheckout = async () => {
         console.error(`[AutoCheckout] Error updating User document for ${session.staffName}:`, userErr.message);
       }
 
-      // 3. Emit Socket.IO event: attendanceAutoCheckout to individual staff room staff:${staffId}
+      // Emit Socket.IO event: attendanceAutoCheckout to individual staff room
       if (io) {
         const staffPayload = {
           staffId: String(session.staffId),
           staffName: session.staffName,
           role: session.role,
-          logoutAt: now,
+          logoutAt: midnightLogoutAt,
           date: session.date,
           autoCheckout: true,
           message: "Your attendance was automatically checked out at 12:00 AM because the workday has ended."
@@ -146,20 +152,25 @@ const performAutoCheckout = async () => {
         io.to(`staff:${session.staffId}`).emit('attendanceAutoCheckout', staffPayload);
         io.to(`user_${session.staffId}`).emit('attendanceAutoCheckout', staffPayload);
 
-        // 4. Emit staff attendance update event to managers so Manager Staff Management updates in real time
+        // Emit staff attendance update event to managers so Manager Staff Management updates in real time
         const managerUpdatePayload = {
+          type: 'AUTO_CHECKOUT',
           staffId: String(session.staffId),
           staffName: session.staffName,
           empId: session.empId,
           role: session.role,
+          normRole: normalizeRole(session.role),
           status: 'offline',
           action: 'checkOut',
           autoCheckout: true,
-          timestamp: now.toISOString(),
+          timestamp: midnightLogoutAt.toISOString(),
           loginAt: session.loginAt,
-          logoutAt: now,
-          logoutTimeFormatted: session.logoutTimeFormatted,
-          durationFormatted: session.durationFormatted,
+          logoutAt: midnightLogoutAt,
+          loginTimeFormatted: session.loginTimeFormatted,
+          logoutTimeFormatted: '12:00 AM',
+          durationMinutes: durationMinutes,
+          durationFormatted: durationFormatted,
+          date: session.date,
           attendanceId: String(session._id)
         };
 
@@ -169,6 +180,36 @@ const performAutoCheckout = async () => {
       }
 
       checkedOutSessions.push(session);
+    }
+
+    // Retroactive cleanup for existing autoCheckout records saved with execution timestamp instead of midnight IST
+    try {
+      const oldAutoSessions = await StaffAttendance.find({
+        autoCheckout: true,
+        role: { $in: operationalRoles }
+      });
+
+      for (const oldSession of oldAutoSessions) {
+        if (!oldSession.date || !oldSession.loginAt) continue;
+        const expectedMidnight = getMidnightIstDateOfNextDay(oldSession.date);
+        const currentLogoutTime = oldSession.logoutAt ? new Date(oldSession.logoutAt).getTime() : 0;
+
+        if (Math.abs(currentLogoutTime - expectedMidnight.getTime()) > 120000) {
+          const loginAtD = new Date(oldSession.loginAt);
+          const diffMs = Math.max(0, expectedMidnight.getTime() - loginAtD.getTime());
+          const durMins = Math.floor(diffMs / 60000);
+          const durFormatted = formatDuration(loginAtD, expectedMidnight);
+
+          oldSession.logoutAt = expectedMidnight;
+          oldSession.logoutTimeFormatted = '12:00 AM';
+          oldSession.durationMinutes = durMins;
+          oldSession.durationFormatted = durFormatted;
+          await oldSession.save();
+          console.log(`[AutoCheckout Cleanup] Corrected past autoCheckout record ID=${oldSession._id} for ${oldSession.staffName}: logoutAt -> ${expectedMidnight.toISOString()}, Duration -> ${durFormatted}`);
+        }
+      }
+    } catch (cleanErr) {
+      console.warn('[AutoCheckout Cleanup] Warning during retroactive cleanup:', cleanErr.message);
     }
 
     return {
@@ -217,6 +258,12 @@ const initAutoCheckoutJob = () => {
       console.error('[AutoCheckout Job] Timer interval error:', e);
     }
   }, 30000);
+};
+
+const getPreviousIstDateStr = (currentIstDateStr) => {
+  const d = new Date(currentIstDateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().split('T')[0];
 };
 
 module.exports = {

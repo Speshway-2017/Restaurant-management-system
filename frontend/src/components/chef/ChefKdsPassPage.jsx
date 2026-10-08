@@ -305,6 +305,22 @@ export default function ChefKdsPassPage({
                           </span>
                         </div>
 
+                        {/* Spice Level & Add-ons Badges for Kitchen Display */}
+                        {typeof item === 'object' && (
+                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.2rem', width: '100%' }}>
+                            {(item.spiceLevel || item.selectedSpiceLevel) && (
+                              <span style={{ fontSize: '0.68rem', color: '#EA580C', backgroundColor: '#FFF7ED', border: '1px solid #FFEDD5', padding: '0.08rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
+                                🌶️ Spice: {item.spiceLevel || item.selectedSpiceLevel}
+                              </span>
+                            )}
+                            {Array.isArray(item.selectedAddOns || item.addOns) && (item.selectedAddOns || item.addOns).length > 0 && (
+                              <span style={{ fontSize: '0.68rem', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '0.08rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
+                                ➕ Add-ons: {(item.selectedAddOns || item.addOns).map(a => (typeof a === 'string' ? a : a.name)).join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           {isUpdating && (
                             <span style={{ fontSize: '0.65rem', color: '#0284C7', fontWeight: 700, fontStyle: 'italic' }}>
