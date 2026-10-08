@@ -249,7 +249,6 @@ export default function CustomerBillModal({
 
       const payData = {
         status: 'Paid',
-        orderStatus: 'Completed',
         payment: 'Paid',
         paymentStatus: 'Paid',
         isBillGenerated: true,
@@ -317,8 +316,6 @@ export default function CustomerBillModal({
           if (loId === cleanTargetId || lo.table === activeTableStr || isTableMatch) {
             return {
               ...lo,
-              status: 'Completed',
-              orderStatus: 'Completed',
               payment: 'Paid',
               paymentStatus: 'Paid',
               paymentMethod: payData.paymentMethod,
@@ -468,6 +465,73 @@ export default function CustomerBillModal({
           {/* Digital GST Invoice Screen */}
           {showInvoice ? (
             <div>
+              {/* Payment Successful Confirmation Banner */}
+              <div style={{
+                backgroundColor: '#F0FDF4',
+                border: '2px solid #86EFAC',
+                borderRadius: '20px',
+                padding: '1.25rem 1rem',
+                textAlign: 'center',
+                marginBottom: '1.25rem',
+                boxShadow: '0 8px 20px rgba(22, 101, 52, 0.12)'
+              }}>
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '50%',
+                  backgroundColor: '#166534',
+                  color: '#FFFFFF',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '0.65rem'
+                }}>
+                  <Check size={28} strokeWidth={3} />
+                </div>
+                <h3 style={{ margin: '0 0 0.5rem 0', color: '#166534', fontWeight: 900, fontSize: '1.25rem' }}>
+                  ✓ Payment Successful
+                </h3>
+
+                <div style={{ backgroundColor: '#FFFFFF', borderRadius: '14px', padding: '0.85rem 1rem', border: '1px solid #BBF7D0', marginBottom: '0.85rem', textAlign: 'left', fontSize: '0.84rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>Amount Paid:</span>
+                    <strong style={{ color: '#166534', fontSize: '0.98rem', fontWeight: 900 }}>₹{formatMoney(grandTotal)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>Payment Method:</span>
+                    <strong style={{ color: '#0F2A1D', fontWeight: 800 }}>{paymentMethod || 'UPI'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>Transaction ID:</span>
+                    <strong style={{ color: '#0F2A1D', fontFamily: 'monospace', fontWeight: 800 }}>{paidReceiptDetails?.transactionId || `TXN-${Date.now().toString().slice(-8)}`}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>Order Number:</span>
+                    <strong style={{ color: '#0F2A1D', fontWeight: 800 }}>#{paidReceiptDetails?.orderId || activeOrder?.orderId || (String(activeOrder?._id || '').slice(-6)).toUpperCase() || 'ORD-3968'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>Payment:</span>
+                    <strong style={{ color: '#166534', fontWeight: 900 }}>
+                      Paid {liveOrder?.waiterPaymentConfirmation === 'CONFIRMED' ? '✓' : ''}
+                    </strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>
+                      {liveOrder?.waiterPaymentConfirmation === 'CONFIRMED' ? 'Payment Received:' : 'Waiter Confirmation:'}
+                    </span>
+                    <strong style={{ color: liveOrder?.waiterPaymentConfirmation === 'CONFIRMED' ? '#166534' : '#D97706', fontWeight: 900 }}>
+                      {liveOrder?.waiterPaymentConfirmation === 'CONFIRMED' ? 'Confirmed ✓' : 'Pending'}
+                    </strong>
+                  </div>
+                </div>
+
+                <p style={{ margin: 0, fontSize: '0.82rem', color: liveOrder?.waiterPaymentConfirmation === 'CONFIRMED' ? '#166534' : '#B45309', fontWeight: 700, lineHeight: 1.5 }}>
+                  {liveOrder?.waiterPaymentConfirmation === 'CONFIRMED'
+                    ? 'Payment confirmed by waiter! Please wait while the order is being completed.'
+                    : 'Payment recorded by system. Waiting for waiter to confirm payment.'}
+                </p>
+              </div>
+
               <div id="digital-gst-invoice" style={{
                 padding: '1.5rem',
                 backgroundColor: '#FAFAFA',
@@ -531,10 +595,7 @@ export default function CustomerBillModal({
                     <span>{sgstLabel}</span>
                     <span>₹{formatMoney(sgstAmount)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontWeight: 700 }}>
-                    <span>GST</span>
-                    <span>₹{formatMoney(gstAmount)}</span>
-                  </div>
+                  
                   {tipAmount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#B45309', fontWeight: 700, marginBottom: '0.35rem' }}>
                       <span>Staff Tip / Gratuity</span>
@@ -791,11 +852,6 @@ export default function CustomerBillModal({
                   <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(sgstAmount)}</span>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#475569', fontWeight: 700 }}>
-                  <span>GST</span>
-                  <span style={{ fontWeight: 700, color: '#0F2A1D' }}>₹{formatMoney(gstAmount)}</span>
-                </div>
-
                 {tipAmount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', color: '#EA580C', fontWeight: 800 }}>
                     <span>Customer Tip:</span>
@@ -815,7 +871,7 @@ export default function CustomerBillModal({
                   marginTop: '0.5rem'
                 }}>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#334155' }}>Total Amount Payable</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#334155' }}>Grand Total</div>
                   </div>
                   <span style={{ fontSize: '1.35rem', color: '#166534', fontWeight: 900 }}>
                     ₹{grandTotal}
@@ -894,11 +950,11 @@ export default function CustomerBillModal({
                     <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '0.5rem' }}>
                       Select Payment Method
                     </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
                       {[
-                        { key: 'UPI', label: 'UPI / Dynamic QR', icon: QrCode, desc: 'GPay, PhonePe, Paytm' },
-                        { key: 'CARD', label: 'Credit / Debit Card', icon: CreditCard, desc: 'Visa, MasterCard, Amex' },
-                        { key: 'CASH', label: 'Pay at Counter', icon: Coins, desc: 'Cash payment to cashier' }
+                        { key: 'UPI', label: 'UPI', icon: QrCode, desc: 'GPay, PhonePe, Paytm' },
+                        { key: 'CASH', label: 'Cash', icon: Coins, desc: 'Pay at Counter' },
+                        { key: 'CARD', label: 'Card', icon: CreditCard, desc: 'Debit / Credit Card' }
                       ].map(pm => {
                         const IconComp = pm.icon;
                         const isSel = paymentMethod === pm.key;
@@ -909,17 +965,19 @@ export default function CustomerBillModal({
                             onClick={() => setPaymentMethod(pm.key)}
                             style={{
                               display: 'flex',
+                              flexDirection: 'column',
                               alignItems: 'center',
-                              gap: '0.65rem',
-                              padding: '0.75rem 0.85rem',
+                              justifyContent: 'center',
+                              gap: '0.35rem',
+                              padding: '0.65rem 0.4rem',
                               borderRadius: '14px',
                               border: isSel ? '2px solid #166534' : '1px solid #CBD5E1',
                               backgroundColor: isSel ? '#F0FDF4' : '#FAFAFA',
                               color: isSel ? '#166534' : '#334155',
-                              fontWeight: 700,
+                              fontWeight: 800,
                               fontSize: '0.82rem',
                               cursor: 'pointer',
-                              textAlign: 'left',
+                              textAlign: 'center',
                               boxShadow: isSel ? '0 4px 12px rgba(22, 101, 52, 0.15)' : 'none',
                               transition: 'all 0.15s ease'
                             }}
@@ -937,15 +995,105 @@ export default function CustomerBillModal({
                             }}>
                               <IconComp size={16} />
                             </div>
-                            <div>
-                              <div style={{ fontWeight: 800 }}>{pm.label}</div>
-                              <div style={{ fontSize: '0.68rem', color: isSel ? '#15803D' : '#64748B', fontWeight: 500 }}>{pm.desc}</div>
-                            </div>
+                            <div style={{ fontWeight: 800, fontSize: '0.85rem' }}>{pm.label}</div>
                           </button>
                         );
                       })}
                     </div>
                   </div>
+
+                  {/* Payment Details Section */}
+                  {paymentMethod === 'UPI' ? (
+                    <div style={{
+                      backgroundColor: '#F8FAFC',
+                      borderRadius: '20px',
+                      padding: '1.25rem 1rem',
+                      border: '1.5px solid #E2E8F0',
+                      textAlign: 'center',
+                      marginBottom: '1.25rem',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 900, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>
+                        Pay via UPI
+                      </div>
+
+                      {/* CUSTOM PAYMENT QR CODE CONTAINER */}
+                      <div style={{
+                        width: '210px',
+                        height: '210px',
+                        margin: '0 auto 0.85rem auto',
+                        backgroundColor: '#FFFFFF',
+                        padding: '0.75rem',
+                        borderRadius: '16px',
+                        border: '2.5px solid #166534',
+                        boxShadow: '0 8px 24px rgba(22, 101, 52, 0.15)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box'
+                      }}>
+                        <img
+                          src={branding?.paymentQr || branding?.upiQr || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=8&data=${encodeURIComponent('upi://pay?pa=' + (branding?.upiId || 'flavorakitchen@upi') + '&pn=' + (branding?.brandName || 'Flavora Kitchen') + '&am=' + grandTotal + '&tn=Order_' + (activeOrder?.orderId || activeOrder?._id || '') + '&cu=INR')}`}
+                          alt="Restaurant Custom UPI Payment QR Code"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '8px', display: 'block' }}
+                        />
+                      </div>
+
+                      <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#334155', marginBottom: '0.4rem' }}>
+                        Scan & Pay using GPay / PhonePe / Paytm
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <span style={{ fontSize: '0.84rem', color: '#64748B', fontWeight: 700 }}>Amount:</span>
+                        <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#166534' }}>₹{grandTotal}</span>
+                      </div>
+
+                      <div style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 700, backgroundColor: '#F1F5F9', padding: '0.4rem 0.85rem', borderRadius: '10px', display: 'inline-block', border: '1px solid #CBD5E1' }}>
+                        UPI ID: <strong style={{ color: '#0F2A1D', fontFamily: 'monospace' }}>{branding?.upiId || 'flavorakitchen@upi'}</strong>
+                      </div>
+                    </div>
+                  ) : paymentMethod === 'CASH' ? (
+                    <div style={{
+                      backgroundColor: '#FFFBEB',
+                      borderRadius: '20px',
+                      padding: '1.25rem 1rem',
+                      border: '1.5px solid #FCD34D',
+                      textAlign: 'center',
+                      marginBottom: '1.25rem'
+                    }}>
+                      <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: '#D97706', color: '#FFFFFF', display: 'grid', placeItems: 'center', margin: '0 auto 0.6rem auto' }}>
+                        <Coins size={22} />
+                      </div>
+                      <h4 style={{ margin: '0 0 0.35rem 0', color: '#78350F', fontWeight: 900, fontSize: '1.05rem' }}>
+                        Pay Cash at Counter
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#92400E', fontWeight: 600, lineHeight: 1.45 }}>
+                        Please hand over exact cash <strong>₹{grandTotal}</strong> to your table waiter or cashier at the billing counter.
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{
+                      backgroundColor: '#EFF6FF',
+                      borderRadius: '20px',
+                      padding: '1.25rem 1rem',
+                      border: '1.5px solid #BFDBFE',
+                      textAlign: 'center',
+                      marginBottom: '1.25rem'
+                    }}>
+                      <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: '#1D4ED8', color: '#FFFFFF', display: 'grid', placeItems: 'center', margin: '0 auto 0.6rem auto' }}>
+                        <CreditCard size={22} />
+                      </div>
+                      <h4 style={{ margin: '0 0 0.35rem 0', color: '#1E40AF', fontWeight: 900, fontSize: '1.05rem' }}>
+                        Credit / Debit Card Machine
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#1E3A8A', fontWeight: 600, lineHeight: 1.45 }}>
+                        Swipe, Tap or Dip your Debit/Credit card on the wireless POS Terminal machine provided by your waiter.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Complete Payment Button */}
                   <button
@@ -961,7 +1109,7 @@ export default function CustomerBillModal({
                       border: 'none',
                       fontWeight: 900,
                       fontSize: '1.05rem',
-                      cursor: 'pointer',
+                      cursor: isProcessingPayment ? 'not-allowed' : 'pointer',
                       boxShadow: '0 12px 24px -4px rgba(22, 101, 52, 0.35)',
                       display: 'flex',
                       alignItems: 'center',
@@ -973,8 +1121,10 @@ export default function CustomerBillModal({
                     <Lock size={18} />
                     <span>
                       {isProcessingPayment
-                        ? 'Processing Encrypted Payment...'
-                        : `Complete Payment • ₹${grandTotal}`}
+                        ? 'Verifying Payment Status...'
+                        : paymentMethod === 'UPI'
+                        ? "I've Completed Payment"
+                        : `Complete Settlement • ₹${grandTotal}`}
                     </span>
                   </button>
 

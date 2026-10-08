@@ -5,15 +5,17 @@ let socket = null;
 export const getSocket = () => {
   if (!socket) {
     let backendUrl;
-    if (import.meta.env?.VITE_SOCKET_URL) {
-      backendUrl = import.meta.env.VITE_SOCKET_URL;
-    } else if (import.meta.env?.VITE_API_URL) {
-      backendUrl = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
-    } else if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (isLocalhost) {
+      // In local dev mode, use current window.location.origin (Vite dev proxy forwards /socket.io to backend)
       backendUrl = window.location.origin;
+    } else if (import.meta.env?.VITE_SOCKET_URL && typeof import.meta.env.VITE_SOCKET_URL === 'string' && import.meta.env.VITE_SOCKET_URL.trim() !== '') {
+      backendUrl = import.meta.env.VITE_SOCKET_URL.trim().replace(/\/+$/, '');
+    } else if (import.meta.env?.VITE_API_URL && typeof import.meta.env.VITE_API_URL === 'string' && import.meta.env.VITE_API_URL.trim() !== '') {
+      backendUrl = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '').trim().replace(/\/+$/, '');
     } else {
-      const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
-      backendUrl = `http://${hostname}:5000`;
+      backendUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000';
     }
 
     console.log('[Socket] Connecting to:', backendUrl);
@@ -23,8 +25,9 @@ export const getSocket = () => {
       transports: ['polling', 'websocket'],
       withCredentials: true,
       reconnection: true,
-      reconnectionAttempts: 15,
-      reconnectionDelay: 1000
+      reconnectionAttempts: 20,
+      reconnectionDelay: 1000,
+      timeout: 10000
     });
 
     socket.on('connect', () => {

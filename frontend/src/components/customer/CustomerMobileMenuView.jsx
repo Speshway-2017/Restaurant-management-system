@@ -43,6 +43,26 @@ export default function CustomerMobileMenuView({
   setIsOrderTrackingOpen = null,
   onViewBill = null
 }) {
+  const getCartItemQuantity = (dishId) => {
+    if (!cart || !dishId) return 0;
+    let total = 0;
+    Object.keys(cart).forEach(key => {
+      const entry = cart[key];
+      if (entry === undefined || entry === null) return;
+      if (typeof entry === 'number') {
+        if (key === dishId || key.startsWith(`${dishId}_`)) {
+          total += entry;
+        }
+      } else if (typeof entry === 'object') {
+        const entryDishId = entry.id || entry.menuItemId || entry.dishId || key.split('_')[0];
+        if (entryDishId === dishId || key === dishId || key.startsWith(`${dishId}_`)) {
+          total += Number(entry.quantity || entry.qty || 0);
+        }
+      }
+    });
+    return total;
+  };
+
   return (
     <div className="customer-mobile-menu-page" style={{ position: 'relative', backgroundColor: '#F8FAFC', color: '#0F172A', paddingBottom: '5rem', minHeight: '100vh' }}>
       
@@ -442,7 +462,7 @@ export default function CustomerMobileMenuView({
               {/* Mobile Dish Card List */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                 {group.items.map(item => {
-                  const qty = cart[item.id] || 0;
+                  const qty = getCartItemQuantity(item.id || item._id);
                   const itemId = item._id || item.id;
                   const isOutInStore = outOfStockItems.includes(itemId) || outOfStockItems.includes(item.name);
                   const isAvailable = item.available !== false && item.isAvailable !== false && !isOutInStore;
@@ -569,28 +589,61 @@ export default function CustomerMobileMenuView({
                               : 'LOCKED'}
                           </button>
                         ) : qty > 0 ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', backgroundColor: '#1E4636', color: '#FFFFFF', padding: '0.2rem 0.45rem', borderRadius: '8px' }}>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#1E4636',
+                            color: '#FFFFFF',
+                            borderRadius: '10px',
+                            padding: '0.25rem 0.5rem',
+                            minWidth: '82px',
+                            boxShadow: '0 2px 6px rgba(30, 70, 54, 0.25)',
+                            boxSizing: 'border-box'
+                          }}>
                             <button
                               type="button"
-                              onClick={() => handleDecreaseQty(item.id)}
-                              style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '1px' }}
+                              onClick={() => handleDecreaseQty(item.id || item._id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#FFFFFF',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '3px 4px'
+                              }}
+                              aria-label="Decrease quantity"
                             >
-                              <Minus size={13} />
+                              <Minus size={14} />
                             </button>
-                            <span style={{ fontWeight: 800, fontSize: '0.82rem', minWidth: '16px', textAlign: 'center' }}>{qty}</span>
+                            <span style={{ fontWeight: 800, fontSize: '0.88rem', minWidth: '18px', textAlign: 'center', color: '#FFFFFF' }}>
+                              {qty}
+                            </span>
                             <button
                               type="button"
                               disabled={isAddDisabled}
-                              onClick={() => !isAddDisabled && handleAddToCart(item.id)}
-                              style={{ background: 'none', border: 'none', color: isAddDisabled ? '#94A3B8' : '#FFFFFF', cursor: isAddDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', padding: '1px' }}
+                              onClick={() => !isAddDisabled && handleAddToCart(item.id || item._id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: isAddDisabled ? '#94A3B8' : '#FFFFFF',
+                                cursor: isAddDisabled ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '3px 4px'
+                              }}
+                              aria-label="Increase quantity"
                             >
-                              <Plus size={13} />
+                              <Plus size={14} />
                             </button>
                           </div>
                         ) : (
                           <button
                             type="button"
-                            onClick={() => handleAddToCart(item.id)}
+                            onClick={() => handleAddToCart(item.id || item._id)}
                             style={{
                               backgroundColor: '#1E4636',
                               color: '#FFFFFF',
@@ -600,7 +653,7 @@ export default function CustomerMobileMenuView({
                               fontWeight: 800,
                               fontSize: '0.78rem',
                               cursor: 'pointer',
-                              boxShadow: '0 2px 6px rgba(30, 70, 54, 0.25)'
+                              boxShadow: '0 2px 6px rgba(30, 70, 54, 0.2)'
                             }}
                           >
                             ADD

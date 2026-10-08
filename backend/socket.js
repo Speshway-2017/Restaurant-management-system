@@ -12,11 +12,12 @@ const initSocket = (httpServer) => {
 
         // Allowed production & localhost development origins (any dynamic port)
         const isProduction = origin === 'https://restaurant.speshway.site' ||
+                             origin === 'http://restaurant.speshway.site' ||
                              origin.endsWith('.speshway.site');
-        const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 
         if (isProduction || isLocalhost) {
-          return callback(null, true);
+          return callback(null, origin);
         }
 
         console.warn(`[Socket CORS] Origin rejected: ${origin}`);

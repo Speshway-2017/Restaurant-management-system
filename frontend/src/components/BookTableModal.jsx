@@ -68,7 +68,8 @@ export default function BookTableModal({ isOpen, onClose }) {
       } else if (api.createReceptionistReservation) {
         res = await api.createReceptionistReservation(bookingPayload);
       } else {
-        const response = await fetch('http://localhost:5000/api/reservations', {
+        const apiBase = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/+$/, '') : 'http://localhost:5000/api';
+        const response = await fetch(`${apiBase}/reservations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(bookingPayload)

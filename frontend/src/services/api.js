@@ -1,10 +1,14 @@
 const getApiBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && !envUrl.includes('localhost')) {
-    return envUrl;
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (isLocalhost) {
+    // In local dev mode, use Vite proxy /api to route to local backend seamlessly
+    return '/api';
   }
-  const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
-  return `http://${hostname}:5000/api`;
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  return '/api';
 };
 
 const API_BASE = getApiBaseUrl();
@@ -119,6 +123,13 @@ export const api = {
     return request(`/orders/${cleanId}/waiter-status`, {
       method: 'PATCH',
       body: JSON.stringify({ status })
+    });
+  },
+  confirmWaiterPayment: (id, extraData = {}) => {
+    const cleanId = encodeURIComponent(String(id || '').replace(/^#/i, '').trim());
+    return request(`/orders/${cleanId}/confirm-payment`, {
+      method: 'PATCH',
+      body: JSON.stringify(extraData)
     });
   },
   clearAllOrders: () => request('/orders/all', { method: 'DELETE' }),

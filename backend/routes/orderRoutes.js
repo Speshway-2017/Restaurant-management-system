@@ -10,6 +10,7 @@ const {
   chefUpdateStatus,
   waiterAcceptOrder,
   waiterUpdateStatus,
+  confirmWaiterPayment,
   updateOrderItemStatus,
   clearAllOrders,
   callWaiter,
@@ -31,6 +32,7 @@ router.patch('/:id/chef-accept', chefAcceptOrder);
 router.patch('/:id/chef-status', chefUpdateStatus);
 router.patch('/:id/waiter-accept', protect, requireWaiterRole, waiterAcceptOrder);
 router.patch('/:id/waiter-status', protect, requireWaiterRole, waiterUpdateStatus);
+router.patch('/:id/confirm-payment', confirmWaiterPayment);
 router.patch('/:id/status', updateOrderStatus);
 router.patch('/:id/items/status', updateOrderItemStatus);
 router.delete('/all', clearAllOrders);

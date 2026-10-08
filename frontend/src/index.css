@@ -8381,3 +8381,640 @@ div[style*="position:fixed"]>div,
     margin: 0 !important;
   }
 }
+
+/* ==========================================================================
+   CHEF DASHBOARD RESPONSIVE DESIGN SYSTEM (MOBILE, TABLET & DESKTOP)
+   ========================================================================== */
+
+/* Mobile Top Header Optimization */
+@media (max-width: 768px) {
+  .admin-top-header {
+    padding: 0.5rem 0.75rem !important;
+    height: auto !important;
+    min-height: 56px !important;
+  }
+
+  .admin-header-left h2 {
+    font-size: 0.92rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 150px !important;
+  }
+
+  .admin-content-viewport {
+    padding: 0.85rem 0.65rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-header-left h2 {
+    max-width: 110px !important;
+  }
+}
+
+/* Hide non-essential header widgets on small mobile */
+@media (max-width: 640px) {
+  .chef-header-clock {
+    display: none !important;
+  }
+  
+  .chef-user-info-text .admin-user-role {
+    display: none !important;
+  }
+}
+
+@media (max-width: 440px) {
+  .chef-user-info-text {
+    display: none !important;
+  }
+}
+
+/* Horizontally Scrollable Filter Chips */
+.chef-status-filter-scroll {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0.2rem 0;
+}
+.chef-status-filter-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Responsive Metric Summary Cards Grid */
+.chef-summary-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 1024px) {
+  .chef-summary-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .chef-summary-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+}
+
+/* Responsive KDS Order Ticket Cards Grid */
+.chef-ticket-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 767px) {
+  .chef-ticket-card-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.85rem;
+  }
+}
+
+/* Compact Ticket Layout Override */
+.chef-ticket-card-grid.is-compact {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+@media (max-width: 767px) {
+  .chef-ticket-card-grid.is-compact {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Ticket Text Wrapping & Touch Optimization */
+.chef-ticket-item-name {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.chef-special-note-box {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.chef-action-touch-btn {
+  min-height: 44px;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+/* ==========================================================================
+   GLOBAL RESPONSIVE BREAKPOINTS & WEBSITE MOBILE OPTIMIZATIONS
+   ========================================================================== */
+
+/* Kinetic Words in Hero Heading */
+.kinetic-phrase-wrap {
+  display: inline;
+}
+.kinetic-word {
+  display: inline-block;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* ==========================================================================
+   MOBILE-ONLY RESPONSIVE OVERRIDES (@media (max-width: 767px))
+   ========================================================================== */
+@media (max-width: 767px) {
+
+  /* Site-wide Overflow & Padding Control */
+  html, body {
+    max-width: 100vw !important;
+    overflow-x: clip !important;
+  }
+
+  .homepage-wrapper,
+  section,
+  main {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  img, svg, video {
+    max-width: 100% !important;
+  }
+
+  /* Mobile Navbar Header */
+  .navbar-container {
+    padding: 0.65rem 1rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .brand-logo-link img {
+    height: 28px !important;
+    width: auto !important;
+  }
+
+  .brand-text-logo {
+    font-size: 1.05rem !important;
+    white-space: nowrap !important;
+  }
+
+  .nav-btn-book-table {
+    display: none !important;
+  }
+
+  .nav-btn-login button {
+    padding: 0.35rem 0.85rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  .mobile-hamburger-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+  }
+
+  /* Mobile Hero Carousel Layout & Typography Overrides */
+  .ref-hero-wrapper {
+    padding: 2.25rem 1rem 3rem 1rem !important;
+    min-height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  .ref-hero-container {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1.25rem !important;
+    text-align: center !important;
+    max-width: 390px !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Badges at top */
+  .ref-hero-container > div:first-child > div:first-child {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    margin-bottom: 0.75rem !important;
+    width: 100% !important;
+  }
+
+  .ref-hero-badge {
+    white-space: nowrap !important;
+    font-size: 0.76rem !important;
+    padding: 0.35rem 0.85rem !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Mobile Hero Title & Word Spacing */
+  .ref-hero-title {
+    font-size: 1.65rem !important;
+    line-height: 1.25 !important;
+    max-width: 100% !important;
+    margin: 0 auto 0.85rem auto !important;
+    text-align: center !important;
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+    hyphens: none !important;
+  }
+
+  .kinetic-center-build-container {
+    display: block !important;
+    text-align: center !important;
+  }
+
+  .kinetic-word {
+    font-size: inherit !important;
+    line-height: inherit !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+  }
+
+  /* Mobile Hero Subtitle */
+  .ref-hero-subtitle {
+    font-size: 0.92rem !important;
+    line-height: 1.55 !important;
+    max-width: 100% !important;
+    margin: 0 auto 1.25rem auto !important;
+    text-align: center !important;
+    color: #4A5568 !important;
+  }
+
+  /* Mobile Hero Buttons Container */
+  .smooth-cta2-container,
+  .ref-hero-container > div:first-child > div:nth-child(4) {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    margin: 0 auto 1.25rem auto !important;
+  }
+
+  .smooth-cta2-primary,
+  .smooth-cta2-secondary,
+  .ref-hero-cta-btn {
+    width: fit-content !important;
+    max-width: 100% !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 0.75rem 1.75rem !important;
+    font-size: 0.92rem !important;
+    box-sizing: border-box !important;
+    white-space: nowrap !important;
+  }
+
+  .smooth-cta2-primary span,
+  .smooth-cta2-secondary span {
+    white-space: nowrap !important;
+  }
+
+  /* Mobile Feature / Trust Badges Bar */
+  .hero-trust-bar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.4rem 0.6rem !important;
+    padding: 0.65rem 0.85rem !important;
+    width: 100% !important;
+    max-width: 360px !important;
+    margin: 0 auto 1rem auto !important;
+    border-radius: 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  .hero-trust-item {
+    font-size: 0.75rem !important;
+    white-space: nowrap !important;
+    gap: 0.35rem !important;
+  }
+
+  .hero-trust-divider {
+    display: inline-block !important;
+    width: 4px !important;
+    height: 4px !important;
+    opacity: 0.5 !important;
+  }
+
+  /* Mobile 3D Stage & Food Image */
+  .ref-hero-dish-stage {
+    position: relative !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 310px !important;
+    margin: 0.5rem auto 0 auto !important;
+    padding: 1.75rem 0 !important;
+  }
+
+  .ref-hero-main-img {
+    width: 100% !important;
+    max-width: 210px !important;
+    height: auto !important;
+    max-height: 210px !important;
+    object-fit: contain !important;
+    z-index: 5 !important;
+    margin: 0 auto !important;
+  }
+
+  .dish-stage-halo,
+  .luxury-stage-ring {
+    width: 210px !important;
+    height: 210px !important;
+  }
+
+  /* Floating Glass Badges Attached to Food Image */
+  .hero-glass-card-1 {
+    position: absolute !important;
+    top: -4px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    z-index: 10 !important;
+    padding: 0.45rem 0.85rem !important;
+    border-radius: 12px !important;
+    font-size: 0.74rem !important;
+    white-space: nowrap !important;
+    max-width: 90% !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  .hero-glass-card-2 {
+    position: absolute !important;
+    bottom: -4px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    z-index: 10 !important;
+    padding: 0.45rem 0.85rem !important;
+    border-radius: 12px !important;
+    font-size: 0.74rem !important;
+    white-space: nowrap !important;
+    max-width: 90% !important;
+    box-shadow: 0 8px 20px rgba(15, 42, 29, 0.25) !important;
+  }
+
+  .hero-glass-card-1 img,
+  .hero-glass-card-2 img {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  /* Carousel Pagination Dots on Mobile */
+  .hero-pagination-dots {
+    position: relative !important;
+    bottom: auto !important;
+    left: auto !important;
+    transform: none !important;
+    margin: 1.25rem auto 0 auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    gap: 0.6rem !important;
+    z-index: 20 !important;
+  }
+
+  /* Site-wide Grids & Section Overrides */
+  .product-cards-grid,
+  .combos-grid,
+  .menu-highlights-grid,
+  .features-grid,
+  .offers-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+    padding: 0 1rem !important;
+  }
+
+  .gallery-masonry-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.85rem !important;
+  }
+
+  .cta-section-wrapper,
+  .cta-container {
+    padding: 2rem 1rem !important;
+    text-align: center !important;
+  }
+
+  .footer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 2rem !important;
+    text-align: center !important;
+  }
+
+  .footer-brand-section,
+  .footer-links-col {
+    align-items: center !important;
+    text-align: center !important;
+  }
+
+  /* ==========================================================================
+     MOBILE RESPONSIVE OVERRIDES FOR OUR STORY & HASSLE-FREE DINING
+     ========================================================================== */
+
+  /* OUR STORY MOBILE LAYOUT */
+  .home-our-story-section {
+    padding: 2.25rem 1rem !important;
+  }
+
+  .our-story-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1.25rem !important;
+  }
+
+  .our-story-text-col {
+    display: contents !important;
+  }
+
+  .our-story-label {
+    order: 1 !important;
+    font-size: 0.8rem !important;
+    margin-bottom: 0.25rem !important;
+    text-align: left !important;
+  }
+
+  .our-story-heading {
+    order: 2 !important;
+    font-size: 1.7rem !important;
+    line-height: 1.25 !important;
+    margin-bottom: 0.75rem !important;
+    color: #0F2A1D !important;
+    text-align: left !important;
+    max-width: 100% !important;
+  }
+
+  .our-story-img-col {
+    order: 3 !important;
+    width: 100% !important;
+    max-width: 320px !important;
+    margin: 0.25rem auto 1rem auto !important;
+  }
+
+  .our-story-img-col img {
+    width: 100% !important;
+    max-height: 240px !important;
+    object-fit: cover !important;
+    border-radius: 18px !important;
+  }
+
+  .our-story-desc-block {
+    order: 4 !important;
+  }
+
+  .our-story-desc-block p {
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
+    margin-bottom: 0.85rem !important;
+    color: #4A5568 !important;
+    text-align: left !important;
+  }
+
+  .our-story-stats-row {
+    order: 5 !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.5rem !important;
+    margin-bottom: 1.25rem !important;
+    padding-top: 1rem !important;
+    border-top: 1px solid rgba(15, 42, 29, 0.12) !important;
+    text-align: center !important;
+  }
+
+  .our-story-stat-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .our-story-stat-num {
+    font-size: 1.5rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .our-story-stat-label {
+    font-size: 0.68rem !important;
+    line-height: 1.2 !important;
+    margin-top: 0.2rem !important;
+  }
+
+  .our-story-cta-wrap {
+    order: 6 !important;
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  .our-story-cta-wrap button {
+    width: auto !important;
+    min-height: 44px !important;
+    padding: 0.75rem 1.75rem !important;
+  }
+
+  /* HASSLE-FREE DINING MOBILE LAYOUT */
+  .home-dining-banner-section {
+    padding: 2.25rem 1rem !important;
+  }
+
+  .dining-banner-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1.25rem !important;
+    text-align: center !important;
+  }
+
+  .dining-banner-text-col {
+    display: contents !important;
+  }
+
+  .dining-banner-badge {
+    order: 1 !important;
+    align-self: center !important;
+    margin: 0 auto 0.5rem auto !important;
+  }
+
+  .dining-banner-heading {
+    order: 2 !important;
+    font-size: 1.65rem !important;
+    line-height: 1.25 !important;
+    margin-bottom: 0.75rem !important;
+    text-align: center !important;
+  }
+
+  .dining-banner-desc {
+    order: 3 !important;
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
+    margin: 0 auto 1rem auto !important;
+    max-width: 100% !important;
+    color: #000000ff !important;
+    text-align: center !important;
+  }
+
+  .dining-banner-img-col {
+    order: 4 !important;
+    width: 100% !important;
+    max-width: 320px !important;
+    margin: 0.25rem auto 1rem auto !important;
+  }
+
+  .dining-banner-img-col img {
+    max-height: 220px !important;
+    object-fit: cover !important;
+    border-radius: 18px !important;
+  }
+
+  .dining-banner-features {
+    order: 5 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 0.65rem !important;
+    margin-bottom: 1.25rem !important;
+    width: 100% !important;
+  }
+
+  .dining-banner-features > div {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+    font-size: 0.9rem !important;
+    color: #000000 !important;
+  }
+
+  .dining-banner-cta {
+    order: 6 !important;
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  .dining-banner-cta button {
+    min-height: 46px !important;
+    padding: 0.8rem 1.8rem !important;
+    font-size: 0.95rem !important;
+  }
+}

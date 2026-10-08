@@ -425,7 +425,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
               </span>
             </div>
 
-            <h1 className="ref-hero-title" style={{ fontSize: 'clamp(2.4rem, 5vw, 3.8rem)', fontWeight: 800, lineHeight: 1.15, marginBottom: '1.25rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
+            <h1 className="ref-hero-title" style={{ fontSize: 'clamp(1.5rem, 4.5vw, 3.5rem)', fontWeight: 800, lineHeight: 1.15, marginBottom: '1.25rem', color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
               <KineticCenterBuild
                 phrases={heroSlides.map(s => s.title)}
                 activePhraseIndex={currentSlide}
@@ -477,6 +477,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
 
             {/* Floating Glassmorphic Dish Card 1 (NO RATING BADGE) */}
             <div
+              className="hero-glass-card-1"
               style={{
                 position: 'absolute',
                 top: '4%',
@@ -504,6 +505,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
 
             {/* Floating Glassmorphic Dish Card 2 (NO RATING BADGE) */}
             <div
+              className="hero-glass-card-2"
               style={{
                 position: 'absolute',
                 bottom: '6%',
@@ -553,7 +555,7 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
         </div>
 
         {/* Slide Pagination Indicator Pills */}
-        <div style={{ position: 'absolute', bottom: '2rem', left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', gap: '0.6rem' }}>
+        <div className="hero-pagination-dots" style={{ position: 'absolute', bottom: '2rem', left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', gap: '0.6rem' }}>
           {heroSlides.map((_, idx) => (
             <button
               key={idx}
@@ -599,49 +601,53 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
       </section>
 
       {/* ================= 3. OUR STORY & HERITAGE (LUXURY RMS FRESH MINT TINT) ================= */}
-      <section style={{ backgroundColor: '#F0F7F3', padding: '3.5rem 1.5rem', borderTop: '1px solid #D8EADF' }}>
+      <section className="home-our-story-section" style={{ backgroundColor: '#F0F7F3', padding: '3.5rem 1.5rem', borderTop: '1px solid #D8EADF' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'center' }}>
+          <div className="our-story-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'center' }}>
 
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+            <div className="our-story-text-col">
+              <div className="our-story-label" style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#E07A3C', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                 OUR STORY & LEGACY
               </div>
 
-              <h2 className="text-h1" style={{ fontSize: '2.3rem', color: '#0F2A1D', marginBottom: '1.25rem', fontFamily: 'var(--font-heading)', lineHeight: 1.25 }}>
+              <h2 className="text-h1 our-story-heading" style={{ fontSize: '2.3rem', color: '#0F2A1D', marginBottom: '1.25rem', fontFamily: 'var(--font-heading)', lineHeight: 1.25 }}>
                 A Journey of Authentic Flavors & Modern Hospitality
               </h2>
 
-              <p className="text-body" style={{ color: '#4A5568', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.25rem' }}>
-                {brandName} brings the rich, authentic culinary traditions of India to your dining table. Founded in <strong>Jubilee Hills, Hyderabad in 2017</strong>, our master chefs infuse age-old recipes with Kashmiri spices, clay-tandoor roasting, and modern digital dining convenience.
-              </p>
+              <div className="our-story-desc-block">
+                <p className="text-body" style={{ color: '#4A5568', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.25rem' }}>
+                  {brandName} brings the rich, authentic culinary traditions of India to your dining table. Founded in <strong>Jubilee Hills, Hyderabad in 2017</strong>, our master chefs infuse age-old recipes with Kashmiri spices, clay-tandoor roasting, and modern digital dining convenience.
+                </p>
 
-              <p className="text-body" style={{ color: '#4A5568', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>
-                From royal dum biryanis to slow-simmered Dal Makhani Gold, every dish is prepared fresh to order with pure desi ghee and hand-milled spices.
-              </p>
+                <p className="text-body" style={{ color: '#4A5568', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>
+                  From royal dum biryanis to slow-simmered Dal Makhani Gold, every dish is prepared fresh to order with pure desi ghee and hand-milled spices.
+                </p>
+              </div>
 
-              <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.75rem', borderTop: '1px solid rgba(15, 42, 29, 0.12)', paddingTop: '1.25rem' }}>
-                <div>
-                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>2017</div>
-                  <div style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Year Founded</div>
+              <div className="our-story-stats-row" style={{ display: 'flex', gap: '2rem', marginBottom: '1.75rem', borderTop: '1px solid rgba(15, 42, 29, 0.12)', paddingTop: '1.25rem' }}>
+                <div className="our-story-stat-item">
+                  <div className="our-story-stat-num" style={{ fontSize: '2rem', fontWeight: 700, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>2017</div>
+                  <div className="our-story-stat-label" style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Year Founded</div>
                 </div>
-                <div>
-                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#E07A3C', fontFamily: 'var(--font-heading)' }}>500K+</div>
-                  <div style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Happy Diners</div>
+                <div className="our-story-stat-item">
+                  <div className="our-story-stat-num" style={{ fontSize: '2rem', fontWeight: 700, color: '#E07A3C', fontFamily: 'var(--font-heading)' }}>500K+</div>
+                  <div className="our-story-stat-label" style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Happy Diners</div>
                 </div>
-                <div>
-                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#2E7D32', fontFamily: 'var(--font-heading)' }}>50+</div>
-                  <div style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Royal Dishes</div>
+                <div className="our-story-stat-item">
+                  <div className="our-story-stat-num" style={{ fontSize: '2rem', fontWeight: 700, color: '#2E7D32', fontFamily: 'var(--font-heading)' }}>50+</div>
+                  <div className="our-story-stat-label" style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', fontWeight: 700 }}>Royal Dishes</div>
                 </div>
               </div>
 
-              <MagneticButton onClick={() => setActivePage('about')} variant="default">
-                <span>Read Full Story</span>
-                <ArrowRight size={16} />
-              </MagneticButton>
+              <div className="our-story-cta-wrap">
+                <MagneticButton onClick={() => setActivePage('about')} variant="default">
+                  <span>Read Full Story</span>
+                  <ArrowRight size={16} />
+                </MagneticButton>
+              </div>
             </div>
 
-            <div style={{ position: 'relative' }}>
+            <div className="our-story-img-col" style={{ position: 'relative' }}>
               <div
                 style={{
                   position: 'absolute',
@@ -713,28 +719,28 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
       </section>
 
       {/* ================= 4.5. BOOK A TABLE CALLOUT BANNER ================= */}
-      <section style={{ backgroundColor: '#0F2A1D', padding: '3.5rem 1.5rem', position: 'relative', overflow: 'hidden', color: '#FFFFFF' }}>
+      <section className="home-dining-banner-section" style={{ backgroundColor: '#0F2A1D', padding: '3.5rem 1.5rem', position: 'relative', overflow: 'hidden', color: '#FFFFFF' }}>
         <div style={{ position: 'absolute', top: '-60px', right: '-60px', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255, 138, 0, 0.25), transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: '-80px', left: '-80px', width: '350px', height: '350px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(74, 127, 181, 0.2), transparent 70%)', pointerEvents: 'none' }} />
 
-        <div style={{ maxWidth: '1180px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2.5rem', alignItems: 'center', position: 'relative', zIndex: 2 }}>
-          <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', backgroundColor: 'rgba(255, 138, 0, 0.15)', border: '1px solid rgba(255, 138, 0, 0.4)', borderRadius: '9999px', padding: '0.35rem 0.85rem', marginBottom: '1rem' }}>
+        <div className="dining-banner-grid" style={{ maxWidth: '1180px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2.5rem', alignItems: 'center', position: 'relative', zIndex: 2 }}>
+          <div className="dining-banner-text-col">
+            <div className="dining-banner-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', backgroundColor: 'rgba(255, 138, 0, 0.15)', border: '1px solid rgba(255, 138, 0, 0.4)', borderRadius: '9999px', padding: '0.35rem 0.85rem', marginBottom: '1rem' }}>
               <Sparkles size={14} color="#FF8A00" />
               <span style={{ fontSize: '0.78rem', color: '#FF8A00', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Hassle-Free Dining
               </span>
             </div>
 
-            <h2 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2, margin: '0 0 1rem 0', fontFamily: 'var(--font-heading)' }}>
+            <h2 className="dining-banner-heading" style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 800, color: '#000000ff', lineHeight: 1.2, margin: '0 0 1rem 0', fontFamily: 'var(--font-heading)' }}>
               Reserve Your Table in Advance
             </h2>
 
-            <p style={{ fontSize: '1.02rem', color: '#0F2A1D', lineHeight: 1.65, margin: '0 0 1.5rem 0', maxWidth: '560px' }}>
+            <p className="dining-banner-desc" style={{ fontSize: '1.02rem', color: '#000000ff', lineHeight: 1.65, margin: '0 0 1.5rem 0', maxWidth: '560px' }}>
               Planning a royal family feast, romantic candlelight dinner, or business lunch? Book your table with instant confirmation, live seating preferences, and dedicated chef hospitality.
             </p>
 
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.75rem' }}>
+            <div className="dining-banner-features" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.86rem', color: '#0F2A1D', fontWeight: 600 }}>
                 <CheckCircle2 size={16} color="#FF8A00" />
                 <span>Zero Booking Fees</span>
@@ -749,40 +755,42 @@ export default function HomePage({ setActivePage, onOpenDemoModal, onOpenBookTab
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (onOpenBookTable) {
-                  onOpenBookTable();
-                } else if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new Event('flavora_open_book_table'));
-                }
-              }}
-              style={{
-                backgroundColor: '#FF8A00',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: '12px',
-                padding: '0.85rem 2.2rem',
-                fontSize: '1rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.6rem',
-                boxShadow: '0 8px 24px rgba(255, 138, 0, 0.45)',
-                transition: 'transform 0.15s ease'
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.04)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-            >
-              <Calendar size={18} />
-              <span>Book a Table Now</span>
-              <ArrowRight size={18} />
-            </button>
+            <div className="dining-banner-cta">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenBookTable) {
+                    onOpenBookTable();
+                  } else if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('flavora_open_book_table'));
+                  }
+                }}
+                style={{
+                  backgroundColor: '#FF8A00',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '0.85rem 2.2rem',
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  boxShadow: '0 8px 24px rgba(255, 138, 0, 0.45)',
+                  transition: 'transform 0.15s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.04)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                <Calendar size={18} />
+                <span>Book a Table Now</span>
+                <ArrowRight size={18} />
+              </button>
+            </div>
           </div>
 
-          <div style={{ position: 'relative' }}>
+          <div className="dining-banner-img-col" style={{ position: 'relative' }}>
             <ThreeDImage
               src="/restaurant_ambience.png"
               alt="Restaurant Ambience"
