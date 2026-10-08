@@ -234,6 +234,8 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
                 }
               }
             },
+            onConfirmPayment: () => _showConfirmPaymentDialog(context, provider, ord),
+            onMarkCompleted: () => _handleMarkOrderCompleted(context, provider, ord),
           );
         },
       );
@@ -244,5 +246,73 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
       onRefresh: () => provider.fetchOrders(),
       child: listWidget,
     );
+  }
+
+  Future<void> _showConfirmPaymentDialog(BuildContext context, OrdersProvider provider, OrderModel ord) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: Color(0xFF166534)),
+            SizedBox(width: 8),
+            Text('Confirm Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Confirm that ₹${ord.totalAmount.toStringAsFixed(0)} ${ord.paymentMethod.isNotEmpty ? ord.paymentMethod.toUpperCase() : "UPI"} payment for Table ${ord.table} (Order #${ord.orderId}) has been received?',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF166534),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _selectedActionOrderId = ord.id);
+      final success = await provider.confirmWaiterPayment(ord.id);
+      if (!mounted) return;
+      setState(() => _selectedActionOrderId = '');
+      if (success) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('✓ Payment received confirmed for Table ${ord.table}!'),
+            backgroundColor: const Color(0xFF166534),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleMarkOrderCompleted(BuildContext context, OrdersProvider provider, OrderModel ord) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _selectedActionOrderId = ord.id);
+    final success = await provider.markOrderCompleted(ord.id);
+    if (mounted) {
+      setState(() => _selectedActionOrderId = '');
+      if (success) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('✓ Order #${ord.orderId} marked as Completed!'),
+            backgroundColor: const Color(0xFF166534),
+          ),
+        );
+      }
+    }
   }
 }

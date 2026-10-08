@@ -48,6 +48,8 @@ class ApiConstants {
       '/orders/$orderId/waiter-status';
   static String updateOrderStatus(String orderId) =>
       '/orders/$orderId/status';
+  static String confirmPayment(String orderId) =>
+      '/orders/$orderId/confirm-payment';
   static String requestCancelItem(String orderId) =>
       '/orders/$orderId/cancel-request';
   static const String getAssistanceRequests = '/orders/assistance';

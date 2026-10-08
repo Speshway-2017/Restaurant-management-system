@@ -57,6 +57,9 @@ class OrderModel {
   final String couponCode;
   final String notes;
   final String createdAt;
+  final String waiterPaymentConfirmation;
+  final String waiterPaymentConfirmedBy;
+  final String waiterPaymentConfirmedAt;
 
   OrderModel({
     required this.id,
@@ -80,6 +83,9 @@ class OrderModel {
     this.couponCode = '',
     this.notes = '',
     this.createdAt = '',
+    this.waiterPaymentConfirmation = 'PENDING',
+    this.waiterPaymentConfirmedBy = '',
+    this.waiterPaymentConfirmedAt = '',
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
@@ -112,6 +118,9 @@ class OrderModel {
       couponCode: json['couponCode']?.toString() ?? json['coupon']?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
       createdAt: json['createdAt']?.toString() ?? json['date']?.toString() ?? '',
+      waiterPaymentConfirmation: json['waiterPaymentConfirmation']?.toString() ?? 'PENDING',
+      waiterPaymentConfirmedBy: json['waiterPaymentConfirmedBy']?.toString() ?? '',
+      waiterPaymentConfirmedAt: json['waiterPaymentConfirmedAt']?.toString() ?? '',
     );
   }
 
@@ -125,6 +134,7 @@ class OrderModel {
   bool get isReadyToServe => !isServed && (chefStatus == 'READY' || status == 'Ready' || readyItemsCount > 0);
   bool get isAcceptedByWaiter => waiterStatus == 'ACCEPTED' || waiterStatus == 'SERVING' || waiterStatus == 'SERVED';
   bool get isPaid => paymentStatus == 'Paid' || paymentStatus == 'Completed';
+  bool get isWaiterPaymentConfirmed => waiterPaymentConfirmation == 'CONFIRMED';
   bool get isBillGenerated => status == 'Bill Generated' || status == 'Billed' || paymentStatus == 'Awaiting Payment';
 
   List<OrderItemModel> get activeItems => items.where((it) => !it.isCancelled).toList();
