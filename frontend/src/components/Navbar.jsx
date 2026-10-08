@@ -110,43 +110,47 @@ export default function Navbar({ activePage, setActivePage, onOpenBookTable }) {
           {/* Right Actions & Mobile Hamburger */}
           <div className="nav-actions">
             {!isCustomerMenuPage && (
-              <MagneticButton
-                onClick={() => {
-                  if (onOpenBookTable) {
-                    onOpenBookTable();
-                  } else if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new Event('flavora_open_book_table'));
-                  }
-                }}
-                variant="primary"
-                style={{
-                  backgroundColor: '#0F2A1D',
-                  color: '#FFFFFF',
-                  padding: '0.45rem 1.15rem',
-                  fontSize: '0.82rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.45rem',
-                  borderRadius: '9999px',
-                  border: '1.5px solid #0F2A1D',
-                  boxShadow: '0 4px 12px rgba(15, 42, 29, 0.18)',
-                  cursor: 'pointer'
-                }}
-              >
-                <Calendar size={14} color="#FF8A00" />
-                <span style={{ fontWeight: 800, letterSpacing: '0.02em' }}>BOOK TABLE</span>
-              </MagneticButton>
+              <div className="nav-btn-book-table">
+                <MagneticButton
+                  onClick={() => {
+                    if (onOpenBookTable) {
+                      onOpenBookTable();
+                    } else if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new Event('flavora_open_book_table'));
+                    }
+                  }}
+                  variant="primary"
+                  style={{
+                    backgroundColor: '#0F2A1D',
+                    color: '#FFFFFF',
+                    padding: '0.45rem 1.15rem',
+                    fontSize: '0.82rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    borderRadius: '9999px',
+                    border: '1.5px solid #0F2A1D',
+                    boxShadow: '0 4px 12px rgba(15, 42, 29, 0.18)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Calendar size={14} color="#FF8A00" />
+                  <span style={{ fontWeight: 800, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>BOOK TABLE</span>
+                </MagneticButton>
+              </div>
             )}
 
             {activePage !== 'menu' && (
-              <MagneticButton
-                onClick={() => handleNavClick('login')}
-                variant="secondary"
-                style={{ padding: '0.45rem 1.1rem', fontSize: '0.82rem' }}
-              >
-                <LogIn size={15} />
-                <span>LOGIN</span>
-              </MagneticButton>
+              <div className="nav-btn-login">
+                <MagneticButton
+                  onClick={() => handleNavClick('login')}
+                  variant="secondary"
+                  style={{ padding: '0.45rem 1.1rem', fontSize: '0.82rem' }}
+                >
+                  <LogIn size={15} />
+                  <span>LOGIN</span>
+                </MagneticButton>
+              </div>
             )}
 
             {!isCustomerMenuPage && (

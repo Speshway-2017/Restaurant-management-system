@@ -697,6 +697,36 @@ const waiterUpdateStatus = async (req, res) => {
   }
 };
 
+const confirmWaiterPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const waiterData = { ...req.body };
+    if (req.user) {
+      waiterData.waiterId = req.user._id ? req.user._id.toString() : '';
+      waiterData.waiterName = req.user.name || 'Waiter';
+    }
+    const updated = await orderService.confirmWaiterPayment(id, waiterData);
+
+    try {
+      const socket = require('../socket');
+      if (socket.notifyOrderStatusUpdated) {
+        socket.notifyOrderStatusUpdated(updated, {
+          status: updated.status,
+          waiterPaymentConfirmation: 'CONFIRMED',
+          waiterPaymentConfirmedBy: updated.waiterPaymentConfirmedBy,
+          waiterPaymentConfirmedAt: updated.waiterPaymentConfirmedAt
+        });
+      }
+    } catch (sErr) {
+      console.warn('Socket error in confirmWaiterPayment:', sErr.message);
+    }
+
+    return successResponse(res, updated, 'Waiter payment confirmation recorded successfully');
+  } catch (error) {
+    return errorResponse(res, error.message, 400);
+  }
+};
+
 module.exports = {
   getOrders,
   createOrder,
@@ -706,6 +736,7 @@ module.exports = {
   chefUpdateStatus,
   waiterAcceptOrder,
   waiterUpdateStatus,
+  confirmWaiterPayment,
   updateOrderItemStatus,
   clearAllOrders,
   callWaiter,

@@ -213,8 +213,9 @@ export default function MenuPage({ onOpenDemoModal }) {
         // 1. Query active session (Backend Source of Truth for both Receptionist & Direct Walk-In)
         let activeSess = null;
         let sessTableStatus = null;
+        let sessRes = null;
         try {
-          const sessRes = await api.getActiveTableSession(tableNum);
+          sessRes = await api.getActiveTableSession(tableNum);
           if (sessRes && (sessRes.tableStatus === 'Cleaning' || sessRes.message === 'Table Unavailable — Cleaning')) {
             sessTableStatus = 'Cleaning';
           }
@@ -645,6 +646,26 @@ export default function MenuPage({ onOpenDemoModal }) {
     return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
   }, [tableNum, activeTableSession?.sessionToken]);
 
+  const getCartItemQuantity = (dishId) => {
+    if (!cart || !dishId) return 0;
+    let total = 0;
+    Object.keys(cart).forEach(key => {
+      const entry = cart[key];
+      if (entry === undefined || entry === null) return;
+      if (typeof entry === 'number') {
+        if (key === dishId || key.startsWith(`${dishId}_`)) {
+          total += entry;
+        }
+      } else if (typeof entry === 'object') {
+        const entryDishId = entry.id || entry.menuItemId || entry.dishId || key.split('_')[0];
+        if (entryDishId === dishId || key === dishId || key.startsWith(`${dishId}_`)) {
+          total += Number(entry.quantity || entry.qty || 0);
+        }
+      }
+    });
+    return total;
+  };
+
   const handleAddToCart = (id, qty = 1, options = null) => {
     if (!tableNum) {
       alert(`Ordering is available exclusively for Dine-In guests via Table QR Code. Please scan your dining table's QR code to unlock dish ordering.`);
@@ -703,23 +724,43 @@ export default function MenuPage({ onOpenDemoModal }) {
   };
 
   const handleDecreaseQty = (keyOrId) => {
-    const existing = cart[keyOrId];
+    if (!keyOrId) return;
+
+    let targetKey = keyOrId;
+    let existing = cart[keyOrId];
+
+    if (!existing) {
+      const matchingKey = Object.keys(cart).find(k => {
+        const entry = cart[k];
+        if (!entry) return false;
+        if (typeof entry === 'object') {
+          const entryDishId = entry.id || entry.menuItemId || entry.dishId || k.split('_')[0];
+          return entryDishId === keyOrId || k === keyOrId || k.startsWith(`${keyOrId}_`);
+        }
+        return k === keyOrId || k.startsWith(`${keyOrId}_`);
+      });
+      if (matchingKey) {
+        targetKey = matchingKey;
+        existing = cart[matchingKey];
+      }
+    }
+
     if (!existing) return;
 
     let updated = { ...cart };
     if (typeof existing === 'number') {
       if (existing <= 1) {
-        delete updated[keyOrId];
+        delete updated[targetKey];
       } else {
-        updated[keyOrId] = existing - 1;
+        updated[targetKey] = existing - 1;
       }
     } else if (typeof existing === 'object') {
       const q = Number(existing.quantity || existing.qty || 1);
       if (q <= 1) {
-        delete updated[keyOrId];
+        delete updated[targetKey];
       } else {
         const newQty = q - 1;
-        updated[keyOrId] = {
+        updated[targetKey] = {
           ...existing,
           quantity: newQty,
           totalPrice: Number((existing.unitPrice * newQty).toFixed(2))
@@ -2650,7 +2691,11 @@ export default function MenuPage({ onOpenDemoModal }) {
 
                 <div className="customer-qr-dishes-list">
                   {Object.entries(cart).map(([id, qty]) => {
-                    const dish = findItemInCatalog(id, menuItems);
+                    const numQty = typeof qty === 'object' && qty !== null ? Number(qty.quantity || qty.qty || 1) : Number(qty || 0);
+                    if (numQty <= 0) return null;
+                    const rawId = typeof qty === 'object' && qty !== null && qty.id ? qty.id : id.split('_')[0];
+                    const dish = findItemInCatalog(rawId, menuItems) || (typeof qty === 'object' ? qty : null);
+                    const unitPrice = typeof qty === 'object' && qty !== null && qty.unitPrice !== undefined ? Number(qty.unitPrice) : Number(dish?.price || 0);
                     return dish ? (
                       <div key={id} className="customer-qr-cart-row">
                         {/* Left: Dish Name & Unit Price */}
@@ -2658,7 +2703,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                           <div className="customer-qr-cart-name">
                             {dish.name}
                           </div>
-                          <div className="customer-qr-cart-unit-price">₹{dish.price} each</div>
+                          <div className="customer-qr-cart-unit-price">₹{unitPrice} each</div>
                         </div>
 
                         {/* Right: Quantity Adjuster & Row Total */}
@@ -2672,7 +2717,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                             >
                               <Minus size={13} />
                             </button>
-                            <span className="customer-qr-qty-val">{qty}</span>
+                            <span className="customer-qr-qty-val">{numQty}</span>
                             <button
                               type="button"
                               disabled={isTableBillGenerated}
@@ -2687,7 +2732,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                               <Plus size={13} />
                             </button>
                           </div>
-                          <span className="customer-qr-row-price">₹{dish.price * qty}</span>
+                          <span className="customer-qr-row-price">₹{unitPrice * numQty}</span>
                         </div>
                       </div>
                     ) : null;
@@ -2953,31 +2998,35 @@ export default function MenuPage({ onOpenDemoModal }) {
 
                     itemsList.forEach(it => {
                       if (it.status === 'CANCELLED' || it.status === 'Cancelled') {
-                        const name = it.name;
-                        if (name && name !== 'Dish Item' && !cancelledNames.includes(name)) {
-                          cancelledNames.push(name);
+                        const rawName = typeof it.name === 'object' ? (it.name?.name || 'Dish Item') : (it.name || 'Dish Item');
+                        const nameStr = String(rawName).trim();
+                        if (nameStr && nameStr !== 'Dish Item' && !cancelledNames.includes(nameStr)) {
+                          cancelledNames.push(nameStr);
                         }
                       }
                     });
 
-                    const noteText = ord.chefNotes || ord.notes || '';
+                    const noteText = String(ord.chefNotes || ord.notes || '');
                     if (noteText.includes('Cancelled dishes:')) {
                       const match = noteText.match(/Cancelled dishes:\s*([^|(]+)/i);
                       if (match && match[1]) {
-                        const parts = match[1].split(',').map(s => s.trim()).filter(Boolean);
+                        const parts = match[1].split(',').map(s => (typeof s === 'object' ? String(s.name || '') : String(s)).trim()).filter(Boolean);
                         parts.forEach(p => {
                           let resolved = p;
                           if (/^[0-9a-fA-F]{24}$/.test(p)) {
                             const matchInItems = (ord.items || []).find(i => String(i._id || i.id || i.itemId || i.dishId || '') === p);
-                            if (matchInItems && matchInItems.name) resolved = matchInItems.name;
-                            else {
+                            if (matchInItems && matchInItems.name) {
+                              resolved = typeof matchInItems.name === 'object' ? (matchInItems.name.name || '') : String(matchInItems.name);
+                            } else {
                               const matchInCat = (menuItems || []).find(m => String(m._id || m.id || m.rawId || m.dishId || '') === p);
-                              if (matchInCat && matchInCat.name) resolved = matchInCat.name;
-                              else resolved = '';
+                              if (matchInCat && matchInCat.name) {
+                                resolved = typeof matchInCat.name === 'object' ? (matchInCat.name.name || '') : String(matchInCat.name);
+                              } else resolved = '';
                             }
                           }
-                          if (resolved && resolved !== 'Dish Item' && !cancelledNames.includes(resolved)) {
-                            cancelledNames.push(resolved);
+                          const cleanStr = String(resolved || '').trim();
+                          if (cleanStr && cleanStr !== 'Dish Item' && !cancelledNames.includes(cleanStr)) {
+                            cancelledNames.push(cleanStr);
                           }
                         });
                       }
@@ -2985,7 +3034,7 @@ export default function MenuPage({ onOpenDemoModal }) {
 
                     // Filter out cancellation metadata from chef notes
                     const cleanChefNote = (() => {
-                      const n = (ord.chefNotes || ord.notes || '').trim();
+                      const n = String(ord.chefNotes || ord.notes || '').trim();
                       if (!n) return '';
                       const parts = n.split('|').map(p => p.trim()).filter(p =>
                         p &&
@@ -3014,10 +3063,11 @@ export default function MenuPage({ onOpenDemoModal }) {
                             const isCancelledItem = it.status === 'CANCELLED' || it.status === 'Cancelled';
                             const qty = Number(it.quantity || it.qty || it.count || 1);
                             const rawP = Number(it.price || it.unitPrice || 0);
-                            const catalogMatch = (menuItems || []).find(m => (m.name || '').toLowerCase() === (it.name || '').toLowerCase());
+                            const rawName = typeof it.name === 'object' ? (it.name?.name || 'Dish Item') : (it.name || 'Dish Item');
+                            const itemName = String(rawName);
+                            const catalogMatch = (menuItems || []).find(m => (m.name || '').toLowerCase() === itemName.toLowerCase());
                             const price = rawP > 0 ? rawP : (catalogMatch ? Number(catalogMatch.price || 0) : 0);
                             const itemTotal = price * qty;
-                            const itemName = it.name || 'Dish';
 
                             return (
                               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.86rem', color: isCancelledItem ? '#94A3B8' : '#334155' }}>
@@ -3044,7 +3094,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                             {cancelledNames.map((name, cIdx) => (
                               <div key={cIdx} style={{ fontSize: '0.82rem', fontWeight: 800, color: '#991B1B', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                 <span>🔴 Cancelled:</span>
-                                <span style={{ fontWeight: 900 }}>{name}</span>
+                                <span style={{ fontWeight: 900 }}>{typeof name === 'object' ? (name.name || String(name)) : String(name)}</span>
                               </div>
                             ))}
                           </div>

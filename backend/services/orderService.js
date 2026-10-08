@@ -596,8 +596,21 @@ class OrderService {
       }
     }
 
-    const isPaid = status === 'Paid' || status === 'Completed' || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid' || fullOrderData.paymentStatus === 'Paid';
+    const isExplicitlyCompleted = status === 'Completed' || fullOrderData.orderStatus === 'Completed';
+    const isPaid = status === 'Paid' || isExplicitlyCompleted || fullOrderData.payment === 'Completed' || fullOrderData.payment === 'Paid' || fullOrderData.paymentStatus === 'Paid';
     const isBillGenerated = status === 'Bill Generated' || status === 'Awaiting Payment' || fullOrderData.isBillGenerated || fullOrderData.billGenerated || fullOrderData.payment === 'Bill Generated' || fullOrderData.payment === 'Awaiting Payment';
+
+    // BLOCK ORDER COMPLETION if waiter payment confirmation is NOT confirmed
+    if (isExplicitlyCompleted && existingOrder) {
+      const orderIsPaid = existingOrder.paymentStatus === 'Paid' || existingOrder.payment === 'Paid' || isPaid;
+      const isWaiterConfirmed = existingOrder.waiterPaymentConfirmation === 'CONFIRMED' || fullOrderData.waiterPaymentConfirmation === 'CONFIRMED';
+      if (!orderIsPaid) {
+        throw new Error(`Cannot mark order as Completed. Customer payment status must be Paid.`);
+      }
+      if (!isWaiterConfirmed) {
+        throw new Error(`Cannot mark order as Completed. Waiter payment confirmation is required first.`);
+      }
+    }
 
     // BLOCK PAYMENT if waiter has not generated the bill yet
     if (isPaid && !isBillGenerated && existingOrder) {
@@ -693,10 +706,14 @@ class OrderService {
     const txnId = fullOrderData.transactionId || (isPaid ? `TXN-${Date.now().toString().slice(-8)}` : '');
     const paidTimestamp = fullOrderData.paidAt || (isPaid ? new Date() : null);
 
+    const resolvedOrderStatus = isExplicitlyCompleted
+      ? 'Completed'
+      : (fullOrderData.orderStatus || (existingOrder?.orderStatus !== 'Completed' ? existingOrder?.orderStatus : null) || (existingOrder?.status !== 'Completed' && existingOrder?.status !== 'Paid' ? existingOrder?.status : null) || (status !== 'Paid' ? status : null) || 'Served');
+
     const updatePayload = {
       ...fullOrderData,
-      status: isPaid ? 'Completed' : (status || 'Placed'),
-      orderStatus: isPaid ? 'Completed' : (status || 'Placed'),
+      status: resolvedOrderStatus,
+      orderStatus: resolvedOrderStatus,
       payment: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.payment || 'Pending')),
       paymentStatus: isPaid ? 'Paid' : (isBillGenerated ? 'Awaiting Payment' : (fullOrderData.paymentStatus || 'Pending')),
       isBillGenerated: isBillGenerated || existingOrder?.isBillGenerated || false,
@@ -864,6 +881,51 @@ class OrderService {
     const updatedOrder = await orderRepository.updateStatus(order.orderId || order._id || id, derivedOrderStatus, extraUpdates);
 
     return updatedOrder;
+  }
+
+  async confirmWaiterPayment(id, waiterData = {}) {
+    const OrderModel = require('../models/Order');
+    let existingOrder = null;
+    try {
+      existingOrder = await orderRepository.findById(id);
+    } catch (e) { }
+
+    if (!existingOrder) {
+      const rawNum = String(id).replace(/[^0-9]/g, '');
+      if (rawNum) {
+        const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${rawNum}$`, 'i');
+        existingOrder = await OrderModel.findOne({
+          $or: [{ table: exactRegex }, { tableNumber: exactRegex }, { orderId: id }]
+        });
+      }
+    }
+
+    if (!existingOrder) {
+      throw new Error('Order not found');
+    }
+
+    const isPaid = existingOrder.paymentStatus === 'Paid' || existingOrder.payment === 'Paid' || existingOrder.status === 'Paid' || existingOrder.status === 'Completed';
+    if (!isPaid) {
+      throw new Error('Cannot confirm payment. Customer payment has not been marked as Paid.');
+    }
+
+    if (existingOrder.waiterPaymentConfirmation === 'CONFIRMED') {
+      return existingOrder;
+    }
+
+    const staffName = waiterData.waiterName || waiterData.staffName || existingOrder.waiterName || 'Staff Waiter';
+    const staffId = waiterData.waiterId || waiterData.staffId || existingOrder.waiterId || '';
+
+    existingOrder.waiterPaymentConfirmation = 'CONFIRMED';
+    existingOrder.waiterPaymentConfirmedBy = staffName;
+    existingOrder.waiterPaymentConfirmedAt = new Date();
+    if (staffId && !existingOrder.waiterId) {
+      existingOrder.waiterId = staffId;
+      existingOrder.waiterName = staffName;
+    }
+
+    await existingOrder.save();
+    return existingOrder;
   }
 }
 

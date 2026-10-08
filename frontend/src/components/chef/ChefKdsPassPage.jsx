@@ -1,7 +1,7 @@
 import React from 'react';
 import { formatTableNumber } from '../../utils/orderUtils';
 import {
-  ChefHat, Clock, CheckCircle2, AlertCircle, Flame, Utensils, CheckSquare, Square, Check, Eye
+  ChefHat, Clock, CheckCircle2, AlertCircle, Flame, Utensils, CheckSquare, Square, Check, Eye, X
 } from 'lucide-react';
 
 export default function ChefKdsPassPage({
@@ -51,35 +51,118 @@ export default function ChefKdsPassPage({
     return !isOtherChef;
   });
 
-  if (displayOrders.length === 0) {
-    return (
-      <div style={{
-        textAlign: 'center',
-        padding: '4rem 2rem',
-        backgroundColor: '#FFFFFF',
-        borderRadius: '20px',
-        border: '1px solid #E2E8F0',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
-        maxWidth: '600px',
-        margin: '2rem auto'
-      }}>
-        <ChefHat size={54} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 1rem auto' }} />
-        <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
-          No Active Tickets in Kitchen Queue
-        </h3>
-        <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.85rem', color: '#64748B' }}>
-          All incoming orders have been claimed or prepared. New QR orders will appear here automatically.
-        </p>
-      </div>
-    );
-  }
+  const newOrdersCount = (displayOrders || []).filter(o => !o.chefId && (o.status === 'Placed' || o.chefStatus === 'NEW' || !o.chefStatus)).length;
+  const preparingCount = (displayOrders || []).filter(o => o.status === 'Preparing' || o.status === 'Cooking' || o.chefStatus === 'PREPARING').length;
+  const readyCount = (displayOrders || []).filter(o => o.status === 'Ready' || o.chefStatus === 'READY').length;
+  const totalActiveCount = displayOrders.length;
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: isCompact ? 'repeat(auto-fill, minmax(210px, 1fr))' : 'repeat(auto-fill, minmax(320px, 1fr))',
-      gap: isCompact ? '0.75rem' : '1.25rem'
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+      {/* Responsive Kitchen Summary / Metric Cards Bar */}
+      <div className="chef-summary-metrics-grid">
+        {/* New Orders Card */}
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #FECACA',
+          borderRadius: '14px',
+          padding: '0.75rem 0.9rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.06)'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.68rem', color: '#991B1B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>New Orders</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#DC2626', lineHeight: 1.25 }}>{newOrdersCount}</div>
+          </div>
+          <div style={{ width: '34px', height: '34px', borderRadius: '10px', backgroundColor: '#FEF2F2', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlertCircle size={18} />
+          </div>
+        </div>
+
+        {/* Preparing Card */}
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #FFEDD5',
+          borderRadius: '14px',
+          padding: '0.75rem 0.9rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 2px 8px rgba(234, 88, 12, 0.06)'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.68rem', color: '#C2410C', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Preparing</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#EA580C', lineHeight: 1.25 }}>{preparingCount}</div>
+          </div>
+          <div style={{ width: '34px', height: '34px', borderRadius: '10px', backgroundColor: '#FFF7ED', color: '#EA580C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Flame size={18} />
+          </div>
+        </div>
+
+        {/* Ready Card */}
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #BBF7D0',
+          borderRadius: '14px',
+          padding: '0.75rem 0.9rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 2px 8px rgba(22, 101, 52, 0.06)'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Food Ready</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#166534', lineHeight: 1.25 }}>{readyCount}</div>
+          </div>
+          <div style={{ width: '34px', height: '34px', borderRadius: '10px', backgroundColor: '#F0FDF4', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <CheckCircle2 size={18} />
+          </div>
+        </div>
+
+        {/* Total Active Card */}
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: '14px',
+          padding: '0.75rem 0.9rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.68rem', color: '#475569', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Active</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0F2A1D', lineHeight: 1.25 }}>{totalActiveCount}</div>
+          </div>
+          <div style={{ width: '34px', height: '34px', borderRadius: '10px', backgroundColor: '#F8FAFC', color: '#0F2A1D', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <ChefHat size={18} />
+          </div>
+        </div>
+      </div>
+
+      {displayOrders.length === 0 ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '3.5rem 1.5rem',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '20px',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+          maxWidth: '560px',
+          margin: '1rem auto'
+        }}>
+          <ChefHat size={48} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 1rem auto' }} />
+          <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F2A1D', fontFamily: 'var(--font-heading)' }}>
+            No Active Tickets in Kitchen Queue
+          </h3>
+          <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.84rem', color: '#64748B' }}>
+            All incoming orders have been claimed or prepared. New QR orders will appear here automatically.
+          </p>
+        </div>
+      ) : (
+        <div className={`chef-ticket-card-grid ${isCompact ? 'is-compact' : ''}`}>
       {displayOrders.map(ord => {
         const elapsedMins = getElapsedMins(ord.createdAt);
         const isOverdue = elapsedMins > overdueLimit;
@@ -187,7 +270,7 @@ export default function ChefKdsPassPage({
                 if (!cleanNote) return null;
 
                 return (
-                  <div style={{
+                  <div className="chef-special-note-box" style={{
                     backgroundColor: '#FFF3EB',
                     border: '1px solid #FDBA74',
                     borderRadius: '10px',
@@ -273,9 +356,9 @@ export default function ChefKdsPassPage({
                         title={isCancelled ? 'Dish cancelled by waiter/customer' : (!isStarted ? '⚠️ Click "🔥 Start Cooking" below to start preparing & ticking dishes' : (isDelivered ? 'Dish already served' : 'Click to toggle dish ready status'))}
                         style={{
                           display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '0.55rem 0.75rem',
+                          flexDirection: 'column',
+                          gap: '0.35rem',
+                          padding: '0.6rem 0.75rem',
                           backgroundColor: isCancelled ? '#FEF2F2' : (isDelivered ? '#F1F5F9' : (isReady ? '#F0FDF4' : (isCooking ? '#FFF7ED' : (isItemAccepted ? '#F0F9FF' : '#FAFAFA')))),
                           borderRadius: '8px',
                           border: isCancelled ? '1px solid #FCA5A5' : (isDelivered ? '1px solid #CBD5E1' : (isReady ? '1.5px solid #86EFAC' : (isCooking ? '1px solid #FFEDD5' : (isItemAccepted ? '1px solid #BAE6FD' : '1px dashed #CBD5E1')))),
@@ -284,30 +367,59 @@ export default function ChefKdsPassPage({
                           transition: 'all 0.2s ease'
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          {isCancelled ? (
-                            <X size={17} color="#991B1B" />
-                          ) : isDelivered ? (
-                            <CheckCircle2 size={17} color="#64748B" />
-                          ) : isReady ? (
-                            <CheckSquare size={17} color="#166534" />
-                          ) : (
-                            <Square size={17} color={isCooking ? '#EA580C' : (isItemAccepted ? '#0284C7' : '#CBD5E1')} />
-                          )}
-                          <span style={{
-                            fontSize: '0.9rem',
-                            fontWeight: 800,
-                            color: isCancelled ? '#991B1B' : (isDelivered ? '#64748B' : (isReady ? '#166534' : (isCooking ? '#0F2A1D' : (isItemAccepted ? '#0369A1' : '#64748B')))),
-                            textDecoration: isCancelled || isDelivered ? 'line-through' : 'none'
-                          }}>
-                            <strong style={{ color: isCancelled ? '#991B1B' : (isDelivered ? '#64748B' : (isCooking ? '#E07A3C' : (isItemAccepted ? '#0284C7' : '#94A3B8'))), marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
-                            {typeof item === 'string' ? item : item.name}
-                          </span>
+                        {/* Top Main Row: Dish Checkbox & Name (left), Status Badge & Price (right) */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem', width: '100%' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: 0 }}>
+                            {isCancelled ? (
+                              <X size={17} color="#991B1B" style={{ flexShrink: 0 }} />
+                            ) : isDelivered ? (
+                              <CheckCircle2 size={17} color="#64748B" style={{ flexShrink: 0 }} />
+                            ) : isReady ? (
+                              <CheckSquare size={17} color="#166534" style={{ flexShrink: 0 }} />
+                            ) : (
+                              <Square size={17} color={isCooking ? '#EA580C' : (isItemAccepted ? '#0284C7' : '#CBD5E1')} style={{ flexShrink: 0 }} />
+                            )}
+                            <span className="chef-ticket-item-name" style={{
+                              fontSize: '0.9rem',
+                              fontWeight: 800,
+                              color: isCancelled ? '#991B1B' : (isDelivered ? '#64748B' : (isReady ? '#166534' : (isCooking ? '#0F2A1D' : (isItemAccepted ? '#0369A1' : '#64748B')))),
+                              textDecoration: isCancelled || isDelivered ? 'line-through' : 'none',
+                              wordBreak: 'break-word'
+                            }}>
+                              <strong style={{ color: isCancelled ? '#991B1B' : (isDelivered ? '#64748B' : (isCooking ? '#E07A3C' : (isItemAccepted ? '#0284C7' : '#94A3B8'))), marginRight: '0.4rem' }}>{item.quantity || item.qty || 1}x</strong>
+                              {typeof item === 'string' ? item : item.name}
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                            {isUpdating && (
+                              <span style={{ fontSize: '0.65rem', color: '#0284C7', fontWeight: 700, fontStyle: 'italic' }}>
+                                Updating...
+                              </span>
+                            )}
+
+                            <span style={{
+                              fontSize: '0.68rem',
+                              fontWeight: 900,
+                              backgroundColor: isCancelled ? '#FEE2E2' : (isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : (isCooking ? '#FFEDD5' : (isItemAccepted ? '#E0F2FE' : '#F1F5F9')))),
+                              color: isCancelled ? '#991B1B' : (isDelivered ? '#475569' : (isReady ? '#166534' : (isCooking ? '#C2410C' : (isItemAccepted ? '#0284C7' : '#64748B')))),
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '5px'
+                            }}>
+                              {isCancelled ? '❌ CANCELLED' : (isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : (isCooking ? 'COOKING' : (isItemAccepted ? 'ACCEPTED' : 'PLACED'))))}
+                            </span>
+
+                            {item.price && (
+                              <span style={{ fontSize: '0.74rem', color: isCancelled ? '#991B1B' : '#64748B', fontWeight: 600, textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                                ₹{item.price * (item.quantity || 1)}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Spice Level & Add-ons Badges for Kitchen Display */}
-                        {typeof item === 'object' && (
-                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.2rem', width: '100%' }}>
+                        {typeof item === 'object' && ((item.spiceLevel || item.selectedSpiceLevel) || (Array.isArray(item.selectedAddOns || item.addOns) && (item.selectedAddOns || item.addOns).length > 0)) && (
+                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', paddingLeft: '1.65rem' }}>
                             {(item.spiceLevel || item.selectedSpiceLevel) && (
                               <span style={{ fontSize: '0.68rem', color: '#EA580C', backgroundColor: '#FFF7ED', border: '1px solid #FFEDD5', padding: '0.08rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
                                 🌶️ Spice: {item.spiceLevel || item.selectedSpiceLevel}
@@ -320,31 +432,6 @@ export default function ChefKdsPassPage({
                             )}
                           </div>
                         )}
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          {isUpdating && (
-                            <span style={{ fontSize: '0.65rem', color: '#0284C7', fontWeight: 700, fontStyle: 'italic' }}>
-                              Updating...
-                            </span>
-                          )}
-
-                          <span style={{
-                            fontSize: '0.68rem',
-                            fontWeight: 900,
-                            backgroundColor: isCancelled ? '#FEE2E2' : (isDelivered ? '#E2E8F0' : (isReady ? '#BBF7D0' : (isCooking ? '#FFEDD5' : (isItemAccepted ? '#E0F2FE' : '#F1F5F9')))),
-                            color: isCancelled ? '#991B1B' : (isDelivered ? '#475569' : (isReady ? '#166534' : (isCooking ? '#C2410C' : (isItemAccepted ? '#0284C7' : '#64748B')))),
-                            padding: '0.15rem 0.45rem',
-                            borderRadius: '5px'
-                          }}>
-                            {isCancelled ? '❌ CANCELLED' : (isDelivered ? '✓ SERVED' : (isReady ? '✓ READY' : (isCooking ? 'COOKING' : (isItemAccepted ? 'ACCEPTED' : 'PLACED'))))}
-                          </span>
-
-                          {item.price && (
-                            <span style={{ fontSize: '0.74rem', color: isCancelled ? '#991B1B' : '#64748B', fontWeight: 600, textDecoration: isCancelled ? 'line-through' : 'none' }}>
-                              ₹{item.price * (item.quantity || 1)}
-                            </span>
-                          )}
-                        </div>
                       </div>
                     );
                   });
@@ -390,6 +477,7 @@ export default function ChefKdsPassPage({
                     <div style={{ flex: 1, display: 'flex', gap: '0.4rem' }}>
                       <button
                         type="button"
+                        className="chef-action-touch-btn"
                         onClick={() => handleClaimOrder && handleClaimOrder(ord.id)}
                         style={{
                           flex: 1,
@@ -421,6 +509,7 @@ export default function ChefKdsPassPage({
                       {isMine ? (
                         <button
                           type="button"
+                          className="chef-action-touch-btn"
                           onClick={() => handleUpdateStatus(ord.id, 'Preparing')}
                           style={{
                             flex: 1,
@@ -471,6 +560,7 @@ export default function ChefKdsPassPage({
                       {isMine ? (
                         <button
                           type="button"
+                          className="chef-action-touch-btn"
                           onClick={() => handleUpdateStatus(ord.id, 'Ready')}
                           style={{
                             flex: 1,
@@ -542,6 +632,7 @@ export default function ChefKdsPassPage({
 
               <button
                 type="button"
+                className="chef-action-touch-btn"
                 onClick={() => setSelectedTicketModal(ord)}
                 title="View Full Ticket Details"
                 style={{
@@ -562,6 +653,8 @@ export default function ChefKdsPassPage({
           </div>
         );
       })}
+        </div>
+      )}
     </div>
   );
 }

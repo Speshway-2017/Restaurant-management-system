@@ -41,7 +41,11 @@ export default function ManagerOrdersPage() {
           tipAmount: Number(o.tipAmount || o.tip || 0),
           paymentMethod: o.paymentMethod || 'UPI / QR',
           total: o.finalAmount !== undefined ? Number(o.finalAmount) : Number(o.total || 0),
-          payment: o.payment || 'Pending',
+          payment: o.payment || o.paymentStatus || 'Pending',
+          paymentStatus: o.paymentStatus || o.payment || 'Pending',
+          waiterPaymentConfirmation: o.waiterPaymentConfirmation || 'PENDING',
+          waiterPaymentConfirmedBy: o.waiterPaymentConfirmedBy || '',
+          waiterPaymentConfirmedAt: o.waiterPaymentConfirmedAt || '',
           status: o.status || 'Placed',
           time: o.time || 'Just now',
           items: o.items || []
@@ -705,6 +709,21 @@ export default function ManagerOrdersPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#1C130E', fontWeight: 800, paddingTop: '0.35rem', borderTop: '1px solid #EAE3D2' }}>
                         <span>Payment Method:</span>
                         <span>{(selectedOrderTicketModal.paymentStatus === 'Paid' || selectedOrderTicketModal.payment === 'Paid') ? (selectedOrderTicketModal.paymentMethod || 'UPI / QR') : 'Pending Payment'}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: selectedOrderTicketModal.paymentStatus === 'Paid' || selectedOrderTicketModal.payment === 'Paid' ? '#166534' : '#B45309', fontWeight: 800 }}>
+                        <span>Payment Status:</span>
+                        <span>{selectedOrderTicketModal.paymentStatus === 'Paid' || selectedOrderTicketModal.payment === 'Paid' ? 'Paid ✓' : 'Pending'}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: selectedOrderTicketModal.waiterPaymentConfirmation === 'CONFIRMED' ? '#166534' : '#D97706', fontWeight: 800 }}>
+                        <span>Waiter Confirmation:</span>
+                        <span>{selectedOrderTicketModal.waiterPaymentConfirmation === 'CONFIRMED' ? `Confirmed ✓${selectedOrderTicketModal.waiterPaymentConfirmedBy ? ` (${selectedOrderTicketModal.waiterPaymentConfirmedBy})` : ''}` : 'Pending'}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: selectedOrderTicketModal.status === 'Completed' ? '#166534' : '#1C130E', fontWeight: 800 }}>
+                        <span>Order Status:</span>
+                        <span>{selectedOrderTicketModal.status || 'Placed'}</span>
                       </div>
                     </>
                   );

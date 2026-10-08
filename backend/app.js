@@ -22,6 +22,17 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Express Engine.IO Handler for /socket.io and /api/socket.io to prevent 404s under reverse proxies
+app.all(['/socket.io*', '/api/socket.io*'], (req, res) => {
+  const { getIO } = require('./socket');
+  const io = getIO();
+  if (io && io.engine) {
+    io.engine.handleRequest(req, res);
+  } else {
+    res.status(503).json({ error: 'Socket.IO server initializing' });
+  }
+});
+
 // Health Check Endpoint
 app.get('/', (req, res) => {
   res.json({

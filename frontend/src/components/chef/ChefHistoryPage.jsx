@@ -302,9 +302,7 @@ export default function ChefHistoryPage({
                 👨‍🍳 Logged as {activeChefName || 'Chef'}
               </span>
             )}
-            <span style={{ fontSize: '0.75rem', backgroundColor: '#EFF6FF', color: '#2563EB', fontWeight: 800, padding: '0.25rem 0.65rem', borderRadius: '6px', border: '1px solid #BFDBFE' }}>
-              🟢 Live Kitchen Pass Active
-            </span>
+            
           </div>
         </div>
 

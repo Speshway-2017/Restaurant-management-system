@@ -82,14 +82,24 @@ const orderSchema = new mongoose.Schema({
   waiterName: { type: String, default: '' },
   waiterAcceptedAt: { type: Date },
   waiterServingAt: { type: Date },
-  waiterServedAt: { type: Date }
+  waiterServedAt: { type: Date },
+  waiterPaymentConfirmation: {
+    type: String,
+    enum: ['PENDING', 'CONFIRMED'],
+    default: 'PENDING'
+  },
+  waiterPaymentConfirmedBy: { type: String, default: '' },
+  waiterPaymentConfirmedAt: { type: Date }
 }, { timestamps: true, strict: false });
 
 orderSchema.pre('save', function(next) {
-  if (this.status === 'Paid' || this.status === 'Completed' || this.payment === 'Paid' || this.payment === 'Completed' || this.paymentStatus === 'Paid') {
+  if (this.status === 'Completed' || this.payment === 'Completed') {
     this.status = 'Completed';
     this.payment = 'Paid';
     this.paymentStatus = 'Paid';
+    if (this.waiterPaymentConfirmation !== 'CONFIRMED') {
+      this.waiterPaymentConfirmation = 'CONFIRMED';
+    }
     if (Array.isArray(this.items)) {
       this.items.forEach(it => {
         if (it.status !== 'CANCELLED' && !it.isCancelled) {
@@ -99,6 +109,10 @@ orderSchema.pre('save', function(next) {
         }
       });
     }
+  } else if (this.status === 'Paid' || this.paymentStatus === 'Paid' || this.payment === 'Paid') {
+    this.payment = 'Paid';
+    this.paymentStatus = 'Paid';
+    // Order completion is a separate action: do NOT set this.status = 'Completed' automatically!
   } else if (this.status === 'Bill Generated' || this.status === 'Awaiting Payment' || this.payment === 'Bill Generated' || this.payment === 'Awaiting Payment') {
     this.payment = 'Awaiting Payment';
     this.paymentStatus = 'Awaiting Payment';

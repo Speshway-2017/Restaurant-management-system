@@ -35,7 +35,10 @@ const settingsSchema = new mongoose.Schema({
   fssaiLicense: { type: String, default: '11223344556677' },
   gstRate: { type: String, default: '5%' },
   defaultGstRate: { type: String, default: '5% (Restaurant CGST 2.5% + SGST 2.5%)' },
-  invoiceFootnote: { type: String, default: 'Thank you for dining with Flavora Kitchen! Visit again.' }
+  invoiceFootnote: { type: String, default: 'Thank you for dining with Flavora Kitchen! Visit again.' },
+  upiId: { type: String, default: 'flavorakitchen@upi' },
+  paymentQr: { type: String, default: '' },
+  upiQr: { type: String, default: '' }
 }, { timestamps: true, strict: false });
 
 module.exports = mongoose.model('Settings', settingsSchema);

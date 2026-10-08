@@ -939,16 +939,14 @@ export default function ChefLayout({ setActivePage }) {
                 </div>
                 <h1 className="admin-page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <span>Live Kitchen Display System (KDS)</span>
-                  <span style={{ fontSize: '0.75rem', backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC', padding: '0.2rem 0.65rem', borderRadius: '9999px', fontWeight: 800 }}>
-                    🟢 Pass Active
-                  </span>
+                  
                 </h1>
                 <p className="admin-page-subtitle">Real-time orders, cooking timers, itemized strikeout checkboxes, and waiter dispatch alerts.</p>
               </div>
 
               {/* Status Filter & Search */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', backgroundColor: '#FFFFFF', padding: '0.2rem', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', width: '100%', maxWidth: '100%' }}>
+                <div className="chef-status-filter-scroll" style={{ backgroundColor: '#FFFFFF', padding: '0.2rem', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', maxWidth: '100%' }}>
                   {[
                     { id: 'active', label: 'All Active' },
                     { id: 'my', label: '👨‍🍳 My Claimed' },
@@ -967,7 +965,8 @@ export default function ChefLayout({ setActivePage }) {
                         padding: '0.45rem 0.85rem',
                         fontSize: '0.78rem',
                         fontWeight: 800,
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
                       }}
                     >
                       {st.label}
@@ -975,7 +974,7 @@ export default function ChefLayout({ setActivePage }) {
                   ))}
                 </div>
 
-                <div style={{ position: 'relative', width: '220px' }}>
+                <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '150px', maxWidth: '100%' }}>
                   <Search size={16} color="#64748B" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                   <input
                     type="text"
@@ -990,7 +989,8 @@ export default function ChefLayout({ setActivePage }) {
                       backgroundColor: '#FFFFFF',
                       color: '#0F2A1D',
                       fontSize: '0.8rem',
-                      outline: 'none'
+                      outline: 'none',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
@@ -1277,6 +1277,7 @@ export default function ChefLayout({ setActivePage }) {
               const ss = segs[2] || '00';
               return (
                 <div
+                  className="chef-header-clock"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -1316,7 +1317,7 @@ export default function ChefLayout({ setActivePage }) {
                     getInitials(chefProfile?.name || 'Chef')
                   )}
                 </div>
-                <div className="admin-user-info-text">
+                <div className="admin-user-info-text chef-user-info-text">
                   <div className="admin-user-name">{chefProfile?.name || 'Chef Vikrant'}</div>
                   <div className="admin-user-role">{chefProfile?.empId || 'CHEF-01'} • {chefProfile?.role || 'Executive Chef'}</div>
                 </div>

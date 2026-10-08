@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { onSocketEvent } from '../../services/socket';
+import { formatMoney } from '../../utils/billingUtils';
 
 export default function CustomerOrderTrackingModal({ 
   activeOrder, 
@@ -401,14 +402,21 @@ export default function CustomerOrderTrackingModal({
 
   const currentStepIdx = getStepIndex(currentOrder);
 
-  const isBillGen = Boolean(
-    currentOrder.isBillGenerated ||
-    currentOrder.billGenerated ||
-    currentOrder.status === 'Bill Generated' ||
-    currentOrder.status === 'Billing' ||
-    currentOrder.payment === 'Awaiting Payment' ||
-    currentOrder.paymentStatus === 'Awaiting Payment'
+  const isBillGenerated = Boolean(
+    currentOrder?.isBillGenerated ||
+    currentOrder?.billGenerated ||
+    currentOrder?.billId ||
+    currentOrder?.invoiceId ||
+    currentOrder?.status === 'Completed' ||
+    currentOrder?.status === 'Bill Generated' ||
+    currentOrder?.status === 'Billing' ||
+    currentOrder?.status === 'Paid' ||
+    currentOrder?.payment === 'Paid' ||
+    currentOrder?.paymentStatus === 'Paid' ||
+    currentOrder?.payment === 'Awaiting Payment' ||
+    currentOrder?.paymentStatus === 'Awaiting Payment'
   );
+  const isBillGen = isBillGenerated;
 
   // Status Highlight Message
   const getStatusDetails = (idx) => {
@@ -464,10 +472,15 @@ export default function CustomerOrderTrackingModal({
 
   const statusInfo = getStatusDetails(currentStepIdx);
 
-  const orderItems = Array.isArray(currentOrder.items) ? currentOrder.items : [];
-  const activeItems = orderItems.filter(it => it.status !== 'CANCELLED' && it.status !== 'Cancelled');
+  const orderItems = Array.isArray(currentOrder?.items) ? currentOrder.items : [];
+  const activeItems = orderItems.filter(it => it && it.status !== 'CANCELLED' && it.status !== 'Cancelled');
   const totalItemCount = activeItems.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
-  const totalAmount = currentOrder.totalAmount || currentOrder.total || activeItems.reduce((acc, it) => acc + ((Number(it.price) || 0) * (Number(it.quantity) || 1)), 0);
+  const calculatedTotal = activeItems.reduce((acc, it) => acc + ((Number(it.price) || 0) * (Number(it.quantity) || 1)), 0);
+  const billTotalAmount = currentOrder?.finalAmount !== undefined && currentOrder?.finalAmount !== null && Number(currentOrder.finalAmount) > 0
+    ? Number(currentOrder.finalAmount)
+    : (currentOrder?.totalAmount !== undefined && currentOrder?.totalAmount !== null && Number(currentOrder.totalAmount) > 0
+      ? Number(currentOrder.totalAmount)
+      : calculatedTotal);
 
   return (
     <div
@@ -663,50 +676,117 @@ export default function CustomerOrderTrackingModal({
             </div>
           )}
 
-          {/* Bill Generated Banner */}
-          {isBillGen && (
-            <div style={{
-              marginBottom: '1rem',
-              padding: '0.85rem 1rem',
-              backgroundColor: '#F3E8FF',
-              borderRadius: '14px',
-              border: '1.5px solid #C084FC',
-              color: '#6B21A8',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              boxShadow: '0 4px 12px rgba(107, 33, 168, 0.1)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <Receipt size={22} color="#6B21A8" />
-                <div>
-                  <div style={{ fontWeight: 900, fontSize: '0.88rem' }}>Bill Generated — Awaiting Payment</div>
-                  <div style={{ fontSize: '0.78rem', color: '#7E22CE', marginTop: '0.1rem' }}>
-                    Total: ₹{totalAmount.toFixed(0)} • Tap to view GST breakdown & pay
+          {/* Payment & Order Status Banner */}
+          {(() => {
+            const isPaidOrder = Boolean(
+              currentOrder?.payment === 'Paid' ||
+              currentOrder?.paymentStatus === 'Paid' ||
+              currentOrder?.status === 'Paid' ||
+              currentOrder?.isPaid
+            );
+            const isCompletedOrder = Boolean(
+              currentOrder?.status === 'Completed' ||
+              currentOrder?.orderStatus === 'Completed'
+            );
+
+            if (isCompletedOrder) {
+              return (
+                <div style={{
+                  marginBottom: '1rem',
+                  padding: '0.85rem 1rem',
+                  backgroundColor: '#F0FDF4',
+                  borderRadius: '14px',
+                  border: '1.5px solid #86EFAC',
+                  color: '#166534',
+                  boxShadow: '0 4px 12px rgba(22, 101, 52, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.65rem'
+                }}>
+                  <CheckCircle2 size={24} color="#15803D" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: '0.92rem' }}>✓ Order Completed</div>
+                    <div style={{ fontSize: '0.78rem', color: '#15803D', marginTop: '0.1rem', fontWeight: 600 }}>
+                      Thank you for dining with us! We hope to see you again soon.
+                    </div>
                   </div>
                 </div>
-              </div>
-              {onViewBill && (
-                <button
-                  onClick={onViewBill}
-                  style={{
-                    padding: '0.45rem 0.85rem',
-                    backgroundColor: '#6B21A8',
-                    color: '#FFFFFF',
-                    borderRadius: '10px',
-                    border: 'none',
-                    fontWeight: 800,
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    boxShadow: '0 4px 10px rgba(107, 33, 168, 0.25)'
-                  }}
-                >
-                  View Bill
-                </button>
-              )}
-            </div>
-          )}
+              );
+            }
+
+            if (isPaidOrder) {
+              return (
+                <div style={{
+                  marginBottom: '1rem',
+                  padding: '0.85rem 1rem',
+                  backgroundColor: '#F0FDF4',
+                  borderRadius: '14px',
+                  border: '1.5px solid #86EFAC',
+                  color: '#166534',
+                  boxShadow: '0 4px 12px rgba(22, 101, 52, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.65rem'
+                }}>
+                  <CheckCircle2 size={24} color="#15803D" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: '0.92rem' }}>✓ Payment Successful</div>
+                    <div style={{ fontSize: '0.78rem', color: '#15803D', marginTop: '0.1rem', fontWeight: 700 }}>
+                      Order Status: <span style={{ color: '#166534' }}>Payment Received</span> • Waiting for waiter completion
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (isBillGen) {
+              return (
+                <div style={{
+                  marginBottom: '1rem',
+                  padding: '0.85rem 1rem',
+                  backgroundColor: '#F3E8FF',
+                  borderRadius: '14px',
+                  border: '1.5px solid #C084FC',
+                  color: '#6B21A8',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  boxShadow: '0 4px 12px rgba(107, 33, 168, 0.1)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <Receipt size={22} color="#6B21A8" />
+                    <div>
+                      <div style={{ fontWeight: 900, fontSize: '0.88rem' }}>Bill Generated — Awaiting Payment</div>
+                      <div style={{ fontSize: '0.78rem', color: '#7E22CE', marginTop: '0.1rem' }}>
+                        Total: ₹{billTotalAmount.toFixed(0)} • Tap to view GST breakdown & pay
+                      </div>
+                    </div>
+                  </div>
+                  {onViewBill && (
+                    <button
+                      onClick={onViewBill}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        backgroundColor: '#6B21A8',
+                        color: '#FFFFFF',
+                        borderRadius: '10px',
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        boxShadow: '0 4px 10px rgba(107, 33, 168, 0.25)'
+                      }}
+                    >
+                      View Bill
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            return null;
+          })()}
 
           {/* Stepper Container with Connected Timeline Bar */}
           <div style={{
@@ -813,58 +893,36 @@ export default function CustomerOrderTrackingModal({
             </div>
           </div>
 
-          {/* Quick Assistance 3-Button Grid */}
+          {/* Quick Assistance 2-Button Grid */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '0.5rem',
-            marginBottom: '1.25rem'
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '0.55rem',
+            marginBottom: '1.25rem',
+            width: '100%'
           }}>
-            <button
-              type="button"
-              onClick={() => handleCallWaiter('Water')}
-              disabled={callingWaiter}
-              style={{
-                padding: '0.65rem 0.4rem',
-                borderRadius: '12px',
-                backgroundColor: '#EFF6FF',
-                color: '#1D4ED8',
-                border: '1px solid #BFDBFE',
-                fontWeight: 800,
-                fontSize: '0.76rem',
-                cursor: callingWaiter ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0.25rem',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Droplets size={16} />
-              <span>Water</span>
-            </button>
-
             <button
               type="button"
               onClick={() => handleCallWaiter('Assistance')}
               disabled={callingWaiter}
               style={{
-                padding: '0.65rem 0.4rem',
+                padding: '0.7rem 0.5rem',
                 borderRadius: '12px',
                 backgroundColor: '#FEF3C7',
                 color: '#92400E',
                 border: '1px solid #FDE68A',
                 fontWeight: 800,
-                fontSize: '0.76rem',
+                fontSize: '0.8rem',
                 cursor: callingWaiter ? 'not-allowed' : 'pointer',
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                gap: '0.25rem',
-                transition: 'all 0.15s ease'
+                justifyContent: 'center',
+                gap: '0.45rem',
+                transition: 'all 0.15s ease',
+                width: '100%'
               }}
             >
-              <BellRing size={16} />
+              <BellRing size={17} />
               <span>Call Waiter</span>
             </button>
 
@@ -873,22 +931,23 @@ export default function CustomerOrderTrackingModal({
               onClick={() => handleCallWaiter('Bill / Tissue')}
               disabled={callingWaiter}
               style={{
-                padding: '0.65rem 0.4rem',
+                padding: '0.7rem 0.5rem',
                 borderRadius: '12px',
                 backgroundColor: '#F3E8FF',
                 color: '#6B21A8',
                 border: '1px solid #E9D5FF',
                 fontWeight: 800,
-                fontSize: '0.76rem',
+                fontSize: '0.8rem',
                 cursor: callingWaiter ? 'not-allowed' : 'pointer',
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                gap: '0.25rem',
-                transition: 'all 0.15s ease'
+                justifyContent: 'center',
+                gap: '0.45rem',
+                transition: 'all 0.15s ease',
+                width: '100%'
               }}
             >
-              <Receipt size={16} />
+              <Receipt size={17} />
               <span>Napkins/Bill</span>
             </button>
           </div>
@@ -904,9 +963,11 @@ export default function CustomerOrderTrackingModal({
               <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Dishes in this Order ({totalItemCount})
               </span>
-              <span style={{ fontSize: '0.74rem', color: '#166534', fontWeight: 800 }}>
-                Total: ₹{totalAmount}
-              </span>
+              {isBillGenerated && (
+                <span style={{ fontSize: '0.78rem', color: '#166534', fontWeight: 800 }}>
+                  Total: ₹{formatMoney(billTotalAmount)}
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

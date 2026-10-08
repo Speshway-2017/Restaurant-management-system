@@ -278,7 +278,7 @@ export default function LoginPage({ setActivePage }) {
                 <span>Table Management</span>
               </div>
 
-              
+
             </div>
 
           </div>
