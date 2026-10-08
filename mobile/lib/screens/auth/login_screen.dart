@@ -449,11 +449,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                         const SizedBox(height: 14),
 
                                         // Remember Me & Forgot Password Row
-                                        Wrap(
-                                          alignment: WrapAlignment.spaceBetween,
-                                          crossAxisAlignment: WrapCrossAlignment.center,
-                                          spacing: 8,
-                                          runSpacing: 8,
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
                                             Row(
                                               mainAxisSize: MainAxisSize.min,

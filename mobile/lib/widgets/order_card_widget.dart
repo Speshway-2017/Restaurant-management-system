@@ -11,6 +11,8 @@ class OrderCardWidget extends StatelessWidget {
   final VoidCallback? onStartServing;
   final VoidCallback? onMarkServed;
   final VoidCallback? onBillingPayment;
+  final VoidCallback? onConfirmPayment;
+  final VoidCallback? onMarkCompleted;
   final bool isActionLoading;
 
   const OrderCardWidget({
@@ -21,6 +23,8 @@ class OrderCardWidget extends StatelessWidget {
     this.onStartServing,
     this.onMarkServed,
     this.onBillingPayment,
+    this.onConfirmPayment,
+    this.onMarkCompleted,
     this.isActionLoading = false,
   });
 
@@ -178,7 +182,133 @@ class OrderCardWidget extends StatelessWidget {
               const SizedBox(height: 12),
 
               // Dynamic Waiter Action Button
-              if (!order.isAcceptedByWaiter && !order.isServed && !order.isPaid) ...[
+              if (order.isPaid) ...[
+                if (order.status == 'Completed') ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF86EFAC)),
+                    ),
+                    child: const Text(
+                      '✓ ORDER COMPLETED',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF166534),
+                      ),
+                    ),
+                  ),
+                ] else if (!order.isWaiterPaymentConfirmed) ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 16),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text(
+                                'Payment Received by System',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFFB45309),
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF08A),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFFDE047)),
+                              ),
+                              child: Text(
+                                '${order.paymentMethod.isNotEmpty ? order.paymentMethod.toUpperCase() : "UPI"} • ₹${order.totalAmount.toStringAsFixed(0)}',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Waiting for Waiter Confirmation',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF78350F)),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: CustomButton(
+                            text: 'Confirm Payment Received',
+                            icon: Icons.check_circle_outline,
+                            isLoading: isActionLoading,
+                            backgroundColor: const Color(0xFF166534),
+                            onPressed: onConfirmPayment,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '✓ PAYMENT RECEIVED',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF166534)),
+                            ),
+                            Text(
+                              'Confirmed',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                            ),
+                          ],
+                        ),
+                        if (order.waiterPaymentConfirmedBy.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Confirmed by: ${order.waiterPaymentConfirmedBy}',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: CustomButton(
+                            text: 'Mark Order Completed',
+                            icon: Icons.check_circle,
+                            isLoading: isActionLoading,
+                            backgroundColor: const Color(0xFF166534),
+                            onPressed: onMarkCompleted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ] else if (!order.isAcceptedByWaiter && !order.isServed) ...[
                 // STEP 1: ACCEPT ORDER
                 SizedBox(
                   width: double.infinity,

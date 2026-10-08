@@ -915,6 +915,76 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ],
                           ),
 
+                          if (currentOrd.isPaid) ...[
+                            const SizedBox(height: 12),
+                            if (currentOrd.isWaiterPaymentConfirmed) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF0FDF4),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFF86EFAC)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.check_circle, color: Color(0xFF166534), size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          '✓ Payment Received',
+                                          style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF166534), fontSize: 13),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Confirmed by: ${currentOrd.waiterPaymentConfirmedBy.isNotEmpty ? currentOrd.waiterPaymentConfirmedBy : "Staff Waiter"}',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+                                ),
+                                child: const Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          '⚠ Waiter Confirmation:',
+                                          style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFB45309), fontSize: 13),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Payment Not Confirmed',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Payment Received by System. Waiting for Waiter Confirmation.',
+                                      style: TextStyle(fontSize: 11, color: Color(0xFF78350F), fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+
                           // 9. Revenue details (if tip exists)
                           if (tip > 0) ...[
                             const SizedBox(height: 12),
@@ -958,7 +1028,63 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             const SizedBox(height: 24),
 
             // Requirement 4: Bottom Delivery & Lifecycle Action Buttons
-            if (!currentOrd.isAcceptedByWaiter && !currentOrd.isServed && !currentOrd.isPaid) ...[
+            if (currentOrd.isPaid) ...[
+              if (currentOrd.status == 'Completed') ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: const Text(
+                    '✓ ORDER COMPLETED',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                ),
+              ] else if (!currentOrd.isWaiterPaymentConfirmed) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: CustomButton(
+                    text: 'Confirm Payment Received',
+                    icon: Icons.check_circle_outline,
+                    isLoading: _isActionLoading,
+                    backgroundColor: const Color(0xFF166534),
+                    onPressed: () => _showConfirmPaymentDialog(context, ordersProvider, currentOrd),
+                  ),
+                ),
+              ] else ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: CustomButton(
+                    text: 'Mark Order Completed',
+                    icon: Icons.check_circle,
+                    isLoading: _isActionLoading,
+                    backgroundColor: const Color(0xFF166534),
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      setState(() => _isActionLoading = true);
+                      final success = await ordersProvider.markOrderCompleted(currentOrd.id);
+                      setState(() => _isActionLoading = false);
+                      if (success && mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('✓ Order #${currentOrd.orderId} marked as Completed!'),
+                            backgroundColor: const Color(0xFF166534),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ] else if (!currentOrd.isAcceptedByWaiter && !currentOrd.isServed) ...[
               SizedBox(
                 width: double.infinity,
                 child: CustomButton(
@@ -1142,34 +1268,61 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ],
                 ),
               ),
-            ] else if (currentOrd.canGenerateBill) ...[
-              SizedBox(
-                width: double.infinity,
-                child: CustomButton(
-                  text: 'Generate Bill',
-                  icon: Icons.receipt_long,
-                  isLoading: _isActionLoading,
-                  backgroundColor: AppColors.darkGreen,
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    setState(() => _isActionLoading = true);
-                    final success = await ordersProvider.generateBill(currentOrd.id);
-                    setState(() => _isActionLoading = false);
-                    if (success && mounted) {
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text('✓ Bill Generated for Table ${currentOrd.table}! Waiting for customer payment.'),
-                          backgroundColor: AppColors.accentGreen,
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showConfirmPaymentDialog(BuildContext context, OrdersProvider provider, OrderModel ord) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: Color(0xFF166534)),
+            SizedBox(width: 8),
+            Text('Confirm Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Confirm that ₹${ord.totalAmount.toStringAsFixed(0)} ${ord.paymentMethod.isNotEmpty ? ord.paymentMethod.toUpperCase() : "UPI"} payment for Table ${ord.table} (Order #${ord.orderId}) has been received?',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF166534),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isActionLoading = true);
+      final success = await provider.confirmWaiterPayment(ord.id);
+      if (!mounted) return;
+      setState(() => _isActionLoading = false);
+      if (success) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('✓ Payment received confirmed for Table ${ord.table}!'),
+            backgroundColor: const Color(0xFF166534),
+          ),
+        );
+      }
+    }
   }
 }

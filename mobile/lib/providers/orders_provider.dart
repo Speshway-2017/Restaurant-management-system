@@ -487,4 +487,40 @@ class OrdersProvider with ChangeNotifier {
       return false;
     }
   }
+
+  // 7. Waiter Confirm Payment Received
+  Future<bool> confirmWaiterPayment(String orderId) async {
+    try {
+      await ApiClient.patch(
+        ApiConstants.confirmPayment(orderId),
+        body: {},
+      );
+      await fetchOrders(silent: true);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // 8. Mark Order Completed
+  Future<bool> markOrderCompleted(String orderId) async {
+    try {
+      await ApiClient.patch(
+        ApiConstants.updateOrderStatus(orderId),
+        body: {
+          'status': 'Completed',
+          'paymentStatus': 'Paid',
+        },
+      );
+      await fetchOrders();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
+  }
 }
