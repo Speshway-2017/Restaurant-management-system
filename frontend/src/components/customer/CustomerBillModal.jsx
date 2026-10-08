@@ -665,16 +665,41 @@ export default function CustomerBillModal({
                     ) : (
                       items.map((it, idx) => {
                         const isCancelled = it && (it.status === 'CANCELLED' || it.status === 'Cancelled' || it.isCancelled);
+                        const itemQty = Number(it.quantity || it.qty || 1);
+                        const uPrice = Number(it.unitPrice !== undefined ? it.unitPrice : (it.price || 0));
+                        const lineTot = Number(it.totalPrice !== undefined ? it.totalPrice : (uPrice * itemQty));
+                        const spiceStr = it.spiceLevel || it.selectedSpiceLevel;
+                        const spicePrice = Number(it.spiceLevelPrice || 0);
+                        const addOnsArr = it.selectedAddOns || it.addOns || [];
+
                         return (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: isCancelled ? '#94A3B8' : '#334155', textDecoration: isCancelled ? 'line-through' : 'none' }}>
-                            <span>
-                              <strong style={{ color: isCancelled ? '#94A3B8' : '#166534', marginRight: '0.35rem' }}>{it.quantity || 1}x</strong>
-                              {it.name}
-                              {isCancelled && <span style={{ marginLeft: '0.35rem', color: '#DC2626', fontSize: '0.7rem', fontWeight: 800, textDecoration: 'none' }}>(Cancelled)</span>}
-                            </span>
-                            <span style={{ fontWeight: 700, color: isCancelled ? '#94A3B8' : '#0F2A1D' }}>
-                              {isCancelled ? '₹0' : `₹${(Number(it.price) || 0) * (Number(it.quantity) || 1)}`}
-                            </span>
+                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', fontSize: '0.82rem', color: isCancelled ? '#94A3B8' : '#334155', textDecoration: isCancelled ? 'line-through' : 'none', paddingBottom: '0.25rem', borderBottom: '1px dashed #F1F5F9' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>
+                                <strong style={{ color: isCancelled ? '#94A3B8' : '#166534', marginRight: '0.35rem' }}>{itemQty}x</strong>
+                                {it.name}
+                                {isCancelled && <span style={{ marginLeft: '0.35rem', color: '#DC2626', fontSize: '0.7rem', fontWeight: 800, textDecoration: 'none' }}>(Cancelled)</span>}
+                              </span>
+                              <span style={{ fontWeight: 700, color: isCancelled ? '#94A3B8' : '#0F2A1D' }}>
+                                {isCancelled ? '₹0' : `₹${lineTot}`}
+                              </span>
+                            </div>
+
+                            {/* Customization Details Badges */}
+                            {!isCancelled && (
+                              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
+                                {spiceStr && (
+                                  <span style={{ fontSize: '0.68rem', color: '#EA580C', backgroundColor: '#FFF7ED', border: '1px solid #FFEDD5', padding: '0.05rem 0.3rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    🌶️ {spiceStr}{spicePrice > 0 ? ` (+₹${spicePrice})` : ''}
+                                  </span>
+                                )}
+                                {addOnsArr.length > 0 && (
+                                  <span style={{ fontSize: '0.68rem', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '0.05rem 0.3rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    + {addOnsArr.map(a => `${a.name || a}${a.price > 0 ? ` (+₹${a.price})` : ' (Free)'}`).join(', ')}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })

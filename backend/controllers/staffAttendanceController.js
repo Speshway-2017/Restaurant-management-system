@@ -147,16 +147,22 @@ exports.checkIn = async (req, res) => {
     const io = getIO();
     if (io) {
       const socketPayload = {
+        type: 'CHECK_IN',
         staffId: String(staffId),
         staffName,
         empId,
-        role,
+        role: user.role || role,
+        normRole: role,
         status: 'available',
         action: 'checkIn',
         timestamp: now.toISOString(),
         loginAt: now,
         logoutAt: null,
         loginTimeFormatted: formattedTime,
+        logoutTimeFormatted: 'Currently Active',
+        durationMinutes: 0,
+        durationFormatted: '0m',
+        date: dateStr,
         attendanceId: String(attendance._id)
       };
       io.emit('staffAvailabilityUpdated', socketPayload);
@@ -240,17 +246,22 @@ exports.checkOut = async (req, res) => {
     const io = getIO();
     if (io) {
       const socketPayload = {
+        type: 'CHECK_OUT',
         staffId: String(staffId),
         staffName: session.staffName,
         empId: session.empId,
-        role: session.role,
+        role: user.role || session.role,
+        normRole: role,
         status: 'offline',
         action: 'checkOut',
         timestamp: now.toISOString(),
         loginAt: session.loginAt,
         logoutAt: now,
+        loginTimeFormatted: session.loginTimeFormatted || (session.loginAt ? getIstDetails(new Date(session.loginAt)).formattedTime : '—'),
         logoutTimeFormatted: formattedTime,
+        durationMinutes,
         durationFormatted,
+        date: session.date || dateStr,
         attendanceId: String(session._id)
       };
       io.emit('staffAvailabilityUpdated', socketPayload);

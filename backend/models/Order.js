@@ -8,9 +8,24 @@ const orderSchema = new mongoose.Schema({
   phone: { type: String, default: '' },
   items: [{
     id: String,
+    menuItemId: String,
     name: String,
-    price: Number,
+    price: Number, // unitPrice for backward compatibility
+    basePrice: Number,
+    spiceLevel: String,
+    selectedSpiceLevel: String,
+    spiceLevelPrice: { type: Number, default: 0 },
+    selectedAddOns: [{
+      name: String,
+      price: Number
+    }],
+    addOns: [{
+      name: String,
+      price: Number
+    }],
+    unitPrice: Number,
     quantity: Number,
+    totalPrice: Number,
     status: { type: String, default: 'PLACED' },
     isReady: { type: Boolean, default: false },
     isDelivered: { type: Boolean, default: false }

@@ -5,15 +5,37 @@ export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, la
   if (!dish) return null;
 
   const [quantity, setQuantity] = useState(1);
-  const [selectedSpice, setSelectedSpice] = useState(dish.spiceLevel || 'Medium');
+  const [selectedSpice, setSelectedSpice] = useState(dish.spiceLevel || dish.spice || 'Medium');
   const [selectedCustomizations, setSelectedCustomizations] = useState([]);
   const [specialInstructions, setSpecialInstructions] = useState('');
 
-  const availableCustomizations = dish.customizations || [
-    { name: 'Extra Cheese', price: 35 },
-    { name: 'Extra Sauce / Gravy', price: 25 },
-    { name: 'Less Oil / Low Sodium', price: 0 }
-  ];
+  const availableSpiceLevels = (Array.isArray(dish.spiceLevels) && dish.spiceLevels.length > 0)
+    ? dish.spiceLevels
+    : [
+        { name: 'Mild', priceAdjustment: 0 },
+        { name: 'Medium', priceAdjustment: 0 },
+        { name: 'Spicy', priceAdjustment: 15 },
+        { name: 'Extra Hot', priceAdjustment: 25 }
+      ];
+
+  const availableCustomizations = (Array.isArray(dish.customizations) && dish.customizations.length > 0)
+    ? dish.customizations
+    : [
+        { name: 'Extra Cheese', price: 35 },
+        { name: 'Extra Sauce / Gravy', price: 25 },
+        { name: 'Less Oil / Low Sodium', price: 0 }
+      ];
+
+  const basePrice = Number(dish.price || 0);
+
+  const activeSpiceObj = availableSpiceLevels.find(
+    s => s.name?.toLowerCase().trim() === String(selectedSpice).toLowerCase().trim()
+  );
+  const spiceAdjustment = activeSpiceObj ? Number(activeSpiceObj.priceAdjustment || 0) : 0;
+
+  const addOnsCost = selectedCustomizations.reduce((sum, c) => sum + Number(c.price || 0), 0);
+  const unitPrice = basePrice + spiceAdjustment + addOnsCost;
+  const totalPrice = unitPrice * quantity;
 
   const allergensList = dish.allergens || (dish.category === 'Desserts' ? ['Dairy', 'Nuts'] : ['Gluten', 'Dairy']);
 
@@ -25,17 +47,20 @@ export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, la
     }
   };
 
-  const extraCost = selectedCustomizations.reduce((sum, c) => sum + (c.price || 0), 0);
-  const unitPrice = (dish.price || 0) + extraCost;
-  const totalPrice = unitPrice * quantity;
-
   const handleAdd = () => {
     if (isBillGenerated || isAddDisabled) return;
     onAddToCart(dish, quantity, {
       spiceLevel: selectedSpice,
+      selectedSpiceLevel: selectedSpice,
+      spiceLevelPrice: spiceAdjustment,
       customizations: selectedCustomizations,
+      selectedAddOns: selectedCustomizations,
+      addOns: selectedCustomizations,
       instructions: specialInstructions,
-      finalUnitPrice: unitPrice
+      basePrice: basePrice,
+      unitPrice: unitPrice,
+      finalUnitPrice: unitPrice,
+      totalPrice: totalPrice
     });
     onClose();
   };
@@ -95,7 +120,7 @@ export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, la
         {/* Dish Hero Image */}
         <div style={{ position: 'relative', width: '100%', height: '220px', backgroundColor: '#F1F5F9', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', overflow: 'hidden' }}>
           <img
-            src={dish.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop'}
+            src={dish.image || dish.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop'}
             alt={dish.name}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
@@ -143,12 +168,12 @@ export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, la
               {dish.name}
             </h2>
             <span style={{ fontSize: '1.35rem', fontWeight: 900, color: '#166534', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
-              ₹{dish.price}
+              ₹{unitPrice}
             </span>
           </div>
 
           <p style={{ fontSize: '0.88rem', color: '#64748B', lineHeight: 1.5, marginTop: '0.25rem', marginBottom: '1.25rem' }}>
-            {dish.description || 'Prepared fresh using authentic spices, quality ingredients, and culinary mastery.'}
+            {dish.description || dish.desc || 'Prepared fresh using authentic spices, quality ingredients, and culinary mastery.'}
           </p>
 
           {/* Spice Level Preference */}
@@ -157,27 +182,32 @@ export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, la
               <Flame size={14} color="#EA580C" /> Select Spice Level
             </label>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {['Mild', 'Medium', 'Spicy', 'Extra Hot'].map(lvl => (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() => setSelectedSpice(lvl)}
-                  style={{
-                    flex: 1,
-                    padding: '0.5rem 0.25rem',
-                    borderRadius: '10px',
-                    border: selectedSpice === lvl ? '2px solid #EA580C' : '1px solid #E2E8F0',
-                    backgroundColor: selectedSpice === lvl ? '#FFF7ED' : '#FAFAFA',
-                    color: selectedSpice === lvl ? '#C2410C' : '#475569',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {lvl}
-                </button>
-              ))}
+              {availableSpiceLevels.map((lvl) => {
+                const lvlName = lvl.name || lvl;
+                const adj = Number(lvl.priceAdjustment || 0);
+                const isSelected = selectedSpice.toLowerCase() === lvlName.toLowerCase();
+                return (
+                  <button
+                    key={lvlName}
+                    type="button"
+                    onClick={() => setSelectedSpice(lvlName)}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem 0.25rem',
+                      borderRadius: '10px',
+                      border: isSelected ? '2px solid #EA580C' : '1px solid #E2E8F0',
+                      backgroundColor: isSelected ? '#FFF7ED' : '#FAFAFA',
+                      color: isSelected ? '#C2410C' : '#475569',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {lvlName}{adj > 0 ? ` +₹${adj}` : ''}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

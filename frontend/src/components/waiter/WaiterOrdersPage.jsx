@@ -1975,15 +1975,43 @@ export default function WaiterOrdersPage() {
             <h4 style={{ margin: '0 0 0.6rem 0', fontSize: '0.9rem', fontWeight: 800, color: '#0F2A1D' }}>Itemized Ordered Dishes:</h4>
             <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '0.75rem', marginBottom: '1.25rem', maxHeight: '180px', overflowY: 'auto' }}>
               {Array.isArray(viewOrderDetailsModal.items) ? (
-                viewOrderDetailsModal.items.filter(it => it && it.status !== 'CANCELLED').map((it, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: idx === viewOrderDetailsModal.items.length - 1 ? 'none' : '1px solid #F1F5F9', fontSize: '0.82rem' }}>
-                    <div>
-                      <span style={{ fontWeight: 800, color: '#0F2A1D' }}>{typeof it === 'string' ? it : it.name}</span>
-                      <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '0.4rem' }}>(x{it.quantity || 1})</span>
+                viewOrderDetailsModal.items.filter(it => it && it.status !== 'CANCELLED').map((it, idx) => {
+                  const itemQty = Number(it.quantity || it.qty || 1);
+                  const uPrice = Number(it.unitPrice !== undefined ? it.unitPrice : (it.price || 0));
+                  const lineTot = Number(it.totalPrice !== undefined ? it.totalPrice : (uPrice * itemQty));
+                  const spiceStr = it.spiceLevel || it.selectedSpiceLevel;
+                  const spicePrice = Number(it.spiceLevelPrice || 0);
+                  const addOnsArr = it.selectedAddOns || it.addOns || [];
+
+                  return (
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', padding: '0.5rem 0', borderBottom: '1px solid #F1F5F9' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 800, color: '#0F2A1D' }}>{typeof it === 'string' ? it : it.name}</span>
+                          <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '0.4rem' }}>(x{itemQty})</span>
+                        </div>
+                        <div style={{ fontWeight: 900, color: '#166534' }}>₹{lineTot}</div>
+                      </div>
+
+                      {/* Customization Details Badges */}
+                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.25rem', alignItems: 'center' }}>
+                        {spiceStr && (
+                          <span style={{ fontSize: '0.7rem', color: '#EA580C', backgroundColor: '#FFF7ED', border: '1px solid #FFEDD5', padding: '0.08rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
+                            🌶️ Spice: {spiceStr}{spicePrice > 0 ? ` (+₹${spicePrice})` : ''}
+                          </span>
+                        )}
+                        {addOnsArr.length > 0 && (
+                          <span style={{ fontSize: '0.7rem', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '0.08rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
+                            ➕ Add-ons: {addOnsArr.map(a => `${a.name || a}${a.price > 0 ? ` (+₹${a.price})` : ' (Free)'}`).join(', ')}
+                          </span>
+                        )}
+                        <span style={{ fontSize: '0.7rem', color: '#64748B', marginLeft: 'auto' }}>
+                          Unit: ₹{uPrice}
+                        </span>
+                      </div>
                     </div>
-                    <div style={{ fontWeight: 900, color: '#166534' }}>₹{(Number(it.price || 150) * Number(it.quantity || 1))}</div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div style={{ fontSize: '0.82rem', color: '#475569' }}>No dish details found.</div>
               )}

@@ -645,7 +645,7 @@ export default function MenuPage({ onOpenDemoModal }) {
     return () => window.removeEventListener('flavora_cart_updated', handleCartSync);
   }, [tableNum, activeTableSession?.sessionToken]);
 
-  const handleAddToCart = (id) => {
+  const handleAddToCart = (id, qty = 1, options = null) => {
     if (!tableNum) {
       alert(`Ordering is available exclusively for Dine-In guests via Table QR Code. Please scan your dining table's QR code to unlock dish ordering.`);
       return;
@@ -658,25 +658,80 @@ export default function MenuPage({ onOpenDemoModal }) {
       alert(`The bill has already been generated for Table ${tableNum || 'this table'}. Additional items cannot be added.`);
       return;
     }
-    const updated = { ...cart, [id]: (cart[id] || 0) + 1 };
+
+    const dish = findItemInCatalog(id, menuItems);
+    const dishName = dish ? dish.name : id;
+    const basePrice = options?.basePrice !== undefined ? Number(options.basePrice) : Number(dish?.price || 0);
+
+    const spiceLevel = options?.spiceLevel || options?.selectedSpiceLevel || dish?.spiceLevel || dish?.spice || 'Medium';
+    const spiceLevelPrice = options?.spiceLevelPrice !== undefined ? Number(options.spiceLevelPrice) : 0;
+
+    const addOns = options?.selectedAddOns || options?.customizations || options?.addOns || [];
+    const sortedAddOnsKey = addOns.map(a => (typeof a === 'string' ? a : (a.name || '')).trim().toLowerCase()).sort().join('|');
+
+    const itemKey = `${id}_${spiceLevel.toLowerCase()}_${sortedAddOnsKey}`;
+
+    const existingEntry = cart[itemKey] || (typeof cart[id] === 'object' ? cart[id] : null);
+    const targetKey = existingEntry ? (cart[itemKey] ? itemKey : id) : itemKey;
+    const currentQty = existingEntry ? Number(existingEntry.quantity || existingEntry.qty || 0) : (typeof cart[id] === 'number' ? cart[id] : 0);
+    const newQty = currentQty + qty;
+
+    const addOnsCost = addOns.reduce((sum, a) => sum + Number(a.price || 0), 0);
+    const unitPrice = options?.unitPrice !== undefined ? Number(options.unitPrice) : (basePrice + spiceLevelPrice + addOnsCost);
+
+    const newItemObj = {
+      key: targetKey,
+      menuItemId: id,
+      id: id,
+      name: dishName,
+      basePrice: basePrice,
+      spiceLevel: spiceLevel,
+      selectedSpiceLevel: spiceLevel,
+      spiceLevelPrice: spiceLevelPrice,
+      selectedAddOns: addOns,
+      addOns: addOns,
+      customizations: addOns,
+      instructions: options?.instructions || '',
+      unitPrice: unitPrice,
+      price: unitPrice,
+      quantity: newQty,
+      totalPrice: Number((unitPrice * newQty).toFixed(2))
+    };
+
+    const updated = { ...cart, [targetKey]: newItemObj };
     updateCartState(updated);
   };
 
-  const handleDecreaseQty = (id) => {
-    const current = cart[id] || 0;
-    let updated;
-    if (current <= 1) {
-      updated = { ...cart };
-      delete updated[id];
-    } else {
-      updated = { ...cart, [id]: current - 1 };
+  const handleDecreaseQty = (keyOrId) => {
+    const existing = cart[keyOrId];
+    if (!existing) return;
+
+    let updated = { ...cart };
+    if (typeof existing === 'number') {
+      if (existing <= 1) {
+        delete updated[keyOrId];
+      } else {
+        updated[keyOrId] = existing - 1;
+      }
+    } else if (typeof existing === 'object') {
+      const q = Number(existing.quantity || existing.qty || 1);
+      if (q <= 1) {
+        delete updated[keyOrId];
+      } else {
+        const newQty = q - 1;
+        updated[keyOrId] = {
+          ...existing,
+          quantity: newQty,
+          totalPrice: Number((existing.unitPrice * newQty).toFixed(2))
+        };
+      }
     }
     updateCartState(updated);
   };
 
-  const handleDeleteItem = (id) => {
+  const handleDeleteItem = (keyOrId) => {
     const updated = { ...cart };
-    delete updated[id];
+    delete updated[keyOrId];
     updateCartState(updated);
   };
 
@@ -884,7 +939,7 @@ export default function MenuPage({ onOpenDemoModal }) {
     return 0;
   });
 
-  const totalCartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+  const totalCartCount = Object.values(cart).reduce((sum, val) => sum + (typeof val === 'number' ? val : Number(val?.quantity || val?.qty || 1)), 0);
   const totalCartPrice = calculateCartTotal(cart, menuItems);
 
   // Group filtered dishes dynamically by category
@@ -936,12 +991,40 @@ export default function MenuPage({ onOpenDemoModal }) {
     if (totalCartCount === 0) return;
 
     setIsSubmittingOrder(true);
-    const orderItems = Object.entries(cart).map(([id, qty]) => {
-      const dish = findItemInCatalog(id, menuItems);
+    const orderItems = Object.entries(cart).map(([key, val]) => {
+      if (typeof val === 'object' && val !== null) {
+        return {
+          menuItemId: val.menuItemId || val.id || key,
+          id: val.id || val.menuItemId || key,
+          name: val.name,
+          basePrice: Number(val.basePrice || val.price || 0),
+          spiceLevel: val.spiceLevel || val.selectedSpiceLevel || 'Medium',
+          selectedSpiceLevel: val.selectedSpiceLevel || val.spiceLevel || 'Medium',
+          spiceLevelPrice: Number(val.spiceLevelPrice || 0),
+          selectedAddOns: val.selectedAddOns || val.addOns || [],
+          addOns: val.selectedAddOns || val.addOns || [],
+          unitPrice: Number(val.unitPrice || val.price || 0),
+          price: Number(val.unitPrice || val.price || 0),
+          quantity: Number(val.quantity || val.qty || 1),
+          totalPrice: Number(val.totalPrice || ((val.unitPrice || val.price) * (val.quantity || 1)))
+        };
+      }
+      const dish = findItemInCatalog(key, menuItems);
+      const bPrice = dish ? dish.price : 0;
       return {
-        name: dish ? dish.name : id,
-        price: dish ? dish.price : 0,
-        quantity: qty
+        menuItemId: dish ? (dish.id || dish._id) : key,
+        id: dish ? (dish.id || dish._id) : key,
+        name: dish ? dish.name : key,
+        basePrice: bPrice,
+        spiceLevel: 'Medium',
+        selectedSpiceLevel: 'Medium',
+        spiceLevelPrice: 0,
+        selectedAddOns: [],
+        addOns: [],
+        unitPrice: bPrice,
+        price: bPrice,
+        quantity: Number(val || 1),
+        totalPrice: bPrice * Number(val || 1)
       };
     });
 
@@ -1191,15 +1274,13 @@ export default function MenuPage({ onOpenDemoModal }) {
             isAddDisabled={isAddDisabled}
             disabledReason={addDisabledReason}
             onClose={() => setSelectedDishForDetail(null)}
-            onAddToCart={(dishObj, qty) => {
+            onAddToCart={(dishObj, qty, options) => {
               if (isAddDisabled) {
                 alert(addDisabledReason || 'Ordering is currently locked for this table.');
                 return;
               }
-              const id = dishObj.id || dishObj._id;
-              const currentQty = cart[id] || 0;
-              const newCart = { ...cart, [id]: currentQty + qty };
-              updateCartState(newCart);
+              handleAddToCart(dishObj.id || dishObj._id, qty, options);
+              setSelectedDishForDetail(null);
             }}
             language={currentLanguage}
           />
@@ -1298,34 +1379,59 @@ export default function MenuPage({ onOpenDemoModal }) {
                   </div>
 
                   <div className="customer-qr-dishes-list">
-                    {Object.entries(cart).map(([id, qty]) => {
-                      const dish = findItemInCatalog(id, menuItems);
-                      return dish ? (
-                        <div key={id} className="customer-qr-cart-row">
-                          {/* Left: Dish Name & Unit Price */}
-                          <div className="customer-qr-cart-info">
-                            <div className="customer-qr-cart-name">
+                    {Object.entries(cart).map(([key, val]) => {
+                      const isObj = typeof val === 'object' && val !== null;
+                      const dish = isObj ? val : findItemInCatalog(key, menuItems);
+                      if (!dish) return null;
+
+                      const itemQty = isObj ? (val.quantity || 1) : val;
+                      const itemUnitPrice = isObj ? (val.unitPrice !== undefined ? val.unitPrice : val.price) : dish.price;
+                      const itemTotalPrice = isObj ? (val.totalPrice !== undefined ? val.totalPrice : itemUnitPrice * itemQty) : (dish.price * itemQty);
+                      const spiceName = isObj ? (val.spiceLevel || val.selectedSpiceLevel) : null;
+                      const spiceAdj = isObj ? (val.spiceLevelPrice || 0) : 0;
+                      const addOnsList = isObj ? (val.selectedAddOns || val.addOns || []) : [];
+
+                      return (
+                        <div key={key} className="customer-qr-cart-row" style={{ padding: '0.75rem 0', borderBottom: '1px solid #F1F5F9' }}>
+                          <div className="customer-qr-cart-info" style={{ flex: 1 }}>
+                            <div className="customer-qr-cart-name" style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.92rem' }}>
                               {dish.name}
                             </div>
-                            <div className="customer-qr-cart-unit-price">₹{dish.price} each</div>
+                            
+                            {/* Customization Details Badges */}
+                            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                              {spiceName && (
+                                <span style={{ fontSize: '0.72rem', color: '#C2410C', backgroundColor: '#FFF7ED', border: '1px solid #FFEDD5', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                  🌶️ {spiceName}{spiceAdj > 0 ? ` (+₹${spiceAdj})` : ''}
+                                </span>
+                              )}
+                              {addOnsList.length > 0 && addOnsList.map((a, aIdx) => (
+                                <span key={aIdx} style={{ fontSize: '0.72rem', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                  + {a.name} {a.price > 0 ? `(+₹${a.price})` : '(Free)'}
+                                </span>
+                              ))}
+                            </div>
+
+                            <div className="customer-qr-cart-unit-price" style={{ fontSize: '0.76rem', color: '#64748B', marginTop: '0.2rem', fontWeight: 600 }}>
+                              Unit Price: ₹{itemUnitPrice}
+                            </div>
                           </div>
 
-                          {/* Right: Quantity Adjuster & Row Total */}
-                          <div className="customer-qr-cart-controls">
+                          <div className="customer-qr-cart-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <div className="customer-qr-qty-picker">
                               <button
                                 type="button"
-                                onClick={() => handleDecreaseQty(dish.id || id)}
+                                onClick={() => handleDecreaseQty(key)}
                                 className="customer-qr-qty-btn"
                                 aria-label="Decrease quantity"
                               >
                                 <Minus size={13} />
                               </button>
-                              <span className="customer-qr-qty-val">{qty}</span>
+                              <span className="customer-qr-qty-val">{itemQty}</span>
                               <button
                                 type="button"
                                 disabled={isTableBillGenerated}
-                                onClick={() => !isTableBillGenerated && handleAddToCart(dish.id || id)}
+                                onClick={() => !isTableBillGenerated && handleAddToCart(dish.menuItemId || dish.id || key, 1, isObj ? val : null)}
                                 className="customer-qr-qty-btn"
                                 aria-label="Increase quantity"
                                 style={{
@@ -1336,10 +1442,12 @@ export default function MenuPage({ onOpenDemoModal }) {
                                 <Plus size={13} />
                               </button>
                             </div>
-                            <span className="customer-qr-row-price">₹{dish.price * qty}</span>
+                            <span className="customer-qr-row-price" style={{ fontWeight: 900, color: '#166534', fontSize: '0.95rem', minWidth: '55px', textAlign: 'right' }}>
+                              ₹{itemTotalPrice}
+                            </span>
                           </div>
                         </div>
-                      ) : null;
+                      );
                     })}
                   </div>
 
@@ -3003,10 +3111,8 @@ export default function MenuPage({ onOpenDemoModal }) {
               alert(addDisabledReason || 'Ordering is currently locked for this table.');
               return;
             }
-            const id = dishObj.id || dishObj._id;
-            const currentQty = cart[id] || 0;
-            const newCart = { ...cart, [id]: currentQty + qty };
-            updateCartState(newCart);
+            handleAddToCart(dishObj.id || dishObj._id, qty, options);
+            setSelectedDishForDetail(null);
           }}
           language={currentLanguage}
         />

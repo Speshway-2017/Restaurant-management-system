@@ -234,11 +234,19 @@ export function findItemInCatalog(idKey, dynamicList = []) {
 // Calculate exact cart total using single source of truth price for each item
 export function calculateCartTotal(cartObject, dynamicList = []) {
   if (!cartObject || typeof cartObject !== 'object') return 0;
-  return Object.entries(cartObject).reduce((total, [idKey, qty]) => {
-    if (!qty || qty <= 0) return total;
-    const item = findItemInCatalog(idKey, dynamicList);
-    const unitPrice = item ? item.price : 0;
-    return total + (unitPrice * qty);
+  return Object.entries(cartObject).reduce((total, [idKey, val]) => {
+    if (!val) return total;
+    if (typeof val === 'number') {
+      if (val <= 0) return total;
+      const item = findItemInCatalog(idKey, dynamicList);
+      const unitPrice = item ? item.price : 0;
+      return total + (unitPrice * val);
+    } else if (typeof val === 'object' && val !== null) {
+      const q = Math.max(1, Number(val.quantity || val.qty || 1));
+      const uPrice = val.unitPrice !== undefined ? Number(val.unitPrice) : (val.price !== undefined ? Number(val.price) : 0);
+      return total + (uPrice * q);
+    }
+    return total;
   }, 0);
 }
 

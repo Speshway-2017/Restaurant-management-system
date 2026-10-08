@@ -2,6 +2,131 @@ const orderRepository = require('../repositories/orderRepository');
 const Table = require('../models/Table');
 
 class OrderService {
+  async processIncomingItems(items) {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    let MenuItem = null;
+    let menuItems = [];
+    try {
+      MenuItem = require('../models/MenuItem');
+      menuItems = await MenuItem.find({}).lean();
+    } catch (e) {
+      console.warn("Could not fetch MenuItems for validation:", e.message);
+    }
+    
+    const menuItemMap = new Map();
+    menuItems.forEach(mi => {
+      if (mi._id) menuItemMap.set(mi._id.toString(), mi);
+      if (mi.name) menuItemMap.set(mi.name.toLowerCase().trim(), mi);
+    });
+
+    const DEFAULT_SPICE_DEFAULTS = {
+      'mild': 0,
+      'medium': 0,
+      'spicy': 15,
+      'extra hot': 25
+    };
+
+    const DEFAULT_ADDON_DEFAULTS = {
+      'extra cheese': 35,
+      'extra sauce': 25,
+      'extra sauce / gravy': 25,
+      'extra gravy': 25,
+      'less oil': 0,
+      'less oil / low sodium': 0,
+      'low sodium': 0
+    };
+
+    return items.map((item, idx) => {
+      const rawId = item.menuItemId || item.id || item._id || '';
+      const rawName = (item.name || item.dishId || '').trim();
+
+      // Find matching MenuItem in DB
+      let matchedMenuItem = null;
+      if (rawId && menuItemMap.has(String(rawId))) {
+        matchedMenuItem = menuItemMap.get(String(rawId));
+      } else if (rawName && menuItemMap.has(rawName.toLowerCase())) {
+        matchedMenuItem = menuItemMap.get(rawName.toLowerCase());
+      }
+
+      const basePrice = matchedMenuItem ? Number(matchedMenuItem.price) : Number(item.basePrice !== undefined ? item.basePrice : (item.price || 0));
+
+      // Spice level
+      const selectedSpiceLevel = item.selectedSpiceLevel || item.spiceLevel || matchedMenuItem?.spiceLevel || 'Medium';
+      let spiceLevelPrice = 0;
+
+      if (matchedMenuItem && Array.isArray(matchedMenuItem.spiceLevels) && matchedMenuItem.spiceLevels.length > 0) {
+        const foundSpice = matchedMenuItem.spiceLevels.find(s => s.name?.toLowerCase().trim() === selectedSpiceLevel.toLowerCase().trim());
+        if (foundSpice && foundSpice.priceAdjustment !== undefined && foundSpice.priceAdjustment !== null) {
+          spiceLevelPrice = Number(foundSpice.priceAdjustment) || 0;
+        } else if (item.spiceLevelPrice !== undefined && item.spiceLevelPrice !== null && !isNaN(Number(item.spiceLevelPrice))) {
+          spiceLevelPrice = Number(item.spiceLevelPrice);
+        } else {
+          spiceLevelPrice = DEFAULT_SPICE_DEFAULTS[selectedSpiceLevel.toLowerCase().trim()] ?? 0;
+        }
+      } else if (item.spiceLevelPrice !== undefined && item.spiceLevelPrice !== null && !isNaN(Number(item.spiceLevelPrice))) {
+        spiceLevelPrice = Number(item.spiceLevelPrice);
+      } else {
+        spiceLevelPrice = DEFAULT_SPICE_DEFAULTS[selectedSpiceLevel.toLowerCase().trim()] ?? 0;
+      }
+
+      // Add-ons / Customizations
+      const rawAddOns = item.selectedAddOns || item.addOns || item.customizations || [];
+      let addOnsTotal = 0;
+      const validatedAddOns = rawAddOns.map(ao => {
+        let name = '';
+        if (typeof ao === 'string') {
+          name = ao.trim();
+        } else if (ao && typeof ao === 'object') {
+          name = (ao.name || '').trim();
+        }
+
+        if (!name) return null;
+
+        let price = 0;
+        if (matchedMenuItem && Array.isArray(matchedMenuItem.customizations) && matchedMenuItem.customizations.length > 0) {
+          const foundCustom = matchedMenuItem.customizations.find(c => c.name?.toLowerCase().trim() === name.toLowerCase().trim());
+          if (foundCustom && foundCustom.price !== undefined && foundCustom.price !== null) {
+            price = Number(foundCustom.price) || 0;
+          } else if (typeof ao === 'object' && ao.price !== undefined && !isNaN(Number(ao.price))) {
+            price = Number(ao.price);
+          } else {
+            price = DEFAULT_ADDON_DEFAULTS[name.toLowerCase().trim()] ?? 0;
+          }
+        } else if (typeof ao === 'object' && ao.price !== undefined && !isNaN(Number(ao.price))) {
+          price = Number(ao.price);
+        } else {
+          price = DEFAULT_ADDON_DEFAULTS[name.toLowerCase().trim()] ?? 0;
+        }
+
+        addOnsTotal += price;
+        return { name, price };
+      }).filter(Boolean);
+
+      const unitPrice = Number((basePrice + spiceLevelPrice + addOnsTotal).toFixed(2));
+      const quantity = Math.max(1, Number(item.quantity || item.qty || 1));
+      const totalPrice = Number((unitPrice * quantity).toFixed(2));
+
+      return {
+        id: item.id || item._id || `item-${Date.now()}-${idx}`,
+        menuItemId: matchedMenuItem ? matchedMenuItem._id.toString() : (item.menuItemId || item.id || ''),
+        name: matchedMenuItem ? matchedMenuItem.name : (item.name || 'Delicious Item'),
+        basePrice: basePrice,
+        selectedSpiceLevel: selectedSpiceLevel,
+        spiceLevel: selectedSpiceLevel,
+        spiceLevelPrice: spiceLevelPrice,
+        selectedAddOns: validatedAddOns,
+        addOns: validatedAddOns,
+        unitPrice: unitPrice,
+        price: unitPrice, // unitPrice for backward compatibility
+        quantity: quantity,
+        totalPrice: totalPrice,
+        status: item.status || (item.isDelivered ? 'DELIVERED' : (item.isReady ? 'READY' : 'PLACED')),
+        isReady: Boolean(item.isReady || item.status === 'READY' || item.status === 'DELIVERED'),
+        isDelivered: Boolean(item.isDelivered || item.status === 'DELIVERED')
+      };
+    });
+  }
+
   async getOrders(query = {}) {
     return await orderRepository.findAll(query) || [];
   }
@@ -13,16 +138,8 @@ class OrderService {
     const cleanNum = rawDigits ? String(parseInt(rawDigits, 10)) : '10';
     const formattedTable = `T-${cleanNum.padStart(2, '0')}`;
 
-    // Normalize incoming new items
-    const newIncomingItems = Array.isArray(data.items) ? data.items.map((item, idx) => ({
-      id: item.id || item._id || `item-${Date.now()}-${idx}`,
-      name: item.name || item.dishId || 'Delicious Item',
-      price: Number(item.price) || 0,
-      quantity: Number(item.quantity || item.qty || 1),
-      status: item.status || (item.isDelivered ? 'DELIVERED' : (item.isReady ? 'READY' : 'PLACED')),
-      isReady: Boolean(item.isReady || item.status === 'READY' || item.status === 'DELIVERED'),
-      isDelivered: Boolean(item.isDelivered || item.status === 'DELIVERED')
-    })) : [];
+    // Normalize and validate incoming new items with full menu configuration price recalculation
+    const newIncomingItems = await this.processIncomingItems(data.items);
 
     const OrderModel = require('../models/Order');
     const exactRegex = new RegExp(`^(T-|Table\\s*)?0*${cleanNum}$`, 'i');
@@ -165,28 +282,47 @@ class OrderService {
       const existingItems = Array.isArray(existingActiveOrder.items) ? [...existingActiveOrder.items] : [];
 
       // Append new items while preserving existing item statuses completely
-      newIncomingItems.forEach((newItem, idx) => {
-        existingItems.push({
-          id: newItem.id || `item-${Date.now()}-${idx}`,
-          name: newItem.name,
-          price: Number(newItem.price) || 0,
-          quantity: Number(newItem.quantity || newItem.qty || 1),
-          status: 'PLACED',
-          isReady: false,
-          isDelivered: false
-        });
+      newIncomingItems.forEach((newItem) => {
+        existingItems.push(newItem);
       });
 
       existingActiveOrder.items = existingItems;
 
-      // Recalculate total amount for the combined order
-      const newCalculatedTotal = existingItems.reduce((sum, it) => {
-        const q = Number(it.quantity || it.qty || 1);
-        const p = Number(it.price) || 0;
-        return sum + (p * q);
+      // Recalculate total amount for the combined order using line totals
+      const activeExistingItems = existingItems.filter(it => it && it.status !== 'CANCELLED' && !it.isCancelled);
+      const newCalculatedSubtotal = activeExistingItems.reduce((sum, it) => {
+        const lineTot = it.totalPrice !== undefined ? Number(it.totalPrice) : (Number(it.price || 0) * Number(it.quantity || 1));
+        return sum + lineTot;
       }, 0);
 
-      existingActiveOrder.total = newCalculatedTotal;
+      existingActiveOrder.subtotal = Number(newCalculatedSubtotal.toFixed(2));
+      existingActiveOrder.originalTotal = Number(newCalculatedSubtotal.toFixed(2));
+
+      // Fetch active Admin Settings for GST calculation
+      const Settings = require('../models/Settings');
+      let activeSettings = null;
+      try {
+        activeSettings = await Settings.findOne({}).sort({ updatedAt: -1 });
+      } catch (e) {}
+      const rawAdminGst = activeSettings?.gstRate || '5%';
+      const adminGstNum = parseFloat(String(rawAdminGst).replace(/[^0-9.]/g, '')) || 5;
+
+      const cgstRateVal = adminGstNum / 2;
+      const sgstRateVal = adminGstNum / 2;
+      const cgstAmtVal = Number(((newCalculatedSubtotal * cgstRateVal) / 100).toFixed(2));
+      const sgstAmtVal = Number(((newCalculatedSubtotal * sgstRateVal) / 100).toFixed(2));
+      const gstAmtVal = Number((cgstAmtVal + sgstAmtVal).toFixed(2));
+      const tipVal = Number(existingActiveOrder.tipAmount ?? existingActiveOrder.tip ?? 0);
+      const grandTotalVal = Number((newCalculatedSubtotal + gstAmtVal + tipVal).toFixed(2));
+
+      existingActiveOrder.gstRate = `${adminGstNum}%`;
+      existingActiveOrder.cgstRate = cgstRateVal;
+      existingActiveOrder.sgstRate = sgstRateVal;
+      existingActiveOrder.cgstAmount = cgstAmtVal;
+      existingActiveOrder.sgstAmount = sgstAmtVal;
+      existingActiveOrder.gstAmount = gstAmtVal;
+      existingActiveOrder.grandTotal = grandTotalVal;
+      existingActiveOrder.total = grandTotalVal;
 
       // Reopen/continue order status if new unserved items are added
       const hasDeliveredItems = existingItems.some(i => i.isDelivered || i.status === 'DELIVERED' || i.status === 'SERVED');
@@ -261,8 +397,8 @@ class OrderService {
     const adminGstNum = parseFloat(String(rawAdminGst).replace(/[^0-9.]/g, '')) || 5;
 
     const activeIncomingItems = newIncomingItems.filter(it => it && it.status !== 'CANCELLED' && !it.isCancelled);
-    const calculatedSubtotal = activeIncomingItems.reduce((sum, it) => sum + (Number(it.price || 0) * Number(it.quantity || 1)), 0);
-    const subtotalVal = data.subtotal !== undefined && Number(data.subtotal) >= 0 ? Number(data.subtotal) : calculatedSubtotal;
+    const calculatedSubtotal = activeIncomingItems.reduce((sum, it) => sum + (it.totalPrice !== undefined ? Number(it.totalPrice) : (Number(it.price || 0) * Number(it.quantity || 1))), 0);
+    const subtotalVal = Number(calculatedSubtotal.toFixed(2));
 
     const cgstRateVal = adminGstNum / 2;
     const sgstRateVal = adminGstNum / 2;
@@ -525,7 +661,7 @@ class OrderService {
 
     const itemsList = fullOrderData.items || existingOrder?.items || [];
     const activeItems = itemsList.filter(it => it && it.status !== 'CANCELLED' && it.status !== 'Cancelled' && !it.isCancelled);
-    const calculatedSubtotal = activeItems.reduce((sum, it) => sum + (Number(it.price || 0) * Number(it.quantity || 1)), 0);
+    const calculatedSubtotal = activeItems.reduce((sum, it) => sum + (it.totalPrice !== undefined ? Number(it.totalPrice) : (Number(it.price || 0) * Number(it.quantity || 1))), 0);
 
     const subtotal = (isAlreadyBillStored && existingOrder?.subtotal !== undefined && existingOrder?.subtotal !== null && Number(existingOrder.subtotal) >= 0)
       ? Number(existingOrder.subtotal)

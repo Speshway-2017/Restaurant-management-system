@@ -131,6 +131,17 @@ export default function AdminMenuPage() {
             desc: item.desc || '',
             prepTime: item.prepTime || '15–20 mins',
             spice: item.spiceLevel || item.spice || 'Medium',
+            spiceLevels: (Array.isArray(item.spiceLevels) && item.spiceLevels.length > 0) ? item.spiceLevels : [
+              { name: 'Mild', priceAdjustment: 0 },
+              { name: 'Medium', priceAdjustment: 0 },
+              { name: 'Spicy', priceAdjustment: 15 },
+              { name: 'Extra Hot', priceAdjustment: 25 }
+            ],
+            customizations: (Array.isArray(item.customizations) && item.customizations.length > 0) ? item.customizations : [
+              { name: 'Extra Cheese', price: 35 },
+              { name: 'Extra Sauce / Gravy', price: 25 },
+              { name: 'Less Oil / Low Sodium', price: 0 }
+            ],
             img: item.img || '/hero_dish_2.png'
           }));
           setMenuItems(mapped);
@@ -156,6 +167,17 @@ export default function AdminMenuPage() {
     isVeg: true,
     prepTime: '15–20 mins',
     spice: 'Medium',
+    spiceLevels: [
+      { name: 'Mild', priceAdjustment: 0 },
+      { name: 'Medium', priceAdjustment: 0 },
+      { name: 'Spicy', priceAdjustment: 15 },
+      { name: 'Extra Hot', priceAdjustment: 25 }
+    ],
+    customizations: [
+      { name: 'Extra Cheese', price: 35 },
+      { name: 'Extra Sauce / Gravy', price: 25 },
+      { name: 'Less Oil / Low Sodium', price: 0 }
+    ],
     available: true,
     bestseller: false,
     desc: '',
@@ -543,6 +565,17 @@ export default function AdminMenuPage() {
       isVeg: true,
       prepTime: '15–20 mins',
       spice: 'Medium',
+      spiceLevels: [
+        { name: 'Mild', priceAdjustment: 0 },
+        { name: 'Medium', priceAdjustment: 0 },
+        { name: 'Spicy', priceAdjustment: 15 },
+        { name: 'Extra Hot', priceAdjustment: 25 }
+      ],
+      customizations: [
+        { name: 'Extra Cheese', price: 35 },
+        { name: 'Extra Sauce / Gravy', price: 25 },
+        { name: 'Less Oil / Low Sodium', price: 0 }
+      ],
       available: true,
       bestseller: false,
       desc: '',
@@ -559,7 +592,18 @@ export default function AdminMenuPage() {
       price: item.price,
       isVeg: item.isVeg !== undefined ? item.isVeg : true,
       prepTime: item.prepTime,
-      spice: item.spice,
+      spice: item.spice || item.spiceLevel || 'Medium',
+      spiceLevels: (Array.isArray(item.spiceLevels) && item.spiceLevels.length > 0) ? item.spiceLevels : [
+        { name: 'Mild', priceAdjustment: 0 },
+        { name: 'Medium', priceAdjustment: 0 },
+        { name: 'Spicy', priceAdjustment: 15 },
+        { name: 'Extra Hot', priceAdjustment: 25 }
+      ],
+      customizations: (Array.isArray(item.customizations) && item.customizations.length > 0) ? item.customizations : [
+        { name: 'Extra Cheese', price: 35 },
+        { name: 'Extra Sauce / Gravy', price: 25 },
+        { name: 'Less Oil / Low Sodium', price: 0 }
+      ],
       available: item.available,
       bestseller: item.bestseller,
       desc: item.desc,
@@ -706,6 +750,8 @@ export default function AdminMenuPage() {
       price: Number(dishFormData.price),
       isVeg: dishFormData.isVeg,
       spiceLevel: dishFormData.spice || 'Medium',
+      spiceLevels: dishFormData.spiceLevels,
+      customizations: dishFormData.customizations,
       prepTime: dishFormData.prepTime || '15–20 mins',
       desc: dishFormData.desc || 'Special dish prepared with fresh ingredients.',
       img: finalImg,
@@ -724,6 +770,8 @@ export default function AdminMenuPage() {
         isVeg: dishFormData.isVeg,
         prepTime: dishFormData.prepTime || '15–20 mins',
         spice: dishFormData.spice || 'Medium',
+        spiceLevels: dishFormData.spiceLevels,
+        customizations: dishFormData.customizations,
         available: dishFormData.available,
         isAvailable: dishFormData.available,
         bestseller: dishFormData.bestseller,
@@ -1880,6 +1928,132 @@ export default function AdminMenuPage() {
                     value={dishFormData.desc}
                     onChange={(e) => setDishFormData({ ...dishFormData, desc: e.target.value })}
                   />
+                </div>
+
+                {/* SPICE LEVEL PRICE ADJUSTMENTS CONFIGURATION */}
+                <div className="admin-form-group mb-4" style={{ background: '#FAF6EE', padding: '1.25rem', borderRadius: '12px', border: '1px solid #E5DBC8' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.9rem', margin: 0, fontWeight: 700, color: '#1E4636', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Flame size={16} color="#EA580C" /> Spice Level Price Adjustments
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => setDishFormData(prev => ({
+                        ...prev,
+                        spiceLevels: [...(prev.spiceLevels || []), { name: '', priceAdjustment: 0 }]
+                      }))}
+                      style={{ fontSize: '0.76rem', background: '#1E4636', color: '#FFF', padding: '0.25rem 0.6rem', borderRadius: '6px' }}
+                    >
+                      + Add Level
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {(dishFormData.spiceLevels || []).map((sl, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Level Name (e.g. Spicy)"
+                          value={sl.name}
+                          onChange={(e) => {
+                            const newArr = [...dishFormData.spiceLevels];
+                            newArr[idx].name = e.target.value;
+                            setDishFormData({ ...dishFormData, spiceLevels: newArr });
+                          }}
+                          style={{ flex: 2, fontSize: '0.85rem' }}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', flex: 1 }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E4636' }}>+₹</span>
+                          <input
+                            type="number"
+                            className="form-control"
+                            placeholder="0"
+                            value={sl.priceAdjustment}
+                            onChange={(e) => {
+                              const newArr = [...dishFormData.spiceLevels];
+                              newArr[idx].priceAdjustment = Number(e.target.value || 0);
+                              setDishFormData({ ...dishFormData, spiceLevels: newArr });
+                            }}
+                            style={{ fontSize: '0.85rem' }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newArr = dishFormData.spiceLevels.filter((_, i) => i !== idx);
+                            setDishFormData({ ...dishFormData, spiceLevels: newArr });
+                          }}
+                          style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', padding: '0.2rem' }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ADD-ONS & CUSTOMIZATIONS CONFIGURATION */}
+                <div className="admin-form-group mb-4" style={{ background: '#FFFBF4', padding: '1.25rem', borderRadius: '12px', border: '1px solid #E5DBC8' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.9rem', margin: 0, fontWeight: 700, color: '#1E4636', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Sparkles size={16} color="#E07A3C" /> Add-ons & Customizations
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => setDishFormData(prev => ({
+                        ...prev,
+                        customizations: [...(prev.customizations || []), { name: '', price: 0 }]
+                      }))}
+                      style={{ fontSize: '0.76rem', background: '#E07A3C', color: '#FFF', padding: '0.25rem 0.6rem', borderRadius: '6px' }}
+                    >
+                      + Add Customization
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {(dishFormData.customizations || []).map((cust, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Customization Name (e.g. Extra Cheese)"
+                          value={cust.name}
+                          onChange={(e) => {
+                            const newArr = [...dishFormData.customizations];
+                            newArr[idx].name = e.target.value;
+                            setDishFormData({ ...dishFormData, customizations: newArr });
+                          }}
+                          style={{ flex: 2, fontSize: '0.85rem' }}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', flex: 1 }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E4636' }}>₹</span>
+                          <input
+                            type="number"
+                            className="form-control"
+                            placeholder="Price (0 for Free)"
+                            value={cust.price}
+                            onChange={(e) => {
+                              const newArr = [...dishFormData.customizations];
+                              newArr[idx].price = Number(e.target.value || 0);
+                              setDishFormData({ ...dishFormData, customizations: newArr });
+                            }}
+                            style={{ fontSize: '0.85rem' }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newArr = dishFormData.customizations.filter((_, i) => i !== idx);
+                            setDishFormData({ ...dishFormData, customizations: newArr });
+                          }}
+                          style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', padding: '0.2rem' }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Dish Image Selection with Tabs (Upload File to Cloudinary / Paste Image Link / Preset Gallery) */}

@@ -6,6 +6,14 @@ const menuItemSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   isVeg: { type: Boolean, default: true },
   spiceLevel: { type: String, default: 'Medium' },
+  spiceLevels: [{
+    name: { type: String },
+    priceAdjustment: { type: Number, default: 0 }
+  }],
+  customizations: [{
+    name: { type: String },
+    price: { type: Number, default: 0 }
+  }],
   prepTime: { type: String, default: '15 mins' },
   desc: { type: String, default: '' },
   img: { type: String, default: '/hero_dish_2.png' },

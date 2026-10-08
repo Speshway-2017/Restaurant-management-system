@@ -21,7 +21,14 @@ export const getBillingDetails = (order, brandingSettings) => {
   const items = Array.isArray(order?.items) ? order.items : [];
   const nonCancelledItems = items.filter(it => it && it.status !== 'CANCELLED' && it.status !== 'Cancelled' && !it.isCancelled);
 
-  const calculatedSubtotal = nonCancelledItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+  const calculatedSubtotal = nonCancelledItems.reduce((sum, item) => {
+    if (item.totalPrice !== undefined && !isNaN(Number(item.totalPrice))) {
+      return sum + Number(item.totalPrice);
+    }
+    const itemUnitPrice = Number(item.unitPrice !== undefined ? item.unitPrice : (item.price || 0));
+    const itemQty = Number(item.quantity || item.qty || 1);
+    return sum + (itemUnitPrice * itemQty);
+  }, 0);
 
   const isStoredBill = Boolean(
     order?.isBillGenerated ||
