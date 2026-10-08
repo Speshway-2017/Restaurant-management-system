@@ -3,11 +3,15 @@ const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const result = await authService.login(email, password);
+    const { email, password, requiredRole, client, app } = req.body;
+    const clientTarget = client || app || req.headers['x-app-target'] || req.headers['x-client-target'];
+    const roleRequirement = requiredRole || (clientTarget === 'waiter_mobile' || app === 'waiter' ? 'waiter' : null);
+
+    const result = await authService.login(email, password, { requiredRole: roleRequirement, clientTarget });
     return successResponse(res, result, 'Login successful');
   } catch (error) {
-    return errorResponse(res, error.message || 'Invalid email or password', 401);
+    const statusCode = error.statusCode || 401;
+    return errorResponse(res, error.message || 'Invalid email or password', statusCode);
   }
 };
 

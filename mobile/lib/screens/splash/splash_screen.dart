@@ -156,18 +156,14 @@ class _SplashScreenState extends State<SplashScreen>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'LOGIN TO CONTINUE',
+                          'GET STARTED',
                           style: TextStyle(
                             fontSize: 16.5,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.5,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 20,
-                        ),
+                        
                       ],
                     ),
                   ),

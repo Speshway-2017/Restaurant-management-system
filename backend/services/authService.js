@@ -3,7 +3,7 @@ const generateToken = require('../utils/generateToken');
 const User = require('../models/User');
 
 class AuthService {
-  async login(email, password) {
+  async login(email, password, options = {}) {
     if (!email || !password) {
       throw new Error('Invalid email or password');
     }
@@ -28,7 +28,18 @@ class AuthService {
       throw new Error('Invalid email or password');
     }
 
-    // 4. Generate JWT Token with exact user ID
+    // 4. Role restriction validation for application-specific login requests
+    const userRoleNormalized = (user.role || '').trim().toLowerCase();
+    if (options.requiredRole) {
+      const reqRole = String(options.requiredRole).trim().toLowerCase();
+      if (userRoleNormalized !== reqRole) {
+        const err = new Error(`Access denied. This application is only for ${reqRole} accounts.`);
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+
+    // 5. Generate JWT Token with exact user ID
     const token = generateToken(user._id, user.role);
 
     const resolvedEmpId = user.empId || (user.role && user.role.toLowerCase().includes('waiter')
@@ -96,6 +107,33 @@ class AuthService {
           phone: '+91 98765 43210',
           branch: 'Jubilee Hills (Main Branch)',
           empId: 'FLV-EMP-101'
+        },
+        {
+          name: 'Waiter Venky',
+          email: 'waiter1@rms.com',
+          password: 'waiter123',
+          role: 'Waiter',
+          phone: '+91 98765 11111',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSW-01'
+        },
+        {
+          name: 'Chef Ramu',
+          email: 'chef1@rms.com',
+          password: 'chef123',
+          role: 'Chef',
+          phone: '+91 98765 22222',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSC-01'
+        },
+        {
+          name: 'Receptionist Raj',
+          email: 'receptionist1@rms.com',
+          password: 'receptionist123',
+          role: 'Receptionist',
+          phone: '+91 98765 33333',
+          branch: 'Jubilee Hills (Main Branch)',
+          empId: 'RMSR-01'
         }
       ];
 

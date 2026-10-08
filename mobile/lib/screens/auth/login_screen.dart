@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../main/main_navigation_screen.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _rememberMe = true;
+  bool _acceptedTerms = false;
 
   @override
   void dispose() {
@@ -27,6 +30,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
+      if (!_acceptedTerms) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.gpp_maybe_outlined, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Please accept the Terms & Conditions and Privacy Policy to proceed.',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.cancelledText,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
+
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final success = await authProvider.login(
         _emailController.text.trim(),
@@ -34,7 +61,10 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (success && mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+          (route) => false,
+        );
       } else if (!success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -58,6 +88,113 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     }
+  }
+
+  void _showTermsModal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFFFFF8EF),
+        title: const Row(
+          children: [
+            Icon(Icons.description_outlined, color: Color(0xFF0F4D3A)),
+            SizedBox(width: 8),
+            Text(
+              'Terms & Conditions',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F4D3A),
+              ),
+            ),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Flavora Kitchen - RMS Terms of Service',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F4D3A)),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '1. Authorized Staff Access: This application is intended exclusively for authorized restaurant staff, waiters, and kitchen personnel of Flavora Kitchen.\n\n'
+                '2. Account Security: Users are responsible for keeping their account credentials confidential. Any activity conducted under your login ID is your responsibility.\n\n'
+                '3. Order Accuracy: Staff must verify order details, table assignments, and customer requests accurately before sending orders to the kitchen or generating bills.\n\n'
+                '4. Real-Time System Integrity: Unauthorized manipulation of order statuses, prices, or table availability is strictly prohibited.\n\n'
+                '5. Policy Updates: Flavora Kitchen reserves the right to update these terms at any time to ensure security and operational excellence.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF374151), height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F4D3A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('I Understand', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPrivacyModal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFFFFF8EF),
+        title: const Row(
+          children: [
+            Icon(Icons.privacy_tip_outlined, color: Color(0xFF0F4D3A)),
+            SizedBox(width: 8),
+            Text(
+              'Privacy Policy',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F4D3A),
+              ),
+            ),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Flavora Kitchen - Data Privacy Notice',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F4D3A)),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '1. Data Collection: We process essential operational data including staff authentication tokens, attendance timestamps, table assignments, and order logs.\n\n'
+                '2. Purpose of Processing: Information collected is strictly used for order processing, table status management, kitchen display routing, and staff attendance tracking.\n\n'
+                '3. Data Protection: All sensitive information is encrypted in transit and stored securely in compliance with system standards.\n\n'
+                '4. Third-Party Sharing: Operational data is kept private within Flavora Kitchen systems and is never sold or shared with external third parties.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF374151), height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F4D3A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _navigateToForgotPasswordScreen(BuildContext context) {
@@ -362,7 +499,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 22),
+                                        _buildTermsCheckboxRow(),
+                                        const SizedBox(height: 18),
 
                                         // Sign In CTA Button (Matching Splash Button Style)
                                         SizedBox(
@@ -540,6 +678,71 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTermsCheckboxRow() {
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: Checkbox(
+                value: _acceptedTerms,
+                activeColor: const Color(0xFF0F4D3A),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                onChanged: (val) {
+                  setState(() {
+                    _acceptedTerms = val ?? false;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF374151),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  children: [
+                    const TextSpan(text: 'I agree to '),
+                    TextSpan(
+                      text: 'Terms & Conditions',
+                      style: const TextStyle(
+                        color: Color(0xFFF36F0A),
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = () => _showTermsModal(context),
+                    ),
+                    const TextSpan(text: ' & '),
+                    TextSpan(
+                      text: 'Privacy Policy',
+                      style: const TextStyle(
+                        color: Color(0xFFF36F0A),
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = () => _showPrivacyModal(context),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

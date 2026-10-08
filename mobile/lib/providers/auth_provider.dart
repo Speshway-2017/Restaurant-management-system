@@ -25,6 +25,15 @@ class AuthProvider with ChangeNotifier {
     final token = await StorageService.getToken();
     final savedUser = await StorageService.getUser();
     if (token != null && token.isNotEmpty && savedUser != null) {
+      final role = savedUser.role.toString().trim().toLowerCase();
+      if (role != 'waiter') {
+        await StorageService.clearSession();
+        _user = null;
+        _errorMessage = 'Invalid Waiter Credentials.';
+        _status = AuthStatus.unauthenticated;
+        notifyListeners();
+        return;
+      }
       _user = savedUser;
       _status = AuthStatus.authenticated;
       notifyListeners();
@@ -47,6 +56,9 @@ class AuthProvider with ChangeNotifier {
       final res = await ApiClient.post(ApiConstants.login, body: {
         'email': email.trim(),
         'password': password,
+        'client': 'waiter_mobile',
+        'app': 'waiter',
+        'requiredRole': 'waiter',
       });
 
       if (res is Map<String, dynamic>) {
@@ -62,13 +74,13 @@ class AuthProvider with ChangeNotifier {
 
         if (token != null && userData != null) {
           final userObj = UserModel.fromJson(userData);
+          final role = userObj.role.toString().trim().toLowerCase();
           
-          // Verify user is Waiter role
-          if (!userObj.role.toLowerCase().contains('waiter') &&
-              !userObj.role.toLowerCase().contains('staff') &&
-              !userObj.role.toLowerCase().contains('manager') &&
-              !userObj.role.toLowerCase().contains('admin')) {
-            _errorMessage = 'Access denied. Account role is not Waiter.';
+          // Verify user is strictly Waiter role
+          if (role != 'waiter') {
+            await StorageService.clearSession();
+            _user = null;
+            _errorMessage = 'Access denied. This app is only for waiter accounts.';
             _status = AuthStatus.unauthenticated;
             notifyListeners();
             return false;
@@ -83,12 +95,19 @@ class AuthProvider with ChangeNotifier {
           return true;
         }
       }
-      _errorMessage = 'Invalid server response';
+      _errorMessage = (res is Map && res.containsKey('message'))
+          ? res['message'].toString()
+          : 'Invalid server response';
       _status = AuthStatus.unauthenticated;
       notifyListeners();
       return false;
     } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      final errStr = e.toString().replaceAll('Exception: ', '');
+      if (errStr.toLowerCase().contains('waiter') || errStr.toLowerCase().contains('access denied')) {
+        _errorMessage = 'Access denied. This app is only for waiter accounts.';
+      } else {
+        _errorMessage = errStr;
+      }
       _status = AuthStatus.unauthenticated;
       notifyListeners();
       return false;
@@ -110,6 +129,13 @@ class AuthProvider with ChangeNotifier {
 
         if (userData.containsKey('name') || userData.containsKey('email') || userData.containsKey('_id') || userData.containsKey('id')) {
           final userObj = UserModel.fromJson(userData);
+          final role = userObj.role.toString().trim().toLowerCase();
+          if (role != 'waiter') {
+            await logout();
+            _errorMessage = 'Access denied. This app is only for waiter accounts.';
+            notifyListeners();
+            return;
+          }
           _user = userObj;
           await StorageService.saveUser(userObj);
           notifyListeners();
@@ -117,8 +143,8 @@ class AuthProvider with ChangeNotifier {
       }
       await fetchAttendanceStatus();
     } catch (e) {
-      // If 401, logout
-      if (e.toString().contains('401') || e.toString().contains('Unauthorized')) {
+      // If 401/403, logout
+      if (e.toString().contains('401') || e.toString().contains('Unauthorized') || e.toString().contains('403')) {
         await logout();
       }
     }

@@ -57,4 +57,15 @@ const optionalAuth = async (req, res, next) => {
   return next();
 };
 
-module.exports = { protect, adminOnly, requireRole, optionalAuth };
+const requireWaiterRole = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Not authorized' });
+  }
+  const userRole = (req.user.role || '').trim().toLowerCase();
+  if (userRole === 'waiter') {
+    return next();
+  }
+  return res.status(403).json({ success: false, message: 'Access denied: Waiter role required' });
+};
+
+module.exports = { protect, adminOnly, requireRole, requireWaiterRole, optionalAuth };
