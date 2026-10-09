@@ -975,7 +975,7 @@ export default function CustomerOrderTrackingModal({
                 const isCancelled = item.status === 'CANCELLED' || item.status === 'Cancelled';
                 const isDeliveredItem = Boolean(item.isDelivered || item.status === 'DELIVERED' || item.status === 'SERVED');
                 const isReadyItem = !isDeliveredItem && Boolean(item.isReady || item.status === 'READY' || item.status === 'READY_FOR_PASS');
-                const itemName = item.name || 'Dish Item';
+                const itemName = typeof item.name === 'object' ? (item.name?.name || String(item.name || 'Dish Item')) : String(item.name || 'Dish Item');
                 const itemQty = Number(item.quantity) || 1;
                 const itemPrice = Number(item.price) || 0;
 

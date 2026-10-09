@@ -967,6 +967,9 @@ export default function WaiterOrdersPage() {
                 const isPaid = order.status === 'Completed' || order.status === 'Paid' || order.payment === 'Completed' || order.payment === 'Paid' || order.paymentStatus === 'Paid';
                 const isServed = isAllDelivered;
 
+                const orderTotalAmt = Number(order.totalAmount || order.total || order.grandTotal || 0);
+                const grandTotal = orderTotalAmt > 0 ? orderTotalAmt : itemsList.reduce((sum, it) => sum + (Number(it.price || 0) * Number(it.quantity || 1)), 0);
+
                 let orderStatusBadgeText = 'Preparing';
                 let badgeBg = '#FFF3EB';
                 let badgeColor = '#E07A3C';
@@ -1485,7 +1488,7 @@ export default function WaiterOrdersPage() {
                                 <Eye size={16} color="#0F2A1D" />
                               </button>
                             </div>
-                          ) : order.waiterPaymentConfirmation === 'CONFIRMED' ? (
+                          ) : (
                             <div style={{
                               backgroundColor: '#F0FDF4',
                               border: '1.5px solid #86EFAC',
@@ -1493,7 +1496,7 @@ export default function WaiterOrdersPage() {
                               padding: '0.75rem 0.85rem',
                               boxShadow: '0 4px 12px rgba(22, 101, 52, 0.1)'
                             }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
                                 <span style={{ fontSize: '0.82rem', fontWeight: 900, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                   ✓ PAYMENT RECEIVED
                                 </span>
@@ -1501,53 +1504,11 @@ export default function WaiterOrdersPage() {
                                   {order.paymentMethod || 'UPI'} • ₹{grandTotal}
                                 </span>
                               </div>
-                              <div style={{ fontSize: '0.74rem', color: '#15803D', marginBottom: '0.5rem', fontWeight: 700 }}>
-                                Confirmed by: {order.waiterPaymentConfirmedBy || 'Staff Waiter'}
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStatus(order.id || order._id || order.orderId, 'Completed', { status: 'Completed', orderStatus: 'Completed', paymentStatus: 'Paid', isPaid: true })}
-                                style={{
-                                  width: '100%',
-                                  backgroundColor: '#166534',
-                                  color: '#FFFFFF',
-                                  border: 'none',
-                                  padding: '0.65rem',
-                                  borderRadius: '10px',
-                                  fontSize: '0.85rem',
-                                  fontWeight: 900,
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '0.4rem',
-                                  boxShadow: '0 4px 12px rgba(22, 101, 52, 0.3)'
-                                }}
-                              >
-                                <CheckCircle2 size={16} />
-                                <span>Mark Order Completed</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <div style={{
-                              backgroundColor: '#FEF3C7',
-                              border: '1.5px solid #F59E0B',
-                              borderRadius: '12px',
-                              padding: '0.75rem 0.85rem'
-                            }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                                <span style={{ fontSize: '0.82rem', fontWeight: 900, color: '#B45309', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                  <AlertTriangle size={15} color="#D97706" />
-                                  Payment Received by System
-                                </span>
-                                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#B45309', backgroundColor: '#FEF08A', padding: '0.15rem 0.5rem', borderRadius: '6px', border: '1px solid #FDE047' }}>
-                                  {order.paymentMethod || 'UPI'} • ₹{grandTotal}
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: '#78350F', fontWeight: 700, marginBottom: '0.5rem' }}>
-                                Waiting for Waiter Confirmation
-                              </div>
+                              {order.waiterPaymentConfirmedBy && (
+                                <div style={{ fontSize: '0.74rem', color: '#15803D', marginBottom: '0.4rem', fontWeight: 700 }}>
+                                  Confirmed by: {order.waiterPaymentConfirmedBy}
+                                </div>
+                              )}
 
                               <button
                                 type="button"
@@ -1571,7 +1532,7 @@ export default function WaiterOrdersPage() {
                                 }}
                               >
                                 <CheckCircle2 size={16} />
-                                <span>Confirm Payment Received</span>
+                                <span>Mark Complete</span>
                               </button>
                             </div>
                           )}
@@ -2284,9 +2245,6 @@ export default function WaiterOrdersPage() {
                             <div style={{ color: '#92400E', fontWeight: 800, fontSize: '0.82rem', marginTop: '0.2rem', marginBottom: '0.35rem' }}>
                               Payment Not Confirmed
                             </div>
-                            <div style={{ fontSize: '0.76rem', color: '#78350F', marginBottom: '0.65rem' }}>
-                              Payment Received by System. Waiting for Waiter Confirmation.
-                            </div>
                             <button
                               type="button"
                               disabled={isProcessingPayment}
@@ -2299,7 +2257,7 @@ export default function WaiterOrdersPage() {
                                 padding: '0.65rem',
                                 borderRadius: '10px',
                                 fontSize: '0.85rem',
-                                fontWeight: 800,
+                                fontWeight: 900,
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -2308,7 +2266,7 @@ export default function WaiterOrdersPage() {
                               }}
                             >
                               <CheckCircle2 size={16} />
-                              <span>Confirm Payment Received</span>
+                              <span>Mark Complete</span>
                             </button>
                           </div>
                         )}
@@ -2332,16 +2290,34 @@ export default function WaiterOrdersPage() {
             </div>
 
             {/* Action Buttons */}
+            {viewOrderDetailsModal.status === 'Completed' && (
+              <div style={{
+                width: '100%',
+                backgroundColor: '#F0FDF4',
+                border: '1.5px solid #86EFAC',
+                borderRadius: '12px',
+                padding: '0.65rem 1rem',
+                textAlign: 'center',
+                color: '#166534',
+                fontWeight: 900,
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                marginBottom: '0.65rem'
+              }}>
+                <CheckCircle2 size={18} color="#166534" />
+                <span>ORDER COMPLETED</span>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              {(viewOrderDetailsModal.paymentStatus === 'Paid' || viewOrderDetailsModal.payment === 'Paid') &&
-               viewOrderDetailsModal.waiterPaymentConfirmation === 'CONFIRMED' &&
-               viewOrderDetailsModal.status !== 'Completed' && (
+              {viewOrderDetailsModal.status !== 'Completed' && (
                 <button
                   type="button"
-                  onClick={async () => {
-                    await handleUpdateStatus(viewOrderDetailsModal.id || viewOrderDetailsModal._id || viewOrderDetailsModal.orderId, 'Completed', { status: 'Completed', orderStatus: 'Completed', paymentStatus: 'Paid', isPaid: true });
-                    setViewOrderDetailsModal(null);
-                  }}
+                  disabled={isProcessingPayment}
+                  onClick={() => setConfirmPaymentPromptOrder(viewOrderDetailsModal)}
                   style={{
                     flex: 1,
                     backgroundColor: '#166534',
@@ -2351,7 +2327,7 @@ export default function WaiterOrdersPage() {
                     borderRadius: '12px',
                     fontSize: '0.85rem',
                     fontWeight: 900,
-                    cursor: 'pointer',
+                    cursor: isProcessingPayment ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -2360,7 +2336,7 @@ export default function WaiterOrdersPage() {
                   }}
                 >
                   <CheckCircle2 size={16} />
-                  <span>Mark Order Completed</span>
+                  <span>Mark Complete</span>
                 </button>
               )}
               <button
@@ -2506,6 +2482,75 @@ export default function WaiterOrdersPage() {
                 style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '0.75rem 1rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer' }}
               >
                 Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CONFIRM PAYMENT & ORDER COMPLETION MODAL ================= */}
+      {confirmPaymentPromptOrder && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1rem' }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '440px', padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem', borderBottom: '1.5px solid #E2E8F0', paddingBottom: '0.75rem' }}>
+              <CheckCircle2 size={24} color="#166534" />
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F2A1D' }}>
+                Confirm Order Completion
+              </h3>
+            </div>
+
+            <p style={{ fontSize: '0.9rem', color: '#334155', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+              Payment of <strong>₹{getBillingDetails(confirmPaymentPromptOrder, branding).grandTotal}</strong> has been received.
+              <br /><br />
+              Are you sure you want to mark this order as completed?
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                disabled={isProcessingPayment}
+                onClick={() => setConfirmPaymentPromptOrder(null)}
+                style={{
+                  backgroundColor: '#F1F5F9',
+                  color: '#475569',
+                  border: '1px solid #CBD5E1',
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '10px',
+                  fontSize: '0.85rem',
+                  fontWeight: 800,
+                  cursor: isProcessingPayment ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isProcessingPayment}
+                onClick={() => handleConfirmWaiterPayment(confirmPaymentPromptOrder)}
+                style={{
+                  backgroundColor: '#166534',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '10px',
+                  fontSize: '0.85rem',
+                  fontWeight: 900,
+                  cursor: isProcessingPayment ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  boxShadow: '0 4px 12px rgba(22, 101, 52, 0.3)'
+                }}
+              >
+                {isProcessingPayment ? (
+                  <span>Processing...</span>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} />
+                    <span>Confirm</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

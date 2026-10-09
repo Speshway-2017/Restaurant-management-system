@@ -277,7 +277,7 @@ export default function CustomerBillModal({
       // Freeze receipt details snapshot before backend state update
       const receiptSnapshot = {
         items: items.map(it => ({
-          name: it.name || 'Dish Item',
+          name: typeof it.name === 'object' ? (it.name?.name || String(it.name || 'Dish Item')) : String(it.name || 'Dish Item'),
           quantity: Number(it.quantity || 1),
           price: Number(it.price || 0)
         })),
@@ -572,13 +572,16 @@ export default function CustomerBillModal({
                     <span style={{ flex: 1, textAlign: 'center' }}>QTY x RATE</span>
                     <span style={{ flex: 1, textAlign: 'right' }}>AMOUNT</span>
                   </div>
-                  {items.map((it, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#1E293B', marginBottom: '0.4rem' }}>
-                      <span style={{ flex: 2, fontWeight: 600 }}>{it.name}</span>
-                      <span style={{ flex: 1, textAlign: 'center', color: '#64748B' }}>{it.quantity} x ₹{it.price}</span>
-                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 800, color: '#0F2A1D' }}>₹{(Number(it.quantity) || 1) * (Number(it.price) || 0)}</span>
-                    </div>
-                  ))}
+                  {items.map((it, i) => {
+                    const itemNameStr = typeof it.name === 'object' ? (it.name?.name || String(it.name || 'Dish Item')) : String(it.name || 'Dish Item');
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#1E293B', marginBottom: '0.4rem' }}>
+                        <span style={{ flex: 2, fontWeight: 600 }}>{itemNameStr}</span>
+                        <span style={{ flex: 1, textAlign: 'center', color: '#64748B' }}>{it.quantity} x ₹{it.price}</span>
+                        <span style={{ flex: 1, textAlign: 'right', fontWeight: 800, color: '#0F2A1D' }}>₹{(Number(it.quantity) || 1) * (Number(it.price) || 0)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Calculations */}
@@ -733,12 +736,15 @@ export default function CustomerBillModal({
                         const spicePrice = Number(it.spiceLevelPrice || 0);
                         const addOnsArr = it.selectedAddOns || it.addOns || [];
 
+                        const itemNameStr = typeof it.name === 'object' ? (it.name?.name || String(it.name || 'Dish Item')) : String(it.name || 'Dish Item');
+                        const spiceStrVal = typeof spiceStr === 'object' ? (spiceStr?.name || String(spiceStr)) : spiceStr;
+
                         return (
                           <div key={idx} style={{ display: 'flex', flexDirection: 'column', fontSize: '0.82rem', color: isCancelled ? '#94A3B8' : '#334155', textDecoration: isCancelled ? 'line-through' : 'none', paddingBottom: '0.25rem', borderBottom: '1px dashed #F1F5F9' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <span>
                                 <strong style={{ color: isCancelled ? '#94A3B8' : '#166534', marginRight: '0.35rem' }}>{itemQty}x</strong>
-                                {it.name}
+                                {itemNameStr}
                                 {isCancelled && <span style={{ marginLeft: '0.35rem', color: '#DC2626', fontSize: '0.7rem', fontWeight: 800, textDecoration: 'none' }}>(Cancelled)</span>}
                               </span>
                               <span style={{ fontWeight: 700, color: isCancelled ? '#94A3B8' : '#0F2A1D' }}>
@@ -749,14 +755,18 @@ export default function CustomerBillModal({
                             {/* Customization Details Badges */}
                             {!isCancelled && (
                               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
-                                {spiceStr && (
+                                {spiceStrVal && (
                                   <span style={{ fontSize: '0.68rem', color: '#EA580C', backgroundColor: '#FFF7ED', border: '1px solid #FFEDD5', padding: '0.05rem 0.3rem', borderRadius: '4px', fontWeight: 700 }}>
-                                    🌶️ {spiceStr}{spicePrice > 0 ? ` (+₹${spicePrice})` : ''}
+                                    🌶️ {String(spiceStrVal)}{spicePrice > 0 ? ` (+₹${spicePrice})` : ''}
                                   </span>
                                 )}
                                 {addOnsArr.length > 0 && (
                                   <span style={{ fontSize: '0.68rem', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '0.05rem 0.3rem', borderRadius: '4px', fontWeight: 700 }}>
-                                    + {addOnsArr.map(a => `${a.name || a}${a.price > 0 ? ` (+₹${a.price})` : ' (Free)'}`).join(', ')}
+                                    + {addOnsArr.map(a => {
+                                      const aName = typeof a === 'object' ? (a?.name?.name || a?.name || String(a)) : String(a);
+                                      const aPrice = typeof a === 'object' ? Number(a?.price || 0) : 0;
+                                      return `${aName}${aPrice > 0 ? ` (+₹${aPrice})` : ' (Free)'}`;
+                                    }).join(', ')}
                                   </span>
                                 )}
                               </div>

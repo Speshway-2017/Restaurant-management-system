@@ -199,7 +199,8 @@ export default function MenuDishStrip({ menuItems = [], onSelectDish }) {
           const isMiddle = idx === middleIndex;
           const isHovered = hoveredIdx === idx;
           const dishImg = resolveDishImageUrl(item);
-          const dishName = item.name;
+          const rawDishName = item?.name;
+          const dishName = typeof rawDishName === 'object' ? (rawDishName?.name || String(rawDishName || '')) : String(rawDishName || '');
 
           return (
             <div
