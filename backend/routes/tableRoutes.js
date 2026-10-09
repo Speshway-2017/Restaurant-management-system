@@ -1,17 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { optionalAuth } = require('../middleware/authMiddleware');
+const { protect, optionalAuth } = require('../middleware/authMiddleware');
 const { getTables, createTable, updateTableStatus, updateTableByNumber, deleteTable, generateTableQr, assignWaiter } = require('../controllers/tableController');
 
 router.use(optionalAuth);
 
 router.get('/', getTables);
-router.post('/', createTable);
-router.post('/generate-qr', generateTableQr);
+router.post('/', protect, createTable);
+router.post('/generate-qr', protect, generateTableQr);
 router.get('/qr/:tableNum', generateTableQr);
-router.patch('/assign-waiter/:tableNum', assignWaiter);
-router.put('/number/:tableNum', updateTableByNumber);
-router.put('/:id', updateTableStatus);
-router.delete('/:id', deleteTable);
+router.patch('/assign-waiter/:tableNum', protect, assignWaiter);
+router.put('/number/:tableNum', protect, updateTableByNumber);
+router.put('/:id', protect, updateTableStatus);
+router.delete('/:id', protect, deleteTable);
 
 module.exports = router;

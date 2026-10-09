@@ -498,7 +498,7 @@ export default function ChefLayout({ setActivePage }) {
 
     const unsubCreated = onSocketEvent('order_created', (data) => {
       fetchOrdersAndMenu();
-      if (soundEnabled) playNotificationTone();
+      if (soundEnabled) playNewOrderChime();
       showToast(`🔔 New Order #${data?.order?.orderId || ''} for ${data?.order?.table || 'Table'}`);
     });
     const unsubAccepted = onSocketEvent('chef_accepted', () => fetchOrdersAndMenu());

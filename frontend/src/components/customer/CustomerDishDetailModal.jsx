@@ -165,7 +165,7 @@ export default function CustomerDishDetailModal({ dish, onClose, onAddToCart, la
         <div style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
             <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0F2A1D', margin: 0, lineHeight: 1.25 }}>
-              {dish.name}
+              {typeof dish.name === 'object' ? (dish.name?.name || String(dish.name || '')) : String(dish.name || '')}
             </h2>
             <span style={{ fontSize: '1.35rem', fontWeight: 900, color: '#166534', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
               ₹{unitPrice}

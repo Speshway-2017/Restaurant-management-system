@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical,
   ShieldCheck, Mail, Phone, RefreshCw, Eye, EyeOff, Ban, AlertCircle, Calendar, Filter,
-  Flame, Utensils, Award, ChevronLeft, ChevronRight, Building2
+  Flame, Utensils, Award, ChevronLeft, ChevronRight, Building2, ArrowLeft
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { getSocket, joinSocketRooms, onSocketEvent } from '../../services/socket';
@@ -727,6 +727,271 @@ export default function ManagerStaffPage() {
     const r = String(s.role || '').toLowerCase();
     return !r.includes('manager') && !r.includes('admin');
   });
+
+  if (viewingStaff) {
+    return (
+      <div className="admin-subpage-container" style={{ paddingBottom: '3rem' }}>
+        {/* Toast Notification Banner */}
+        {toastMessage && (
+          <div style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            backgroundColor: '#0F2A1D',
+            color: '#FFFFFF',
+            padding: '0.75rem 1.25rem',
+            borderRadius: '10px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
+            zIndex: 99999,
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            border: '1px solid #285A46'
+          }}>
+            <CheckCircle2 size={16} color="#4ADE80" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Page Header with Back Button */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+          <div>
+            <div className="page-breadcrumb-bar">
+              <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setViewingStaff(null)}>Staff Management</span>
+              <span className="crumb-sep">›</span>
+              <span className="crumb-current">Attendance Details</span>
+            </div>
+            <h1 className="admin-page-title" style={{ margin: '0.2rem 0 0 0', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              
+              <span>{viewingStaff.name}</span>
+            </h1>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              type="button"
+              onClick={() => {
+                const target = viewingStaff;
+                setViewingStaff(null);
+                handleOpenEditModal(target);
+              }}
+              style={{
+                backgroundColor: '#FFFFFF',
+                border: '1px solid #CBD5E1',
+                padding: '0.6rem 1.1rem',
+                borderRadius: '12px',
+                fontSize: '0.86rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                color: '#1E293B',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+              }}
+            >
+              <Edit size={16} color="#2563EB" />
+              <span>Edit Staff Shift</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Staff Profile Information Card */}
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '20px',
+          padding: '1.5rem',
+          marginBottom: '1.5rem',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '20px',
+              backgroundColor: '#0F2A1D',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.5rem',
+              fontWeight: 900
+            }}>
+              {viewingStaff.name ? viewingStaff.name.slice(0, 2).toUpperCase() : 'ST'}
+            </div>
+            <div style={{ flex: 1, minWidth: '240px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: '#0F2A1D' }}>
+                  {viewingStaff.name}
+                </h2>
+                <span style={{ fontWeight: 800, backgroundColor: '#FFF5ED', color: '#92400E', padding: '0.2rem 0.75rem', borderRadius: '8px', border: '1px solid #FDE68A', fontSize: '0.8rem' }}>
+                  {viewingStaff.role}
+                </span>
+                <span style={{
+                  fontSize: '0.76rem',
+                  fontWeight: 800,
+                  backgroundColor: viewingStaff.status === 'available' ? '#DCFCE7' : '#F1F5F9',
+                  color: viewingStaff.status === 'available' ? '#15803D' : '#64748B',
+                  padding: '0.2rem 0.65rem',
+                  borderRadius: '9999px',
+                  border: '1px solid ' + (viewingStaff.status === 'available' ? '#86EFAC' : '#CBD5E1')
+                }}>
+                  {viewingStaff.status === 'available' ? '● Currently Active' : '⚪ Offline'}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#64748B', fontFamily: 'monospace', marginTop: '0.3rem' }}>
+                EMP ID: {viewingStaff.empId || `RMS-${String(viewingStaff.id).slice(-4)}`} • Shift: {viewingStaff.shift || '09:00 AM – 05:00 PM'}
+              </div>
+            </div>
+
+            {/* Quick Contact Details */}
+            <div style={{
+              display: 'flex',
+              gap: '1.5rem',
+              backgroundColor: '#F8FAFC',
+              padding: '0.85rem 1.25rem',
+              borderRadius: '14px',
+              border: '1px solid #E2E8F0',
+              fontSize: '0.84rem'
+            }}>
+              <div>
+                <div style={{ color: '#64748B', fontWeight: 600, fontSize: '0.74rem' }}>EMAIL</div>
+                <div style={{ fontWeight: 800, color: '#1E293B', marginTop: '0.1rem' }}>{viewingStaff.email || '—'}</div>
+              </div>
+              <div style={{ borderLeft: '1px solid #CBD5E1', paddingLeft: '1.5rem' }}>
+                <div style={{ color: '#64748B', fontWeight: 600, fontSize: '0.74rem' }}>MOBILE</div>
+                <div style={{ fontWeight: 800, color: '#1E293B', marginTop: '0.1rem' }}>{viewingStaff.phone ? `+91 ${viewingStaff.phone}` : '—'}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Monthly Attendance Log Table Section */}
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '20px',
+          border: '1px solid #E2E8F0',
+          padding: '1.5rem',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
+        }}>
+          {/* Controls Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Calendar size={22} color="#0F2A1D" />
+              <span>Monthly Attendance Record ({formatMonthYearLabel(selectedMonth)})</span>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', backgroundColor: '#F8FAFC', padding: '0.35rem 0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                title="Previous Month"
+                style={{ border: 'none', background: '#FFFFFF', padding: '0.4rem 0.75rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem', fontWeight: 800, color: '#334155', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
+              >
+                <ChevronLeft size={16} />
+                <span>Prev Month</span>
+              </button>
+              <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D', minWidth: '130px', textAlign: 'center' }}>
+                {formatMonthYearLabel(selectedMonth)}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                disabled={selectedMonth >= getCurrentIstMonthStr()}
+                title={selectedMonth >= getCurrentIstMonthStr() ? "Cannot navigate into future months" : "Next Month"}
+                style={{ border: 'none', background: selectedMonth >= getCurrentIstMonthStr() ? '#E2E8F0' : '#FFFFFF', padding: '0.4rem 0.75rem', borderRadius: '8px', cursor: selectedMonth >= getCurrentIstMonthStr() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem', fontWeight: 800, color: selectedMonth >= getCurrentIstMonthStr() ? '#94A3B8' : '#334155', boxShadow: selectedMonth >= getCurrentIstMonthStr() ? 'none' : '0 1px 3px rgba(0,0,0,0.08)', opacity: selectedMonth >= getCurrentIstMonthStr() ? 0.6 : 1 }}
+              >
+                <span>Next Month</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Full Page Attendance Table */}
+          <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.88rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.76rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '0.9rem 1.25rem', borderTopLeftRadius: '12px' }}>DATE (IST)</th>
+                  <th style={{ padding: '0.9rem 1.25rem' }}>IN → OUT SESSIONS</th>
+                  <th style={{ padding: '0.9rem 1.25rem' }}>LOGGED HOURS</th>
+                  <th style={{ padding: '0.9rem 1.25rem', borderTopRightRadius: '12px' }}>STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoadingMonthly ? (
+                  <tr>
+                    <td colSpan="4" style={{ padding: '3.5rem', textAlign: 'center', color: '#64748B' }}>
+                      <RefreshCw size={26} className="spin" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
+                      <span style={{ fontWeight: 700 }}>Fetching {formatMonthYearLabel(selectedMonth)} attendance log...</span>
+                    </td>
+                  </tr>
+                ) : monthlyHistoryList.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" style={{ padding: '3rem', textAlign: 'center', color: '#94A3B8' }}>
+                      No attendance records found for this month
+                    </td>
+                  </tr>
+                ) : (
+                  monthlyHistoryList.map((item, idx) => {
+                    const isAvailable = item.status === 'available';
+                    const hasSessions = Array.isArray(item.sessions) && item.sessions.length > 0;
+                    return (
+                      <tr key={item.id || idx} style={{ backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FDFBF7', borderBottom: '1px solid #F4EFEA' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#334155', verticalAlign: 'top' }}>
+                          {item.displayDate || item.date}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#15803D', verticalAlign: 'top' }}>
+                          {hasSessions ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {item.sessions.map((s, sIdx) => {
+                                const isAuto = s.autoCheckout || (s.logoutTimeFormatted && String(s.logoutTimeFormatted).includes('Auto Checkout'));
+                                return (
+                                  <div key={sIdx} style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', color: s.isCurrentlyActive ? '#2563EB' : (isAuto ? '#D97706' : '#15803D') }}>
+                                    <span>{s.loginTimeFormatted} – {s.logoutTimeFormatted}</span>
+                                    {isAuto && (
+                                      <span style={{ fontSize: '0.72rem', fontWeight: 800, backgroundColor: '#FEF3C7', color: '#B45309', padding: '0.1rem 0.5rem', borderRadius: '4px', border: '1px solid #FDE68A' }}>
+                                        Auto Checkout
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span style={{ color: '#94A3B8', fontWeight: 600 }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace', verticalAlign: 'top' }}>
+                          {item.durationFormatted || '0m'}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top' }}>
+                          <span style={{
+                            fontSize: '0.76rem',
+                            fontWeight: 800,
+                            backgroundColor: isAvailable ? '#DCFCE7' : (hasSessions ? '#F1F5F9' : '#F8FAFC'),
+                            color: isAvailable ? '#15803D' : (hasSessions ? '#475569' : '#94A3B8'),
+                            padding: '0.2rem 0.65rem',
+                            borderRadius: '9999px',
+                            border: '1px solid ' + (isAvailable ? '#86EFAC' : '#CBD5E1')
+                          }}>
+                            {isAvailable ? '● Available' : (hasSessions ? '⚪ Offline' : 'Not Checked In')}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-subpage-container" style={{ paddingBottom: '3rem' }}>
@@ -1716,220 +1981,6 @@ export default function ManagerStaffPage() {
         </div>
       )}
 
-      {/* ================= VIEW STAFF DETAILS MODAL (WITH 1-MONTH ATTENDANCE LOG) ================= */}
-      {viewingStaff && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.65)',
-          backdropFilter: 'blur(5px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 99999,
-          padding: '1.25rem'
-        }}>
-          <div style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '24px',
-            maxWidth: '760px',
-            width: '100%',
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '1.75rem',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.35)',
-            border: '1px solid #EAE3D2',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <button
-              onClick={() => setViewingStaff(null)}
-              style={{ position: 'absolute', right: '1.25rem', top: '1.25rem', border: 'none', background: 'none', cursor: 'pointer', zIndex: 10 }}
-            >
-              <X size={22} color="#64748B" />
-            </button>
-
-            {/* Header Section */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
-              <div style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '16px',
-                backgroundColor: '#0F2A1D',
-                color: '#FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.3rem',
-                fontWeight: 900
-              }}>
-                {viewingStaff.name ? viewingStaff.name.slice(0, 2).toUpperCase() : 'ST'}
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0F2A1D' }}>
-                    {viewingStaff.name}
-                  </h3>
-                  <span style={{ fontWeight: 800, backgroundColor: '#FFF5ED', color: '#92400E', padding: '0.15rem 0.65rem', borderRadius: '6px', border: '1px solid #FDE68A', fontSize: '0.76rem' }}>
-                    {viewingStaff.role}
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#64748B', fontFamily: 'monospace', marginTop: '0.2rem' }}>
-                  {viewingStaff.empId || `RMS-${String(viewingStaff.id).slice(-4)}`} • {viewingStaff.shift || '09:00 AM – 05:00 PM'}
-                </div>
-              </div>
-            </div>
-
-            {/* Profile Info Pills */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem', backgroundColor: '#F8FAFC', padding: '0.85rem 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', fontSize: '0.8rem' }}>
-              <div>
-                <span style={{ color: '#64748B', fontWeight: 600 }}>Email: </span>
-                <span style={{ fontWeight: 800, color: '#334155' }}>{viewingStaff.email || '—'}</span>
-              </div>
-              <div>
-                <span style={{ color: '#64748B', fontWeight: 600 }}>Mobile: </span>
-                <span style={{ fontWeight: 800, color: '#334155' }}>{viewingStaff.phone ? `+91 ${viewingStaff.phone}` : '—'}</span>
-              </div>
-            </div>
-
-            {/* Month-Wise Attendance Log Title & Month Navigation Controls */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Calendar size={18} color="#0F2A1D" />
-                <span>Attendance Log ({formatMonthYearLabel(selectedMonth)})</span>
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#F8FAFC', padding: '0.25rem 0.5rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                <button
-                  type="button"
-                  onClick={handlePrevMonth}
-                  title="Previous Month"
-                  style={{ border: 'none', background: '#FFFFFF', padding: '0.3rem 0.55rem', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.76rem', fontWeight: 800, color: '#334155', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
-                >
-                  <ChevronLeft size={16} />
-                  <span>Prev</span>
-                </button>
-                <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#0F2A1D', minWidth: '115px', textAlign: 'center' }}>
-                  {formatMonthYearLabel(selectedMonth)}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleNextMonth}
-                  disabled={selectedMonth >= getCurrentIstMonthStr()}
-                  title={selectedMonth >= getCurrentIstMonthStr() ? "Cannot navigate into future months" : "Next Month"}
-                  style={{ border: 'none', background: selectedMonth >= getCurrentIstMonthStr() ? '#E2E8F0' : '#FFFFFF', padding: '0.3rem 0.55rem', borderRadius: '6px', cursor: selectedMonth >= getCurrentIstMonthStr() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.76rem', fontWeight: 800, color: selectedMonth >= getCurrentIstMonthStr() ? '#94A3B8' : '#334155', boxShadow: selectedMonth >= getCurrentIstMonthStr() ? 'none' : '0 1px 2px rgba(0,0,0,0.05)', opacity: selectedMonth >= getCurrentIstMonthStr() ? 0.6 : 1 }}
-                >
-                  <span>Next</span>
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable Month Table */}
-            <div style={{ flex: 1, overflowY: 'auto', maxHeight: '340px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.84rem' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
-                  <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                    <th style={{ padding: '0.75rem 1rem' }}>DATE (IST)</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>IN → OUT SESSIONS</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>LOGGED HOURS</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>STATUS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoadingMonthly ? (
-                    <tr>
-                      <td colSpan="4" style={{ padding: '2.5rem', textAlign: 'center', color: '#64748B' }}>
-                        <RefreshCw size={22} className="spin" style={{ display: 'block', margin: '0 auto 0.4rem auto' }} />
-                        <span>Fetching {formatMonthYearLabel(selectedMonth)} attendance log...</span>
-                      </td>
-                    </tr>
-                  ) : monthlyHistoryList.length === 0 ? (
-                    <tr>
-                      <td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: '#94A3B8' }}>
-                        No attendance records found for this period
-                      </td>
-                    </tr>
-                  ) : (
-                    monthlyHistoryList.map((item, idx) => {
-                      const isAvailable = item.status === 'available';
-                      const hasSessions = Array.isArray(item.sessions) && item.sessions.length > 0;
-                      return (
-                        <tr key={item.id || idx} style={{ backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FDFBF7', borderBottom: '1px solid #F4EFEA' }}>
-                          <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: '#334155', verticalAlign: 'top' }}>
-                            {item.displayDate || item.date}
-                          </td>
-                          <td style={{ padding: '0.7rem 1rem', fontWeight: 800, color: '#15803D', verticalAlign: 'top' }}>
-                            {hasSessions ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                {item.sessions.map((s, sIdx) => {
-                                  const isAuto = s.autoCheckout || (s.logoutTimeFormatted && String(s.logoutTimeFormatted).includes('Auto Checkout'));
-                                  return (
-                                    <div key={sIdx} style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', color: s.isCurrentlyActive ? '#2563EB' : (isAuto ? '#D97706' : '#15803D') }}>
-                                      <span>{s.loginTimeFormatted} – {s.logoutTimeFormatted}</span>
-                                      {isAuto && (
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 800, backgroundColor: '#FEF3C7', color: '#B45309', padding: '0.05rem 0.4rem', borderRadius: '4px', border: '1px solid #FDE68A' }}>
-                                          Auto Checkout
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <span style={{ color: '#94A3B8', fontWeight: 600 }}>—</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '0.7rem 1rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace', verticalAlign: 'top' }}>
-                            {item.durationFormatted || '0m'}
-                          </td>
-                          <td style={{ padding: '0.7rem 1rem', verticalAlign: 'top' }}>
-                            <span style={{
-                              fontSize: '0.72rem',
-                              fontWeight: 800,
-                              backgroundColor: isAvailable ? '#DCFCE7' : (hasSessions ? '#F1F5F9' : '#F8FAFC'),
-                              color: isAvailable ? '#15803D' : (hasSessions ? '#475569' : '#94A3B8'),
-                              padding: '0.15rem 0.55rem',
-                              borderRadius: '9999px',
-                              border: '1px solid ' + (isAvailable ? '#86EFAC' : '#CBD5E1')
-                            }}>
-                              {isAvailable ? '● Available' : (hasSessions ? '⚪ Offline' : 'Not Checked In')}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Modal Footer Controls */}
-            <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const target = viewingStaff;
-                  setViewingStaff(null);
-                  handleOpenEditModal(target);
-                }}
-                style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', padding: '0.6rem 1.1rem', borderRadius: '10px', fontSize: '0.84rem', fontWeight: 800, cursor: 'pointer', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-              >
-                <Edit size={14} color="#2563EB" />
-                <span>Edit Shift</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewingStaff(null)}
-                style={{ backgroundColor: '#0F2A1D', color: '#FFFFFF', border: 'none', padding: '0.6rem 1.4rem', borderRadius: '10px', fontSize: '0.84rem', fontWeight: 800, cursor: 'pointer' }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

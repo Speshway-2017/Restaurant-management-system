@@ -524,7 +524,7 @@ export default function CustomerMobileMenuView({
                             onClick={() => setSelectedDishForDetail(item)}
                             style={{ fontSize: '0.94rem', fontWeight: 800, color: '#0F2A1D', margin: 0, lineHeight: 1.25, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}
                           >
-                            {item.name}
+                            {typeof item.name === 'object' ? (item.name?.name || String(item.name || '')) : String(item.name || '')}
                           </h3>
 
                           {item.bestseller && (

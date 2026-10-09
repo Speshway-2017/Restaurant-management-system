@@ -211,7 +211,13 @@ class OrderService {
 
     let verifiedCustomerName = (reservedGuestName && !isGenericDiner(reservedGuestName)) ? reservedGuestName : 'Guest Diner';
     if (data.customer && !isGenericDiner(data.customer)) {
-      verifiedCustomerName = String(data.customer).trim();
+      const sanitized = String(data.customer)
+        .replace(/[^a-zA-Z ]/g, '')
+        .replace(/^\s+/, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+        .slice(0, 20);
+      verifiedCustomerName = sanitized || 'Guest Diner';
       activeSession.guestName = verifiedCustomerName;
       await activeSession.save();
     } else if (activeSession.guestName && !isGenericDiner(activeSession.guestName)) {
@@ -919,12 +925,18 @@ class OrderService {
     existingOrder.waiterPaymentConfirmation = 'CONFIRMED';
     existingOrder.waiterPaymentConfirmedBy = staffName;
     existingOrder.waiterPaymentConfirmedAt = new Date();
+    existingOrder.status = 'Completed';
+    existingOrder.payment = 'Paid';
+    existingOrder.paymentStatus = 'Paid';
     if (staffId && !existingOrder.waiterId) {
       existingOrder.waiterId = staffId;
       existingOrder.waiterName = staffName;
     }
 
     await existingOrder.save();
+    if (existingOrder.table) {
+      await this.syncTableStatusForOrder(existingOrder.table, 'Cleaning');
+    }
     return existingOrder;
   }
 }

@@ -208,6 +208,7 @@ export default function MenuPage({ onOpenDemoModal }) {
 
     const checkTableStatus = async () => {
       try {
+        const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
         const cleanTableNum = String(tableNum).replace(/[^0-9]/g, '');
 
         // 1. Query active session (Backend Source of Truth for both Receptionist & Direct Walk-In)
@@ -259,16 +260,14 @@ export default function MenuPage({ onOpenDemoModal }) {
           const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
           const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeSess.sessionToken}`);
 
-          const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
-
           const sessName = activeSess.guestName && !isGeneric(activeSess.guestName) ? activeSess.guestName.trim() : '';
           const resvName = sessRes?.reservation?.guestName && !isGeneric(sessRes.reservation.guestName) ? sessRes.reservation.guestName.trim() : '';
           const bestName = selfName && selfName.trim() ? selfName.trim() : (sessName || resvName);
 
           if (bestName) {
-            setGuestName(bestName);
+            setGuestName(prev => (prev && !isGeneric(prev) && prev !== bestName) ? prev : bestName);
           } else {
-            setGuestName('');
+            setGuestName(prev => (prev && !isGeneric(prev)) ? prev : '');
           }
 
           // Cart sync: load cart strictly for this session
@@ -279,7 +278,7 @@ export default function MenuPage({ onOpenDemoModal }) {
           }
         } else {
           setActiveTableSession(null);
-          setGuestName('');
+          setGuestName(prev => (prev && !isGeneric(prev)) ? prev : '');
           setCart({});
         }
 
@@ -599,20 +598,26 @@ export default function MenuPage({ onOpenDemoModal }) {
     if (!activeTableSession) return '';
     const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
     const isGeneric = (n) => !n || ['guest diner', 'guest', 'valued guest', '-', 'n/a', 'null', 'undefined', 'test diner', 'test', 'test customer', 'test guest'].includes(String(n).trim().toLowerCase());
-    const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeTableSession.sessionToken}`);
-    if (selfName && selfName.trim() && !isGeneric(selfName)) {
-      return selfName.trim();
-    }
-
+    
     const hasSubmittedOnThisDevice = sessionStorage.getItem(`flavora_order_submitted_${cleanTbl}_${activeTableSession.sessionToken}`) === 'true';
 
-    if (hasSubmittedOnThisDevice && activeTableSession.guestName && !isGeneric(activeTableSession.guestName)) {
+    // 1. Receptionist/Waiter seated guest name assigned to session
+    if (activeTableSession.guestName && !isGeneric(activeTableSession.guestName)) {
       return activeTableSession.guestName.trim();
     }
-    const cleanGuest = (guestName || '').trim();
-    if (hasSubmittedOnThisDevice && cleanGuest && !isGeneric(cleanGuest)) {
-      return cleanGuest;
+
+    // 2. Only lock as confirmed card if an order has been submitted on this device
+    if (hasSubmittedOnThisDevice) {
+      const selfName = sessionStorage.getItem(`flavora_guest_name_${cleanTbl}_${activeTableSession.sessionToken}`);
+      if (selfName && selfName.trim() && !isGeneric(selfName)) {
+        return selfName.trim();
+      }
+      const cleanGuest = (guestName || '').trim();
+      if (cleanGuest && !isGeneric(cleanGuest)) {
+        return cleanGuest;
+      }
     }
+
     return '';
   }, [activeTableSession, placedTableOrders, guestName, tableNum]);
 
@@ -784,22 +789,34 @@ export default function MenuPage({ onOpenDemoModal }) {
 
   useEffect(() => {
     const loadMenu = () => {
-      const formatItem = (item) => ({
-        id: item._id || item.id || item.name,
-        _id: item._id || item.id,
-        rawId: String(item._id || item.id || ''),
-        dishId: item._id || item.id || item.dishId,
-        name: item.name,
-        category: item.category || 'Main Course',
-        price: Number(item.price || 0),
-        isVeg: item.isVeg !== undefined ? item.isVeg : true,
-        available: item.available !== undefined ? item.available : (item.isAvailable !== undefined ? item.isAvailable : true),
-        bestseller: item.bestseller !== undefined ? item.bestseller : (item.isBestseller !== undefined ? item.isBestseller : false),
-        desc: item.desc || '',
-        prepTime: item.prepTime || '15 mins',
-        spice: item.spiceLevel || item.spice || 'Medium',
-        img: resolveDishImageUrl(item)
-      });
+      const formatItem = (item) => {
+        if (!item) return null;
+        const extractName = (n) => {
+          if (!n) return '';
+          if (typeof n === 'string') return n;
+          if (typeof n === 'number') return String(n);
+          if (typeof n === 'object') return extractName(n.name || n.title || n.label || '');
+          return String(n);
+        };
+        const cleanName = extractName(item.name || item.title || item) || 'Dish Item';
+
+        return {
+          id: item._id || item.id || cleanName,
+          _id: item._id || item.id,
+          rawId: String(item._id || item.id || ''),
+          dishId: item._id || item.id || item.dishId,
+          name: cleanName,
+          category: typeof item.category === 'object' ? (item.category.name || String(item.category)) : (item.category || 'Main Course'),
+          price: Number(item.price || 0),
+          isVeg: item.isVeg !== undefined ? item.isVeg : true,
+          available: item.available !== undefined ? item.available : (item.isAvailable !== undefined ? item.isAvailable : true),
+          bestseller: item.bestseller !== undefined ? item.bestseller : (item.isBestseller !== undefined ? item.isBestseller : false),
+          desc: typeof item.desc === 'object' ? (item.desc.desc || String(item.desc)) : (item.desc || ''),
+          prepTime: typeof item.prepTime === 'object' ? String(item.prepTime.prepTime || '') : (item.prepTime || '15 mins'),
+          spice: typeof item.spice === 'object' ? String(item.spice.spice || '') : (item.spiceLevel || item.spice || 'Medium'),
+          img: resolveDishImageUrl(item)
+        };
+      };
 
       const mergedMap = new Map();
 
@@ -1425,32 +1442,40 @@ export default function MenuPage({ onOpenDemoModal }) {
                       const dish = isObj ? val : findItemInCatalog(key, menuItems);
                       if (!dish) return null;
 
-                      const itemQty = isObj ? (val.quantity || 1) : val;
+                      const rawDishName = isObj ? (val.name?.name || val.name || dish.name) : dish.name;
+                      const dishDisplayName = typeof rawDishName === 'object' ? (rawDishName?.name || String(rawDishName || 'Dish Item')) : String(rawDishName || 'Dish Item');
+
+                      const itemQty = isObj ? (val.quantity || val.qty || 1) : val;
                       const itemUnitPrice = isObj ? (val.unitPrice !== undefined ? val.unitPrice : val.price) : dish.price;
                       const itemTotalPrice = isObj ? (val.totalPrice !== undefined ? val.totalPrice : itemUnitPrice * itemQty) : (dish.price * itemQty);
-                      const spiceName = isObj ? (val.spiceLevel || val.selectedSpiceLevel) : null;
+                      const rawSpice = isObj ? (val.spiceLevel || val.selectedSpiceLevel) : null;
+                      const spiceName = typeof rawSpice === 'object' ? (rawSpice?.name || String(rawSpice)) : rawSpice;
                       const spiceAdj = isObj ? (val.spiceLevelPrice || 0) : 0;
-                      const addOnsList = isObj ? (val.selectedAddOns || val.addOns || []) : [];
+                      const addOnsList = isObj ? (val.selectedAddOns || val.addOns || val.customizations || []) : [];
 
                       return (
                         <div key={key} className="customer-qr-cart-row" style={{ padding: '0.75rem 0', borderBottom: '1px solid #F1F5F9' }}>
                           <div className="customer-qr-cart-info" style={{ flex: 1 }}>
                             <div className="customer-qr-cart-name" style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.92rem' }}>
-                              {dish.name}
+                              {dishDisplayName}
                             </div>
                             
                             {/* Customization Details Badges */}
                             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
                               {spiceName && (
                                 <span style={{ fontSize: '0.72rem', color: '#C2410C', backgroundColor: '#FFF7ED', border: '1px solid #FFEDD5', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
-                                  🌶️ {spiceName}{spiceAdj > 0 ? ` (+₹${spiceAdj})` : ''}
+                                  🌶️ {String(spiceName)}{spiceAdj > 0 ? ` (+₹${spiceAdj})` : ''}
                                 </span>
                               )}
-                              {addOnsList.length > 0 && addOnsList.map((a, aIdx) => (
-                                <span key={aIdx} style={{ fontSize: '0.72rem', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
-                                  + {a.name} {a.price > 0 ? `(+₹${a.price})` : '(Free)'}
-                                </span>
-                              ))}
+                              {addOnsList.length > 0 && addOnsList.map((a, aIdx) => {
+                                const aName = typeof a === 'object' ? (a?.name?.name || a?.name || String(a)) : String(a);
+                                const aPrice = typeof a === 'object' ? Number(a?.price || 0) : 0;
+                                return (
+                                  <span key={aIdx} style={{ fontSize: '0.72rem', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    + {aName} {aPrice > 0 ? `(+₹${aPrice})` : '(Free)'}
+                                  </span>
+                                );
+                              })}
                             </div>
 
                             <div className="customer-qr-cart-unit-price" style={{ fontSize: '0.76rem', color: '#64748B', marginTop: '0.2rem', fontWeight: 600 }}>
@@ -1606,20 +1631,33 @@ export default function MenuPage({ onOpenDemoModal }) {
                     </div>
                     <input
                       type="text"
+                      maxLength={20}
                       placeholder="Enter your full name (e.g. Kiran)"
                       value={guestName}
                       onChange={(e) => {
-                        // Only update React state — do NOT write to sessionStorage here.
-                        // Writing on every keystroke caused the name to lock after 1 letter.
-                        setGuestName(e.target.value);
-                      }}
-                      onBlur={(e) => {
-                        // Persist to sessionStorage only when the user finishes typing (blur).
-                        const val = e.target.value;
-                        if (!val.trim()) return;
+                        const sanitized = e.target.value
+                          .replace(/[^a-zA-Z ]/g, '')
+                          .replace(/^\s+/, '')
+                          .replace(/\s{2,}/g, ' ')
+                          .slice(0, 20);
+                        setGuestName(sanitized);
                         try {
                           const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val.trim());
+                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, sanitized);
+                        } catch (err) { }
+                      }}
+                      onBlur={(e) => {
+                        const val = e.target.value
+                          .replace(/[^a-zA-Z ]/g, '')
+                          .replace(/^\s+/, '')
+                          .replace(/\s{2,}/g, ' ')
+                          .trim()
+                          .slice(0, 20);
+                        setGuestName(val);
+                        if (!val) return;
+                        try {
+                          const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                          sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val);
                         } catch (err) { }
                       }}
                       onKeyDown={(e) => {
@@ -1750,12 +1788,15 @@ export default function MenuPage({ onOpenDemoModal }) {
                             </span>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                            {activeItems.map((item, iIdx) => (
-                              <div key={iIdx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                                <span>{item.name} x {item.quantity || item.qty || 1}</span>
-                                <span style={{ fontWeight: 700 }}>₹{(Number(item.price || 0)) * Number(item.quantity || item.qty || 1)}</span>
-                              </div>
-                            ))}
+                            {activeItems.map((item, iIdx) => {
+                              const rawItemName = typeof item.name === 'object' ? (item.name?.name || String(item.name || 'Dish Item')) : String(item.name || 'Dish Item');
+                              return (
+                                <div key={iIdx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                                  <span>{rawItemName} x {item.quantity || item.qty || 1}</span>
+                                  <span style={{ fontWeight: 700 }}>₹{(Number(item.price || 0)) * Number(item.quantity || item.qty || 1)}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #CBD5E1', marginTop: '0.75rem', paddingTop: '0.5rem', fontWeight: 900, color: '#0F2A1D', fontSize: '0.9rem' }}>
                             <span>Total</span>
@@ -2695,13 +2736,17 @@ export default function MenuPage({ onOpenDemoModal }) {
                     if (numQty <= 0) return null;
                     const rawId = typeof qty === 'object' && qty !== null && qty.id ? qty.id : id.split('_')[0];
                     const dish = findItemInCatalog(rawId, menuItems) || (typeof qty === 'object' ? qty : null);
+                    if (!dish) return null;
+
+                    const rawDishName = dish?.name;
+                    const dishDisplayName = typeof rawDishName === 'object' ? (rawDishName?.name || String(rawDishName || 'Dish Item')) : String(rawDishName || 'Dish Item');
                     const unitPrice = typeof qty === 'object' && qty !== null && qty.unitPrice !== undefined ? Number(qty.unitPrice) : Number(dish?.price || 0);
-                    return dish ? (
+                    return (
                       <div key={id} className="customer-qr-cart-row">
                         {/* Left: Dish Name & Unit Price */}
                         <div className="customer-qr-cart-info">
                           <div className="customer-qr-cart-name">
-                            {dish.name}
+                            {dishDisplayName}
                           </div>
                           <div className="customer-qr-cart-unit-price">₹{unitPrice} each</div>
                         </div>
@@ -2735,7 +2780,7 @@ export default function MenuPage({ onOpenDemoModal }) {
                           <span className="customer-qr-row-price">₹{unitPrice * numQty}</span>
                         </div>
                       </div>
-                    ) : null;
+                    );
                   })}
                 </div>
 
@@ -2854,20 +2899,33 @@ export default function MenuPage({ onOpenDemoModal }) {
                   </div>
                   <input
                     type="text"
+                    maxLength={20}
                     placeholder="Enter your full name (e.g. Kiran)"
                     value={guestName}
                     onChange={(e) => {
-                      // Only update React state — do NOT write to sessionStorage here.
-                      // Writing on every keystroke caused the name to lock after 1 letter.
-                      setGuestName(e.target.value);
-                    }}
-                    onBlur={(e) => {
-                      // Persist to sessionStorage only when the user finishes typing (blur).
-                      const val = e.target.value;
-                      if (!val.trim()) return;
+                      const sanitized = e.target.value
+                        .replace(/[^a-zA-Z ]/g, '')
+                        .replace(/^\s+/, '')
+                        .replace(/\s{2,}/g, ' ')
+                        .slice(0, 20);
+                      setGuestName(sanitized);
                       try {
                         const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                        sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val.trim());
+                        sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, sanitized);
+                      } catch (err) { }
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value
+                        .replace(/[^a-zA-Z ]/g, '')
+                        .replace(/^\s+/, '')
+                        .replace(/\s{2,}/g, ' ')
+                        .trim()
+                        .slice(0, 20);
+                      setGuestName(val);
+                      if (!val) return;
+                      try {
+                        const cleanTbl = String(tableNum || 'GENERAL').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                        sessionStorage.setItem(`flavora_guest_name_${cleanTbl}_${activeTableSession?.sessionToken || 'anon'}`, val);
                       } catch (err) { }
                     }}
                     onKeyDown={(e) => {
