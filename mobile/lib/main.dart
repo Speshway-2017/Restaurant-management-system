@@ -21,7 +21,7 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // 🔔 Request Firebase Push Notification Permissions
+    // ðŸ”” Request Firebase Push Notification Permissions
     final messaging = FirebaseMessaging.instance;
     final settings = await messaging.requestPermission(
       alert: true,
@@ -91,7 +91,7 @@ class _FlavoraWaiterAppState extends State<FlavoraWaiterApp> {
       );
     }
 
-    if (auth.isAuthenticated) {
+    if (auth.isAuthenticated || auth.isGuestMode) {
       return const MainNavigationScreen();
     }
 

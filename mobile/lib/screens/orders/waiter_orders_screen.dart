@@ -5,6 +5,7 @@ import '../../providers/orders_provider.dart';
 import '../../models/order_model.dart';
 import '../../core/constants/app_colors.dart';
 import '../../widgets/order_card_widget.dart';
+import '../../core/utils/guest_guard.dart';
 import 'order_detail_screen.dart';
 
 class WaiterOrdersScreen extends StatefulWidget {
@@ -204,21 +205,25 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
               );
             },
             onAcceptOrder: () async {
+              if (GuestGuard.checkGuestRestriction(context, action: 'accept orders')) return;
               setState(() => _selectedActionOrderId = ord.id);
               await provider.acceptOrder(ord.id, waiterId, waiterName);
               if (mounted) setState(() => _selectedActionOrderId = '');
             },
             onStartServing: () async {
+              if (GuestGuard.checkGuestRestriction(context, action: 'update order serving status')) return;
               setState(() => _selectedActionOrderId = ord.id);
               await provider.updateServingStatus(ord.id, 'SERVING', waiterId, waiterName);
               if (mounted) setState(() => _selectedActionOrderId = '');
             },
             onMarkServed: () async {
+              if (GuestGuard.checkGuestRestriction(context, action: 'mark order as served')) return;
               setState(() => _selectedActionOrderId = ord.id);
               await provider.updateServingStatus(ord.id, 'SERVED', waiterId, waiterName);
               if (mounted) setState(() => _selectedActionOrderId = '');
             },
             onBillingPayment: () async {
+              if (GuestGuard.checkGuestRestriction(context, action: 'generate bills')) return;
               final messenger = ScaffoldMessenger.of(context);
               setState(() => _selectedActionOrderId = ord.id);
               final success = await provider.generateBill(ord.id);
@@ -227,15 +232,16 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
                 if (success) {
                   messenger.showSnackBar(
                     SnackBar(
-                      content: Text('✓ Bill Generated for Table ${ord.table}! Waiting for customer payment.'),
+                      content: Text('âœ“ Bill Generated for Table ${ord.table}! Waiting for customer payment.'),
                       backgroundColor: AppColors.accentGreen,
                     ),
                   );
                 }
               }
             },
-            onConfirmPayment: () => _showConfirmPaymentDialog(context, provider, ord),
-            onMarkCompleted: () => _handleMarkOrderCompleted(context, provider, ord),
+            onConfirmPayment: () => _showConfirmAndCompleteDialog(context, provider, ord),
+            onMarkCompleted: () => _showConfirmAndCompleteDialog(context, provider, ord),
+            onConfirmAndComplete: () => _showConfirmAndCompleteDialog(context, provider, ord),
           );
         },
       );
@@ -248,21 +254,24 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
     );
   }
 
-  Future<void> _showConfirmPaymentDialog(BuildContext context, OrdersProvider provider, OrderModel ord) async {
+  Future<void> _showConfirmAndCompleteDialog(BuildContext context, OrdersProvider provider, OrderModel ord) async {
+    if (GuestGuard.checkGuestRestriction(context, action: 'confirm payment or complete orders')) return;
     final messenger = ScaffoldMessenger.of(context);
+    final amountStr = (ord.totalAmount > 0 ? ord.totalAmount : ord.netTotal).toStringAsFixed(0);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.check_circle_outline, color: Color(0xFF166534)),
+            Icon(Icons.check_circle, color: Color(0xFF166534)),
             SizedBox(width: 8),
-            Text('Confirm Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Confirm Order Completion', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
-          'Confirm that ₹${ord.totalAmount.toStringAsFixed(0)} ${ord.paymentMethod.isNotEmpty ? ord.paymentMethod.toUpperCase() : "UPI"} payment for Table ${ord.table} (Order #${ord.orderId}) has been received?',
+          'Payment of â‚¹$amountStr has been received.\n\nAre you sure you want to mark this order as completed?',
           style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
         ),
         actions: [
@@ -285,30 +294,13 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
 
     if (confirmed == true) {
       setState(() => _selectedActionOrderId = ord.id);
-      final success = await provider.confirmWaiterPayment(ord.id);
+      final success = await provider.confirmAndCompleteOrder(ord.id);
       if (!mounted) return;
       setState(() => _selectedActionOrderId = '');
       if (success) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('✓ Payment received confirmed for Table ${ord.table}!'),
-            backgroundColor: const Color(0xFF166534),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleMarkOrderCompleted(BuildContext context, OrdersProvider provider, OrderModel ord) async {
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _selectedActionOrderId = ord.id);
-    final success = await provider.markOrderCompleted(ord.id);
-    if (mounted) {
-      setState(() => _selectedActionOrderId = '');
-      if (success) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('✓ Order #${ord.orderId} marked as Completed!'),
+            content: Text('âœ“ Payment confirmed & Order #${ord.orderId} completed!'),
             backgroundColor: const Color(0xFF166534),
           ),
         );

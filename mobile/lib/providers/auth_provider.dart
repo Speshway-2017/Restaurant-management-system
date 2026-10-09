@@ -5,7 +5,7 @@ import '../core/storage/storage_service.dart';
 import '../core/constants/api_constants.dart';
 import '../core/network/socket_service.dart';
 
-enum AuthStatus { uninitialized, authenticated, unauthenticated, authenticating }
+enum AuthStatus { uninitialized, authenticated, unauthenticated, authenticating, guest }
 
 class AuthProvider with ChangeNotifier {
   AuthStatus _status = AuthStatus.uninitialized;
@@ -16,6 +16,7 @@ class AuthProvider with ChangeNotifier {
   UserModel? get user => _user;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
+  bool get isGuestMode => _status == AuthStatus.guest;
 
   AuthProvider() {
     _initAuth();
@@ -24,6 +25,8 @@ class AuthProvider with ChangeNotifier {
   Future<void> _initAuth() async {
     final token = await StorageService.getToken();
     final savedUser = await StorageService.getUser();
+    final isGuest = await StorageService.isGuestMode();
+
     if (token != null && token.isNotEmpty && savedUser != null) {
       final role = savedUser.role.toString().trim().toLowerCase();
       if (role != 'waiter') {
@@ -34,6 +37,7 @@ class AuthProvider with ChangeNotifier {
         notifyListeners();
         return;
       }
+      await StorageService.clearGuestMode();
       _user = savedUser;
       _status = AuthStatus.authenticated;
       notifyListeners();
@@ -41,10 +45,33 @@ class AuthProvider with ChangeNotifier {
       try {
         await refreshProfile();
       } catch (_) {}
+    } else if (isGuest) {
+      _user = null;
+      _status = AuthStatus.guest;
+      notifyListeners();
     } else {
       _status = AuthStatus.unauthenticated;
       notifyListeners();
     }
+  }
+
+  Future<void> enterGuestMode() async {
+    await StorageService.clearSession();
+    await StorageService.saveGuestMode(true);
+    _user = null;
+    _status = AuthStatus.guest;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> exitGuestMode() async {
+    SocketService.disconnect();
+    await StorageService.clearGuestMode();
+    await StorageService.clearSession();
+    _user = null;
+    _status = AuthStatus.unauthenticated;
+    _errorMessage = null;
+    notifyListeners();
   }
 
   Future<bool> login(String email, String password) async {
@@ -88,6 +115,7 @@ class AuthProvider with ChangeNotifier {
 
           await StorageService.saveToken(token);
           await StorageService.saveUser(userObj);
+          await StorageService.clearGuestMode();
 
           _user = userObj;
           _status = AuthStatus.authenticated;

@@ -47,6 +47,8 @@ class TableModel {
   }
 
   bool get isOccupied => status.toUpperCase() == 'OCCUPIED' || status.toUpperCase() == 'BUSY';
+  int get capacity => seats;
+  String get floor => section;
 
   bool isAssignedToWaiter(String waiterId, String waiterName, List<String> waiterAssignedTables) {
     if (assignedWaiterId.isNotEmpty && assignedWaiterId == waiterId) return true;

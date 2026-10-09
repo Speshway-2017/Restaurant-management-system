@@ -1,3 +1,4 @@
+import '../../core/utils/guest_guard.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -76,7 +77,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ All dishes in this order have already been served or cancelled.'),
+            content: Text('âš ï¸ All dishes in this order have already been served or cancelled.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -113,7 +114,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 children: [
                   const Expanded(
                     child: Text(
-                      '⚠️ Request Order / Item Cancellation',
+                      'âš ï¸ Request Order / Item Cancellation',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF991B1B)),
                     ),
                   ),
@@ -237,10 +238,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                       ),
                                       child: Text(
                                         isServed
-                                            ? '🚫 Served (Cannot cancel)'
+                                            ? 'ðŸš« Served (Cannot cancel)'
                                             : (isReady
-                                                ? '🔔 Ready (Cannot cancel)'
-                                                : (isCancelled ? 'Cancelled' : '⏳ Pending (Can cancel)')),
+                                                ? 'ðŸ”” Ready (Cannot cancel)'
+                                                : (isCancelled ? 'Cancelled' : 'â³ Pending (Can cancel)')),
                                         style: TextStyle(
                                           fontSize: 9,
                                           fontWeight: FontWeight.w900,
@@ -347,7 +348,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   if (success) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('✓ Cancellation request submitted successfully!'),
+                                        content: Text('âœ“ Cancellation request submitted successfully!'),
                                         backgroundColor: AppColors.accentGreen,
                                       ),
                                     );
@@ -355,7 +356,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                           content: Text(
-                                            '❌ ${provider.error ?? "Failed to submit cancellation request."}',
+                                            'âŒ ${provider.error ?? "Failed to submit cancellation request."}',
                                                 ),
                                                  backgroundColor: Colors.red,
                                       ),
@@ -449,7 +450,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               children: [
                 Text(
                   deliveredCount == totalItemsCount
-                      ? '✓ All items delivered to table'
+                      ? 'âœ“ All items delivered to table'
                       : '${totalItemsCount - deliveredCount} item${(totalItemsCount - deliveredCount) > 1 ? 's' : ''} remaining',
                   style: TextStyle(
                     fontSize: 11,
@@ -459,12 +460,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
                 if (readyCount > 0)
                   Text(
-                    '🔔 $readyCount Ready to Serve',
+                    'ðŸ”” $readyCount Ready to Serve',
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534)),
                   )
                 else if (pendingCount > 0)
                   Text(
-                    '⏳ $pendingCount Preparing',
+                    'â³ $pendingCount Preparing',
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD97706)),
                   ),
               ],
@@ -688,16 +689,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 if (item.isCancelled)
                                   const Text('CANCELLED', style: TextStyle(fontSize: 10, color: AppColors.cancelledText, fontWeight: FontWeight.bold))
                                 else if (isServed)
-                                  const Text('✅ SERVED TO TABLE', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold))
+                                  const Text('âœ… SERVED TO TABLE', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold))
                                 else if (isReady)
-                                  const Text('🟢 READY TO SERVE', style: TextStyle(fontSize: 10, color: Color(0xFF166534), fontWeight: FontWeight.bold))
+                                  const Text('ðŸŸ¢ READY TO SERVE', style: TextStyle(fontSize: 10, color: Color(0xFF166534), fontWeight: FontWeight.bold))
                                 else
-                                  const Text('⏳ PREPARING IN KITCHEN', style: TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
+                                  const Text('â³ PREPARING IN KITCHEN', style: TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
                           Text(
-                            '₹${(item.price * item.quantity).toStringAsFixed(0)}',
+                            'â‚¹${(item.price * item.quantity).toStringAsFixed(0)}',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
@@ -764,7 +765,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 style: TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w700),
                               ),
                               Text(
-                                '₹${originalTotal % 1 == 0 ? originalTotal.toStringAsFixed(0) : originalTotal.toStringAsFixed(2)}',
+                                'â‚¹${originalTotal % 1 == 0 ? originalTotal.toStringAsFixed(0) : originalTotal.toStringAsFixed(2)}',
                                 style: const TextStyle(color: Color(0xFF334155), fontSize: 15, fontWeight: FontWeight.w800),
                               ),
                             ],
@@ -780,7 +781,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 style: const TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w700),
                               ),
                               Text(
-                                '₹${(gstAmount / 2) % 1 == 0 ? (gstAmount / 2).toStringAsFixed(0) : (gstAmount / 2).toStringAsFixed(2)}',
+                                'â‚¹${(gstAmount / 2) % 1 == 0 ? (gstAmount / 2).toStringAsFixed(0) : (gstAmount / 2).toStringAsFixed(2)}',
                                 style: const TextStyle(color: Color(0xFF475569), fontSize: 15, fontWeight: FontWeight.w800),
                               ),
                             ],
@@ -796,7 +797,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 style: const TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.w700),
                               ),
                               Text(
-                                '₹${(gstAmount / 2) % 1 == 0 ? (gstAmount / 2).toStringAsFixed(0) : (gstAmount / 2).toStringAsFixed(2)}',
+                                'â‚¹${(gstAmount / 2) % 1 == 0 ? (gstAmount / 2).toStringAsFixed(0) : (gstAmount / 2).toStringAsFixed(2)}',
                                 style: const TextStyle(color: Color(0xFF475569), fontSize: 15, fontWeight: FontWeight.w800),
                               ),
                             ],
@@ -818,7 +819,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   style: TextStyle(color: Color(0xFF0F2A1D), fontSize: 14, fontWeight: FontWeight.w900),
                                 ),
                                 Text(
-                                  '₹${finalBill.toStringAsFixed(0)}',
+                                  'â‚¹${finalBill.toStringAsFixed(0)}',
                                   style: const TextStyle(color: Color(0xFF0F2A1D), fontSize: 15, fontWeight: FontWeight.w900),
                                 ),
                               ],
@@ -836,7 +837,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   style: TextStyle(color: Color(0xFFEA580C), fontSize: 14, fontWeight: FontWeight.w800),
                                 ),
                                 Text(
-                                  '+₹${tip.toStringAsFixed(0)}',
+                                  '+â‚¹${tip.toStringAsFixed(0)}',
                                   style: const TextStyle(color: Color(0xFFEA580C), fontSize: 15, fontWeight: FontWeight.w900),
                                 ),
                               ],
@@ -857,7 +858,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   style: TextStyle(color: Color(0xFF15803D), fontSize: 16, fontWeight: FontWeight.w800),
                                 ),
                                 Text(
-                                  '₹${customerPaid.toStringAsFixed(0)}',
+                                  'â‚¹${customerPaid.toStringAsFixed(0)}',
                                   style: const TextStyle(
                                     color: Color(0xFF15803D),
                                     fontSize: 18,
@@ -934,7 +935,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                         Icon(Icons.check_circle, color: Color(0xFF166534), size: 16),
                                         SizedBox(width: 6),
                                         Text(
-                                          '✓ Payment Received',
+                                          'âœ“ Payment Received',
                                           style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF166534), fontSize: 13),
                                         ),
                                       ],
@@ -964,7 +965,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                         Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 16),
                                         SizedBox(width: 6),
                                         Text(
-                                          '⚠ Waiter Confirmation:',
+                                          'âš  Waiter Confirmation:',
                                           style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFB45309), fontSize: 13),
                                         ),
                                       ],
@@ -998,7 +999,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500),
                                 ),
                                 Text(
-                                  '₹${restaurantRevenue.toStringAsFixed(0)}',
+                                  'â‚¹${restaurantRevenue.toStringAsFixed(0)}',
                                   style: const TextStyle(color: Color(0xFF0F2A1D), fontSize: 13, fontWeight: FontWeight.w700),
                                 ),
                               ],
@@ -1012,7 +1013,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500),
                                 ),
                                 Text(
-                                  '₹${tip.toStringAsFixed(0)}',
+                                  'â‚¹${tip.toStringAsFixed(0)}',
                                   style: const TextStyle(color: Color(0xFFEA580C), fontSize: 13, fontWeight: FontWeight.w700),
                                 ),
                               ],
@@ -1039,7 +1040,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     border: Border.all(color: const Color(0xFF86EFAC)),
                   ),
                   child: const Text(
-                    '✓ ORDER COMPLETED',
+                    'âœ“ ORDER COMPLETED',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
@@ -1048,39 +1049,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                   ),
                 ),
-              ] else if (!currentOrd.isWaiterPaymentConfirmed) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: CustomButton(
-                    text: 'Confirm Payment Received',
-                    icon: Icons.check_circle_outline,
-                    isLoading: _isActionLoading,
-                    backgroundColor: const Color(0xFF166534),
-                    onPressed: () => _showConfirmPaymentDialog(context, ordersProvider, currentOrd),
-                  ),
-                ),
               ] else ...[
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
-                    text: 'Mark Order Completed',
+                    text: currentOrd.isWaiterPaymentConfirmed ? 'Mark Order Completed' : 'Mark Complete',
                     icon: Icons.check_circle,
                     isLoading: _isActionLoading,
                     backgroundColor: const Color(0xFF166534),
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      setState(() => _isActionLoading = true);
-                      final success = await ordersProvider.markOrderCompleted(currentOrd.id);
-                      setState(() => _isActionLoading = false);
-                      if (success && mounted) {
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text('✓ Order #${currentOrd.orderId} marked as Completed!'),
-                            backgroundColor: const Color(0xFF166534),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: () => _showConfirmAndCompleteDialog(context, ordersProvider, currentOrd),
                   ),
                 ),
               ],
@@ -1114,7 +1091,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     if (success && mounted) {
                       messenger.showSnackBar(
                         SnackBar(
-                          content: Text('✓ Bill Generated for Table ${currentOrd.table}! Waiting for customer payment.'),
+                          content: Text('âœ“ Bill Generated for Table ${currentOrd.table}! Waiting for customer payment.'),
                           backgroundColor: AppColors.accentGreen,
                         ),
                       );
@@ -1165,7 +1142,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               if (success && mounted) {
                                 messenger.showSnackBar(
                                   const SnackBar(
-                                    content: Text('✓ Selected ready dish(es) marked as Delivered to table!'),
+                                    content: Text('âœ“ Selected ready dish(es) marked as Delivered to table!'),
                                     backgroundColor: AppColors.accentGreen,
                                   ),
                                 );
@@ -1202,6 +1179,114 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       'Bill generation unlocks after all ready dishes are prepared & served to table.',
                       style: TextStyle(fontSize: 11, color: Color(0xFF78350F), fontWeight: FontWeight.w500),
                       textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (currentOrd.isPaid && !currentOrd.isWaiterPaymentConfirmed) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Payment received â€” waiter confirmation required',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFB45309)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: CustomButton(
+                        text: 'Mark Complete',
+                        icon: Icons.check_circle,
+                        isLoading: _isActionLoading,
+                        backgroundColor: const Color(0xFF166534),
+                        onPressed: () => _showConfirmAndCompleteDialog(context, ordersProvider, currentOrd),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (currentOrd.status == 'Completed') ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle, color: Color(0xFF166534), size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'âœ“ Payment Received & Order Completed',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF166534)),
+                        ),
+                      ],
+                    ),
+                    if (currentOrd.waiterPaymentConfirmedBy.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Confirmed by: ${currentOrd.waiterPaymentConfirmedBy}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ] else if (currentOrd.isWaiterPaymentConfirmed || currentOrd.isPaid) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'âœ“ Payment Received',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF166534)),
+                        ),
+                        Text(
+                          'â‚¹${currentOrd.totalAmount.toStringAsFixed(0)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF166534)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: CustomButton(
+                        text: 'Mark Complete',
+                        icon: Icons.check_circle,
+                        isLoading: _isActionLoading,
+                        backgroundColor: const Color(0xFF166534),
+                        onPressed: () => _showConfirmAndCompleteDialog(context, ordersProvider, currentOrd),
+                      ),
                     ),
                   ],
                 ),
@@ -1275,21 +1360,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Future<void> _showConfirmPaymentDialog(BuildContext context, OrdersProvider provider, OrderModel ord) async {
+  Future<void> _showConfirmAndCompleteDialog(BuildContext context, OrdersProvider provider, OrderModel ord) async {
+    if (GuestGuard.checkGuestRestriction(context, action: 'mark order completed')) return;
     final messenger = ScaffoldMessenger.of(context);
+    final amountStr = (ord.totalAmount > 0 ? ord.totalAmount : ord.netTotal).toStringAsFixed(0);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.check_circle_outline, color: Color(0xFF166534)),
+            Icon(Icons.check_circle, color: Color(0xFF166534)),
             SizedBox(width: 8),
-            Text('Confirm Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Confirm Order Completion', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
-          'Confirm that ₹${ord.totalAmount.toStringAsFixed(0)} ${ord.paymentMethod.isNotEmpty ? ord.paymentMethod.toUpperCase() : "UPI"} payment for Table ${ord.table} (Order #${ord.orderId}) has been received?',
+          'Payment of â‚¹$amountStr has been received.\n\nAre you sure you want to mark this order as completed?',
           style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
         ),
         actions: [
@@ -1312,13 +1400,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     if (confirmed == true) {
       setState(() => _isActionLoading = true);
-      final success = await provider.confirmWaiterPayment(ord.id);
+      final success = await provider.confirmAndCompleteOrder(ord.id);
       if (!mounted) return;
       setState(() => _isActionLoading = false);
       if (success) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('✓ Payment received confirmed for Table ${ord.table}!'),
+            content: Text('âœ“ Payment confirmed & Order #${ord.orderId} completed!'),
             backgroundColor: const Color(0xFF166534),
           ),
         );

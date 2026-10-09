@@ -11,6 +11,7 @@ import '../orders/order_detail_screen.dart';
 import '../orders/waiter_orders_screen.dart';
 import '../settings/waiter_settings_screen.dart';
 import '../profile/waiter_profile_screen.dart';
+import '../auth/login_screen.dart';
 
 class WaiterDashboardScreen extends StatefulWidget {
   final Function(int)? onNavigateTab;
@@ -185,7 +186,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${_getGreeting()}, $firstName 👋',
+                                  '${_getGreeting()}, $firstName ðŸ‘‹',
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
                                   style: const TextStyle(
@@ -197,7 +198,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '${user?.role ?? "Waiter"} • ID: $empIdDisplay',
+                                  '${user?.role ?? "Waiter"} â€¢ ID: $empIdDisplay',
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
                                   style: TextStyle(
@@ -331,7 +332,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${user?.branch.isNotEmpty == true ? user!.branch : "Main Branch"} • Active Shift',
+                                  '${user?.branch.isNotEmpty == true ? user!.branch : "Main Branch"} â€¢ Active Shift',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 12,
@@ -790,7 +791,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${ord.items.length} Items • ₹${ord.totalAmount.toStringAsFixed(0)}',
+                          '${ord.items.length} Items â€¢ â‚¹${ord.totalAmount.toStringAsFixed(0)}',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
@@ -993,7 +994,7 @@ class _ActiveOrdersTinderStackState extends State<_ActiveOrdersTinderStack> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Swipe left/right for next order • ${safeIndex + 1} of $count',
+              'Swipe left/right for next order â€¢ ${safeIndex + 1} of $count',
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -1274,7 +1275,7 @@ class _ActiveOrdersTinderStackState extends State<_ActiveOrdersTinderStack> {
                 ),
               ),
               Text(
-                '₹${order.totalAmount.toStringAsFixed(0)}',
+                'â‚¹${order.totalAmount.toStringAsFixed(0)}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -1289,7 +1290,7 @@ class _ActiveOrdersTinderStackState extends State<_ActiveOrdersTinderStack> {
           if (isPending) ...[
             Row(
               children: [
-                // ❌ Reject Button
+                // âŒ Reject Button
                 Expanded(
                   child: SizedBox(
                     height: 44,
@@ -1328,7 +1329,7 @@ class _ActiveOrdersTinderStackState extends State<_ActiveOrdersTinderStack> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // ✔ Accept Button
+                // âœ” Accept Button
                 Expanded(
                   child: SizedBox(
                     height: 44,
@@ -1472,7 +1473,7 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${user?.role ?? "Waiter"} • ${user?.branch.isNotEmpty == true ? user!.branch : "Main Branch"}',
+                        '${user?.role ?? "Waiter"} â€¢ ${user?.branch.isNotEmpty == true ? user!.branch : "Main Branch"}',
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 11,
@@ -1582,7 +1583,7 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                           messenger.showSnackBar(
                             const SnackBar(
                               content:
-                                  Text('✓ Checked Out of Shift successfully'),
+                                  Text('âœ“ Checked Out of Shift successfully'),
                               backgroundColor: Color(0xFFD97706),
                             ),
                           );
@@ -1593,7 +1594,7 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                           messenger.showSnackBar(
                             const SnackBar(
                               content:
-                                  Text('✓ Checked In for Shift successfully'),
+                                  Text('âœ“ Checked In for Shift successfully'),
                               backgroundColor: Color(0xFF0F2A1D),
                             ),
                           );
@@ -1688,7 +1689,10 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                 Navigator.pop(context);
                 await authProvider.logout();
                 if (context.mounted) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
                 }
               },
               borderRadius: BorderRadius.circular(10),

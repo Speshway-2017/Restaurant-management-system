@@ -523,4 +523,27 @@ class OrdersProvider with ChangeNotifier {
       return false;
     }
   }
+
+  // 9. Confirm Payment & Complete Order in 1 Step
+  Future<bool> confirmAndCompleteOrder(String orderId) async {
+    try {
+      await ApiClient.patch(
+        ApiConstants.confirmPayment(orderId),
+        body: {},
+      );
+      await ApiClient.patch(
+        ApiConstants.updateOrderStatus(orderId),
+        body: {
+          'status': 'Completed',
+          'paymentStatus': 'Paid',
+        },
+      );
+      await fetchOrders();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
+  }
 }

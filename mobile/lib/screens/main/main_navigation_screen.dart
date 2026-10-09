@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/network/socket_service.dart';
+import '../../core/utils/guest_guard.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/tables_provider.dart';
 import '../../providers/orders_provider.dart';
@@ -83,9 +84,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
+      body: SafeArea(
+        child: Column(
+          children: [
+            GuestGuard.buildGuestBanner(context),
+            Expanded(
+              child: IndexedStack(
+                index: _currentIndex,
+                children: pages,
+              ),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: FlavoraBottomNavigationBar(
         currentIndex: _currentIndex,
