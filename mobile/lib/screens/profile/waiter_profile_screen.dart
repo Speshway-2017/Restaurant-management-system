@@ -4,8 +4,9 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/device_image_picker.dart';
+import '../../core/utils/guest_guard.dart';
 import '../../widgets/user_avatar_widget.dart';
-
+import '../auth/login_screen.dart';
 import '../settings/waiter_settings_screen.dart';
 
 class WaiterProfileScreen extends StatelessWidget {
@@ -15,6 +16,7 @@ class WaiterProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
+    final isGuest = authProvider.isGuestMode;
 
     final phone = user?.phone ?? '';
     final empId = user?.empId ?? '';
@@ -26,17 +28,19 @@ class WaiterProfileScreen extends StatelessWidget {
     final status = user?.status ?? '';
     final assigned = user?.assignedTables ?? [];
 
-    final nameStr = user?.name ?? 'Waiter Staff';
-    final phoneStr = phone.isNotEmpty ? phone : 'Not Specified';
-    final empIdStr = empId.isNotEmpty ? empId : (userId.length >= 4 ? 'RMSW-${userId.substring(userId.length - 4).toUpperCase()}' : 'RMSW-01');
+    final nameStr = isGuest ? 'Guest Mode User' : (user?.name ?? 'Waiter Staff');
+    final emailStr = isGuest ? 'guest@flavorakitchen.com' : (user?.email ?? 'No email');
+    final phoneStr = isGuest ? 'Guest Session (Read-Only)' : (phone.isNotEmpty ? phone : 'Not Specified');
+    final empIdStr = isGuest ? 'GUEST-MODE' : (empId.isNotEmpty ? empId : (userId.length >= 4 ? 'RMSW-${userId.substring(userId.length - 4).toUpperCase()}' : 'RMSW-01'));
+    final roleStr = isGuest ? 'GUEST MODE' : (user?.role.toUpperCase() ?? 'WAITER');
     final branchStr = branch.isNotEmpty ? branch : 'Main Branch';
     final deptStr = dept.isNotEmpty ? dept : 'Floor Operations';
     final shiftStr = shift.isNotEmpty ? shift : 'General Shift';
-    final statusStr = status.isNotEmpty ? status : 'Active';
-    final attendanceStr = isCheckedIn ? 'Present' : 'Checked Out';
-    final attendanceColor = isCheckedIn ? const Color(0xFF10B981) : const Color(0xFFEF4444);
-    final hoursStr = user?.calculatedShiftHours ?? _calculateShiftHours(shiftStr, user?.hoursLogged);
-    final tablesStr = assigned.isNotEmpty ? assigned.join(', ') : 'All Floor Tables (Auto-Sync)';
+    final statusStr = isGuest ? 'Limited Access' : (status.isNotEmpty ? status : 'Active');
+    final attendanceStr = isGuest ? 'Disabled in Guest' : (isCheckedIn ? 'Present' : 'Checked Out');
+    final attendanceColor = isGuest ? Colors.amber.shade800 : (isCheckedIn ? const Color(0xFF10B981) : const Color(0xFFEF4444));
+    final hoursStr = isGuest ? 'N/A' : (user?.calculatedShiftHours ?? _calculateShiftHours(shiftStr, user?.hoursLogged));
+    final tablesStr = assigned.isNotEmpty ? assigned.join(', ') : 'All Floor Tables (Read-Only)';
 
     return Scaffold(
       appBar: AppBar(
@@ -45,31 +49,70 @@ class WaiterProfileScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Edit Profile Details',
-            onPressed: () => _showEditProfileModal(context, authProvider),
+            onPressed: () {
+              if (GuestGuard.checkGuestRestriction(context, action: 'edit profile details')) return;
+              _showEditProfileModal(context, authProvider);
+            },
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             tooltip: 'Shift Actions Dropdown',
             onSelected: (val) async {
               if (val == 'checkin') {
+                if (GuestGuard.checkGuestRestriction(context, action: 'check in to shift')) return;
                 final success = await authProvider.checkIn();
                 if (context.mounted && success) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✓ Checked In for Shift successfully'), backgroundColor: AppColors.darkGreen),
+                    const SnackBar(content: Text('âœ“ Checked In for Shift successfully'), backgroundColor: AppColors.darkGreen),
                   );
                 }
               } else if (val == 'checkout') {
+                if (GuestGuard.checkGuestRestriction(context, action: 'check out of shift')) return;
                 final success = await authProvider.checkOut();
                 if (context.mounted && success) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✓ Checked Out of Shift successfully'), backgroundColor: Colors.amber),
+                    const SnackBar(content: Text('âœ“ Checked Out of Shift successfully'), backgroundColor: Colors.amber),
                   );
                 }
               } else if (val == 'settings') {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const WaiterSettingsScreen()));
+              } else if (val == 'exit_guest') {
+                authProvider.exitGuestMode();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
               }
             },
             itemBuilder: (ctx) {
+              if (isGuest) {
+                return [
+                  const PopupMenuItem(
+                    value: 'exit_guest',
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout_rounded, color: Color(0xFF0F4D3A), size: 20),
+                        SizedBox(width: 10),
+                        Text(
+                          'Exit Guest Mode & Sign In',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F4D3A)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'settings',
+                    child: Row(
+                      children: [
+                        Icon(Icons.settings_outlined, size: 20, color: AppColors.textPrimary),
+                        SizedBox(width: 10),
+                        Text('App Settings'),
+                      ],
+                    ),
+                  ),
+                ];
+              }
+
               final isCheckedIn = user?.isCheckedIn ?? true;
               return [
                 PopupMenuItem(
@@ -121,28 +164,32 @@ class WaiterProfileScreen extends StatelessWidget {
                   children: [
                     // Interactive Avatar with Camera Badge
                     GestureDetector(
-                      onTap: () => _pickAndUploadPhoto(context, authProvider),
+                      onTap: () {
+                        if (GuestGuard.checkGuestRestriction(context, action: 'upload profile photo')) return;
+                        _pickAndUploadPhoto(context, authProvider);
+                      },
                       child: Stack(
                         alignment: Alignment.bottomRight,
-                  children: [
-                    UserAvatarWidget(
-                      avatarUrl: user?.avatarUrl,
-                      name: nameStr,
-                      radius: 44,
-                      border: Border.all(color: AppColors.darkGreen, width: 2.5),
+                        children: [
+                          UserAvatarWidget(
+                            avatarUrl: user?.avatarUrl,
+                            name: nameStr,
+                            radius: 44,
+                            border: Border.all(color: AppColors.darkGreen, width: 2.5),
                           ),
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: AppColors.darkGreen,
-                              shape: BoxShape.circle,
+                          if (!isGuest)
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: AppColors.darkGreen,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                size: 16,
+                                color: Colors.white,
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.camera_alt,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -153,7 +200,7 @@ class WaiterProfileScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      user?.email ?? '',
+                      emailStr,
                       style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 12),
@@ -177,13 +224,13 @@ class WaiterProfileScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                           decoration: BoxDecoration(
-                            color: AppColors.lightGreen,
+                            color: isGuest ? const Color(0xFFFFF0C7) : AppColors.lightGreen,
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.availableBorder),
+                            border: Border.all(color: isGuest ? const Color(0xFFFFE38E) : AppColors.availableBorder),
                           ),
                           child: Text(
-                            'ROLE: ${user?.role.toUpperCase() ?? "WAITER"}',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.accentGreen),
+                            'ROLE: $roleStr',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isGuest ? const Color(0xFFB45309) : AppColors.accentGreen),
                           ),
                         ),
                       ],
@@ -193,7 +240,6 @@ class WaiterProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-
 
             // Duty & Shift Information Card
             Card(
@@ -218,8 +264,8 @@ class WaiterProfileScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildStatusStat('Account Status', statusStr, Icons.verified_user, Colors.green),
-                        _buildStatusStat('Attendance', attendanceStr, isCheckedIn ? Icons.check_circle_outline : Icons.highlight_off_rounded, attendanceColor),
+                        _buildStatusStat('Account Status', statusStr, Icons.verified_user, isGuest ? Colors.amber.shade900 : Colors.green),
+                        _buildStatusStat('Attendance', attendanceStr, isGuest ? Icons.lock_clock_outlined : (isCheckedIn ? Icons.check_circle_outline : Icons.highlight_off_rounded), attendanceColor),
                         _buildStatusStat('Hours Logged', hoursStr, Icons.access_time_rounded, Colors.orange),
                       ],
                     ),
@@ -239,7 +285,10 @@ class WaiterProfileScreen extends StatelessWidget {
                     Icons.phone_outlined,
                     'Contact Number',
                     phoneStr,
-                    onTap: () => _showEditProfileModal(context, authProvider),
+                    onTap: () {
+                      if (GuestGuard.checkGuestRestriction(context, action: 'edit contact number')) return;
+                      _showEditProfileModal(context, authProvider);
+                    },
                   ),
                   const Divider(height: 1),
                   _buildProfileTile(Icons.storefront_outlined, 'Branch / Restaurant', branchStr),
@@ -252,6 +301,63 @@ class WaiterProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 24),
+
+            // Exit Guest Mode or Logout Waiter Account Button
+            if (isGuest)
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F4D3A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () {
+                    authProvider.exitGuestMode();
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      (route) => false,
+                    );
+                  },
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text(
+                    'Exit Guest Mode & Sign In',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFEF4444),
+                    side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () async {
+                    await authProvider.logout();
+                    if (context.mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        (route) => false,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),
+                  label: const Text(
+                    'Logout Account',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFFEF4444)),
+                  ),
+                ),
+              ),
             const SizedBox(height: 28),
           ],
         ),
@@ -298,51 +404,36 @@ class WaiterProfileScreen extends StatelessWidget {
 
         if (p1 == 'PM' && h1 < 12) h1 += 12;
         if (p1 == 'AM' && h1 == 12) h1 = 0;
-
         if (p2 == 'PM' && h2 < 12) h2 += 12;
         if (p2 == 'AM' && h2 == 12) h2 = 0;
 
-        int startTotal = h1 * 60 + min1;
-        int endTotal = h2 * 60 + min2;
+        int totalMin1 = h1 * 60 + min1;
+        int totalMin2 = h2 * 60 + min2;
 
-        if (endTotal < startTotal) {
-          endTotal += 24 * 60; // Overnight shift
+        if (totalMin2 < totalMin1) {
+          totalMin2 += 24 * 60;
         }
 
-        int diffMins = endTotal - startTotal;
-        int hours = diffMins ~/ 60;
-        int mins = diffMins % 60;
+        int diff = totalMin2 - totalMin1;
+        int hours = diff ~/ 60;
+        int minutes = diff % 60;
 
-        if (mins > 0) {
-          return '${hours}h ${mins.toString().padLeft(2, '0')}m';
-        } else {
-          return '${hours}h 00m';
-        }
+        return '${hours}h ${minutes.toString().padLeft(2, '0')}m';
       } catch (_) {}
     }
-
     return (fallbackHours != null && fallbackHours.isNotEmpty) ? fallbackHours : '9h 00m';
   }
 
-  Widget _buildProfileTile(
-    IconData icon,
-    String title,
-    String subtitle, {
-    bool isEditable = false,
-    VoidCallback? onTap,
-  }) {
+  Widget _buildProfileTile(IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
     return ListTile(
-      onTap: onTap,
-      leading: Icon(icon, color: AppColors.darkGreen),
-      title: Text(
-        title,
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-      ),
+      leading: Icon(icon, color: AppColors.darkGreen, size: 22),
+      title: Text(title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
       subtitle: Text(
         subtitle,
         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
       ),
-      trailing: isEditable ? const Icon(Icons.edit_outlined, size: 18, color: AppColors.darkGreen) : null,
+      trailing: onTap != null ? const Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary) : null,
+      onTap: onTap,
     );
   }
 
@@ -350,184 +441,76 @@ class WaiterProfileScreen extends StatelessWidget {
     final user = authProvider.user;
     final nameCtrl = TextEditingController(text: user?.name ?? '');
     final phoneCtrl = TextEditingController(text: user?.phone ?? '');
-    final branchCtrl = TextEditingController(text: user?.branch ?? '');
-    final deptCtrl = TextEditingController(text: user?.department ?? '');
-    final shiftCtrl = TextEditingController(text: user?.scheduledShift ?? '');
-    final tablesCtrl = TextEditingController(
-      text: user?.assignedTables.isNotEmpty == true ? user!.assignedTables.join(', ') : 'All Floor Tables (Auto-Sync)',
-    );
-
     bool isSaving = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
               padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
-              child: SingleChildScrollView(
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Row(
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.edit_note, color: AppColors.darkGreen, size: 26),
-                        SizedBox(width: 8),
-                        Text(
+                        const Text(
                           'Edit Profile Details',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: const Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.info_outline, size: 18, color: AppColors.darkGreen),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Personal contact details (Name & Phone) can be updated by you. All duty info (Branch, Department, Shift, & Tables) are read-only and assigned by your Manager.',
-                              style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.3),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
 
-                    // Full Name Input
-                    const Text('Full Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    // Name Input
+                    const Text('Full Name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: nameCtrl,
                       decoration: InputDecoration(
-                        hintText: 'Enter full name',
-                        prefixIcon: const Icon(Icons.person_outline, size: 20),
+                        hintText: 'Enter your full name',
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
-                    // Phone Contact Input
-                    const Text('Contact Number', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    // Phone Input
+                    const Text('Contact Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: phoneCtrl,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(10),
-                      ],
+                      keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(
-                        hintText: 'Enter mobile number',
-                        prefixIcon: const Icon(Icons.phone_outlined, size: 20),
+                        hintText: '10-digit mobile number',
+                        prefixText: '+91 ',
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Branch (Assigned by Manager)
-                    const Text('Branch / Restaurant Location ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: branchCtrl,
-                      enabled: false,
-                      style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w600),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFFF1F5F9),
-                        prefixIcon: const Icon(Icons.storefront_outlined, size: 20, color: Color(0xFF94A3B8)),
-                        suffixIcon: const Icon(Icons.lock_outline, size: 18, color: Color(0xFF94A3B8)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Department (Assigned by Manager)
-                    const Text('Department ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: deptCtrl,
-                      enabled: false,
-                      style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w600),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFFF1F5F9),
-                        prefixIcon: const Icon(Icons.corporate_fare_outlined, size: 20, color: Color(0xFF94A3B8)),
-                        suffixIcon: const Icon(Icons.lock_outline, size: 18, color: Color(0xFF94A3B8)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Scheduled Shift (Assigned by Manager)
-                    const Text('Scheduled Shift ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: shiftCtrl,
-                      enabled: false,
-                      style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w600),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFFF1F5F9),
-                        prefixIcon: const Icon(Icons.schedule_outlined, size: 20, color: Color(0xFF94A3B8)),
-                        suffixIcon: const Icon(Icons.lock_outline, size: 18, color: Color(0xFF94A3B8)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Floor Section (Assigned by Manager)
-                    const Text('Assigned Floor Section ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: tablesCtrl,
-                      enabled: false,
-                      style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w600),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFFF1F5F9),
-                        prefixIcon: const Icon(Icons.table_restaurant_outlined, size: 20, color: Color(0xFF94A3B8)),
-                        suffixIcon: const Icon(Icons.lock_outline, size: 18, color: Color(0xFF94A3B8)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        counterText: '',
                       ),
                     ),
                     const SizedBox(height: 24),
 
-                    // Action Buttons
+                    // Actions Row
                     Row(
                       children: [
                         Expanded(
@@ -536,7 +519,7 @@ class WaiterProfileScreen extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                            onPressed: () => Navigator.pop(ctx),
                             child: const Text('Cancel'),
                           ),
                         ),
@@ -639,7 +622,7 @@ class WaiterProfileScreen extends StatelessWidget {
           SnackBar(
             content: Text(
               success
-                  ? '✓ Profile photo updated successfully!'
+                  ? 'âœ“ Profile photo updated successfully!'
                   : (authProvider.errorMessage ?? 'Error saving profile photo'),
             ),
             backgroundColor: success ? AppColors.darkGreen : Colors.red,
@@ -658,4 +641,3 @@ class WaiterProfileScreen extends StatelessWidget {
     }
   }
 }
-

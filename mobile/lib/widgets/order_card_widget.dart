@@ -13,6 +13,7 @@ class OrderCardWidget extends StatelessWidget {
   final VoidCallback? onBillingPayment;
   final VoidCallback? onConfirmPayment;
   final VoidCallback? onMarkCompleted;
+  final VoidCallback? onConfirmAndComplete;
   final bool isActionLoading;
 
   const OrderCardWidget({
@@ -25,6 +26,7 @@ class OrderCardWidget extends StatelessWidget {
     this.onBillingPayment,
     this.onConfirmPayment,
     this.onMarkCompleted,
+    this.onConfirmAndComplete,
     this.isActionLoading = false,
   });
 
@@ -96,7 +98,7 @@ class OrderCardWidget extends StatelessWidget {
                     ],
                   ),
                   Text(
-                    '${order.items.length} Items • ₹${(order.totalAmount > 0 ? order.totalAmount : order.netTotal).toStringAsFixed(0)}',
+                    '${order.items.length} Items â€¢ â‚¹${(order.totalAmount > 0 ? order.totalAmount : order.netTotal).toStringAsFixed(0)}',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -157,16 +159,16 @@ class OrderCardWidget extends StatelessWidget {
                                 if (item.isCancelled)
                                   const Text(' (Cancelled)', style: TextStyle(fontSize: 10, color: AppColors.cancelledText))
                                 else if (isServed)
-                                  const Text(' • ✅ Served', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold))
+                                  const Text(' â€¢ âœ… Served', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold))
                                 else if (isReady)
-                                  const Text(' • 🟢 READY TO SERVE', style: TextStyle(fontSize: 10, color: Color(0xFF166534), fontWeight: FontWeight.bold))
+                                  const Text(' â€¢ ðŸŸ¢ READY TO SERVE', style: TextStyle(fontSize: 10, color: Color(0xFF166534), fontWeight: FontWeight.bold))
                                 else
-                                  const Text(' • ⏳ Cooking', style: TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
+                                  const Text(' â€¢ â³ Cooking', style: TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
                           Text(
-                            '₹${(item.price * item.quantity).toStringAsFixed(0)}',
+                            'â‚¹${(item.price * item.quantity).toStringAsFixed(0)}',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -186,17 +188,17 @@ class OrderCardWidget extends StatelessWidget {
                 if (order.status == 'Completed') ...[
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: const Color(0xFF86EFAC)),
                     ),
                     child: const Text(
-                      '✓ ORDER COMPLETED',
+                      'âœ“ ORDER COMPLETED',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w900,
                         color: Color(0xFF166534),
                       ),
@@ -234,7 +236,7 @@ class OrderCardWidget extends StatelessWidget {
                                 border: Border.all(color: const Color(0xFFFDE047)),
                               ),
                               child: Text(
-                                '${order.paymentMethod.isNotEmpty ? order.paymentMethod.toUpperCase() : "UPI"} • ₹${order.totalAmount.toStringAsFixed(0)}',
+                                '${order.paymentMethod.isNotEmpty ? order.paymentMethod.toUpperCase() : "UPI"} â€¢ â‚¹${(order.totalAmount > 0 ? order.totalAmount : order.netTotal).toStringAsFixed(0)}',
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
                               ),
                             ),
@@ -252,11 +254,65 @@ class OrderCardWidget extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: CustomButton(
-                            text: 'Confirm Payment Received',
-                            icon: Icons.check_circle_outline,
+                            text: 'Mark Complete',
+                            icon: Icons.check_circle,
                             isLoading: isActionLoading,
                             backgroundColor: const Color(0xFF166534),
-                            onPressed: onConfirmPayment,
+                            onPressed: onConfirmAndComplete ?? onConfirmPayment ?? onMarkCompleted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (order.status == 'Completed') ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'âœ“ PAYMENT RECEIVED',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF166534)),
+                            ),
+                            Text(
+                              'Completed',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                            ),
+                          ],
+                        ),
+                        if (order.waiterPaymentConfirmedBy.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Confirmed by: ${order.waiterPaymentConfirmedBy}',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_circle, size: 16, color: Color(0xFF166534)),
+                              SizedBox(width: 4),
+                              Text(
+                                'ORDER COMPLETED',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF166534)),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -273,16 +329,16 @@ class OrderCardWidget extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              '✓ PAYMENT RECEIVED',
+                            const Text(
+                              'âœ“ PAYMENT RECEIVED',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF166534)),
                             ),
                             Text(
-                              'Confirmed',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                              '${order.paymentMethod.isNotEmpty ? order.paymentMethod : "UPI"} â€¢ â‚¹${order.totalAmount.toStringAsFixed(0)}',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
                             ),
                           ],
                         ),
@@ -297,11 +353,11 @@ class OrderCardWidget extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: CustomButton(
-                            text: 'Mark Order Completed',
+                            text: 'Mark Complete',
                             icon: Icons.check_circle,
                             isLoading: isActionLoading,
                             backgroundColor: const Color(0xFF166534),
-                            onPressed: onMarkCompleted,
+                            onPressed: onConfirmAndComplete ?? onConfirmPayment ?? onMarkCompleted,
                           ),
                         ),
                       ],
@@ -410,7 +466,7 @@ class OrderCardWidget extends StatelessWidget {
                       Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 16),
                       SizedBox(width: 6),
                       Text(
-                        'Bill Generated • Awaiting Customer Payment',
+                        'Bill Generated â€¢ Awaiting Customer Payment',
                         style: TextStyle(
                           color: Color(0xFFD97706),
                           fontWeight: FontWeight.bold,

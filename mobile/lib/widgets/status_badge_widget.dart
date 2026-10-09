@@ -19,42 +19,42 @@ class StatusBadgeWidget extends StatelessWidget {
       bg = AppColors.cleaningBg;
       text = AppColors.cleaningText;
       border = AppColors.cleaningBorder;
-      label = '🧹 CLEANING';
+      label = 'ðŸ§¹ CLEANING';
     } else if (sUpper.contains('BILL') || sUpper.contains('AWAITING PAYMENT')) {
       bg = AppColors.billingBg;
       text = AppColors.billingText;
       border = AppColors.billingBorder;
-      label = '🧾 BILLING';
+      label = 'ðŸ§¾ BILLING';
     } else if (sUpper.contains('READY')) {
       bg = AppColors.readyBg;
       text = AppColors.readyText;
       border = AppColors.readyBorder;
-      label = '✨ READY';
+      label = 'âœ¨ READY';
     } else if (sUpper.contains('SERVING') || sUpper.contains('IN_TRANSIT')) {
       bg = AppColors.servingBg;
       text = AppColors.servingText;
       border = AppColors.servingBorder;
-      label = '🏃 SERVING';
+      label = 'ðŸƒ SERVING';
     } else if (sUpper.contains('SERVED') || sUpper.contains('COMPLETED') || sUpper.contains('PAID')) {
       bg = AppColors.availableBg;
       text = AppColors.availableText;
       border = AppColors.availableBorder;
-      label = '✅ SERVED';
+      label = 'âœ… SERVED';
     } else if (sUpper.contains('OCCUPIED') || sUpper.contains('IN PROGRESS') || sUpper.contains('PREPARING') || sUpper.contains('COOKING')) {
       bg = AppColors.occupiedBg;
       text = AppColors.occupiedText;
       border = AppColors.occupiedBorder;
-      label = '⏳ IN PROGRESS';
+      label = 'â³ IN PROGRESS';
     } else if (sUpper.contains('CANCEL')) {
       bg = AppColors.cancelledBg;
       text = AppColors.cancelledText;
       border = AppColors.cancelledBorder;
-      label = '❌ CANCELLED';
+      label = 'âŒ CANCELLED';
     } else {
       bg = AppColors.availableBg;
       text = AppColors.availableText;
       border = AppColors.availableBorder;
-      label = '🟢 AVAILABLE';
+      label = 'ðŸŸ¢ AVAILABLE';
     }
 
     return Container(

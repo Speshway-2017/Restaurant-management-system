@@ -52,7 +52,7 @@ class _MyTablesScreenState extends State<MyTablesScreen> {
           children: [
             const Text('Restaurant Floor Tables', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             Text(
-              'Showing all $totalCount tables • Any waiter can accept orders',
+              'Showing all $totalCount tables â€¢ Any waiter can accept orders',
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
             ),
           ],

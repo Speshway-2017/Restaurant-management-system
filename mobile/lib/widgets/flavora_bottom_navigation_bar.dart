@@ -94,7 +94,7 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
-          // Reduced selected horizontal padding: 8→5 so icon fits in constrained Expanded slot
+          // Reduced selected horizontal padding: 8â†’5 so icon fits in constrained Expanded slot
           padding: EdgeInsets.symmetric(
             horizontal: isSelected ? 5 : 4,
             vertical: 4,
@@ -131,7 +131,7 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   if (isSelected) ...[
-                    // Rainbow Chromatic Spectrum Halo Ring — smaller (1.8 padding, 22px inner)
+                    // Rainbow Chromatic Spectrum Halo Ring â€” smaller (1.8 padding, 22px inner)
                     Container(
                       padding: const EdgeInsets.all(1.8),
                       decoration: BoxDecoration(
@@ -155,7 +155,7 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
                         ],
                       ),
                       child: Container(
-                        width: 22,  // Reduced from 26 → 22 to fit constrained slots
+                        width: 22,  // Reduced from 26 â†’ 22 to fit constrained slots
                         height: 22,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
@@ -167,7 +167,7 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
                         ),
                         child: Icon(
                           activeIcon,
-                          size: 13,  // Reduced from 15 → 13
+                          size: 13,  // Reduced from 15 â†’ 13
                           color: Colors.white,
                         ),
                       ),
@@ -175,7 +175,7 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
                   ] else ...[
                     Icon(
                       icon,
-                      size: 19,  // Reduced from 20 → 19
+                      size: 19,  // Reduced from 20 â†’ 19
                       color: const Color(0xFF94A3B8),
                     ),
                   ],
@@ -200,7 +200,7 @@ class FlavoraBottomNavigationBar extends StatelessWidget {
                 ],
               ),
 
-              // Active Tab Text Label — gap trimmed to 3px, trailing box removed
+              // Active Tab Text Label â€” gap trimmed to 3px, trailing box removed
               if (isSelected) ...[
                 const SizedBox(width: 3),
                 Flexible(

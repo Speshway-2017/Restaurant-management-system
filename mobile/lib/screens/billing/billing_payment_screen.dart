@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/order_model.dart';
 import '../../providers/orders_provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/guest_guard.dart';
 import '../../widgets/custom_button.dart';
 
 class BillingPaymentScreen extends StatefulWidget {
@@ -54,72 +55,53 @@ class _BillingPaymentScreenState extends State<BillingPaymentScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('Order #${widget.order.orderId} • Customer: ${widget.order.customer}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    Text('Order #${widget.order.orderId} â€¢ Customer: ${widget.order.customer}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                     const Divider(height: 24),
 
                     // Items list
-                    ...widget.order.items.where((it) => !it.isCancelled).map((item) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          children: [
-                            Text('${item.quantity}x ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            Expanded(child: Text(item.name)),
-                            Text('₹${(item.price * item.quantity).toStringAsFixed(0)}'),
-                          ],
-                        ),
-                      );
-                    }),
-                    const Divider(height: 24),
+                    ...widget.order.items.map((i) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('${i.quantity}x ${i.name}', style: const TextStyle(fontSize: 13.5)),
+                          Text('â‚¹${(i.price * i.quantity).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    )),
 
+                    const Divider(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Subtotal'),
-                        Text('₹${subtotal % 1 == 0 ? subtotal.toStringAsFixed(0) : subtotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const Text('Subtotal', style: TextStyle(color: AppColors.textSecondary)),
+                        Text('â‚¹${subtotal.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('CGST @ ${((gstRate / 2) * 100).toStringAsFixed(((gstRate / 2) * 100) % 1 == 0 ? 0 : 1)}%', style: const TextStyle(color: AppColors.textSecondary)),
-                        Text('₹${(gst / 2) % 1 == 0 ? (gst / 2).toStringAsFixed(0) : (gst / 2).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('SGST @ ${((gstRate / 2) * 100).toStringAsFixed(((gstRate / 2) * 100) % 1 == 0 ? 0 : 1)}%', style: const TextStyle(color: AppColors.textSecondary)),
-                        Text('₹${(gst / 2) % 1 == 0 ? (gst / 2).toStringAsFixed(0) : (gst / 2).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('GST ($gstPctStr%)', style: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                        Text('₹${gst % 1 == 0 ? gst.toStringAsFixed(0) : gst.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    if (_tipAmount > 0) ...[
-                      const SizedBox(height: 6),
+                    if (discount > 0) ...[
+                      const SizedBox(height: 4),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Customer Tip (Excluded from Revenue)', style: TextStyle(color: AppColors.warmOrange, fontWeight: FontWeight.bold)),
-                          Text('+₹${_tipAmount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.warmOrange)),
+                          const Text('Discount / Offer', style: TextStyle(color: Colors.green)),
+                          Text('-â‚¹${discount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                         ],
                       ),
                     ],
-                    const Divider(height: 24),
-
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('GST ($gstPctStr%)', style: const TextStyle(color: AppColors.textSecondary)),
+                        Text('â‚¹${gst.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const Divider(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Grand Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text('₹${grandTotalWithTip.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.darkGreen)),
+                        Text('â‚¹${totalPayable.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.darkGreen)),
                       ],
                     ),
                   ],
@@ -128,15 +110,15 @@ class _BillingPaymentScreenState extends State<BillingPaymentScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Tip Option Section
-            const Text('Add Optional Staff Tip', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            const SizedBox(height: 10),
+            // Tip Option
+            const Text('Add Staff Tip (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 8),
             Row(
               children: [0, 20, 50, 100].map((tipVal) {
                 final isSel = _tipAmount == tipVal.toDouble();
                 return Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.only(right: 6),
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         backgroundColor: isSel ? AppColors.darkGreen : Colors.white,
@@ -144,7 +126,7 @@ class _BillingPaymentScreenState extends State<BillingPaymentScreen> {
                         side: BorderSide(color: isSel ? AppColors.darkGreen : AppColors.border),
                       ),
                       onPressed: () => setState(() => _tipAmount = tipVal.toDouble()),
-                      child: Text(tipVal == 0 ? 'No Tip' : '₹$tipVal'),
+                      child: Text(tipVal == 0 ? 'No Tip' : 'â‚¹$tipVal'),
                     ),
                   ),
                 );
@@ -182,11 +164,12 @@ class _BillingPaymentScreenState extends State<BillingPaymentScreen> {
             SizedBox(
               width: double.infinity,
               child: CustomButton(
-                text: 'Confirm ₹${grandTotalWithTip.toStringAsFixed(0)} Payment Received',
+                text: 'Confirm â‚¹${grandTotalWithTip.toStringAsFixed(0)} Payment Received',
                 icon: Icons.check_circle,
                 isLoading: _isProcessing,
                 backgroundColor: AppColors.accentGreen,
                 onPressed: () async {
+                  if (GuestGuard.checkGuestRestriction(context, action: 'confirm and settle payment')) return;
                   final messenger = ScaffoldMessenger.of(context);
                   final navigator = Navigator.of(context);
                   setState(() => _isProcessing = true);
@@ -203,7 +186,7 @@ class _BillingPaymentScreenState extends State<BillingPaymentScreen> {
                   if (success && mounted) {
                     messenger.showSnackBar(
                       SnackBar(
-                        content: Text('✓ Payment of ₹${grandTotalWithTip.toStringAsFixed(0)} confirmed! Table ${widget.order.table} marked CLEANING.'),
+                        content: Text('âœ“ Payment of â‚¹${grandTotalWithTip.toStringAsFixed(0)} confirmed! Table ${widget.order.table} marked CLEANING.'),
                         backgroundColor: AppColors.accentGreen,
                       ),
                     );

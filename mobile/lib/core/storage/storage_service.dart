@@ -37,6 +37,22 @@ class StorageService {
   static const String _keyRingtone = 'flavora_ringtone_tone';
   static const String _keySoundEnabled = 'flavora_sound_enabled';
   static const String _keyOnboardingCompleted = 'onboarding_completed';
+  static const String _keyGuestMode = 'flavora_guest_mode';
+
+  static Future<void> saveGuestMode(bool isGuest) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyGuestMode, isGuest);
+  }
+
+  static Future<bool> isGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyGuestMode) ?? false;
+  }
+
+  static Future<void> clearGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyGuestMode);
+  }
 
   static Future<void> saveRingtone(String ringtone) async {
     final prefs = await SharedPreferences.getInstance();
@@ -72,5 +88,6 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyToken);
     await prefs.remove(_keyUser);
+    await prefs.remove(_keyGuestMode);
   }
 }

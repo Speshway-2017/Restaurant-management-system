@@ -5,6 +5,7 @@ import '../../models/order_model.dart';
 import '../../providers/tables_provider.dart';
 import '../../providers/orders_provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/guest_guard.dart';
 import '../../widgets/status_badge_widget.dart';
 import '../../widgets/custom_button.dart';
 import '../billing/billing_payment_screen.dart';
@@ -59,7 +60,7 @@ class TableDetailScreen extends StatelessWidget {
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 22,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
@@ -79,59 +80,25 @@ class TableDetailScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${table.section} • Capacity: ${table.seats} Persons',
+                            'Capacity: ${table.capacity} Persons â€¢ ${table.floor}',
                             style: const TextStyle(
                               fontSize: 13,
                               color: AppColors.textSecondary,
                             ),
                           ),
+                          const SizedBox(height: 6),
+                          StatusBadgeWidget(status: table.status),
                         ],
                       ),
                     ),
-                    StatusBadgeWidget(status: table.status),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Active Order Section
-            const Text(
-              'Active Table Order',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            if (activeOrder == null) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Column(
-                  children: [
-                    Icon(Icons.restaurant_outlined, size: 40, color: AppColors.textSecondary),
-                    SizedBox(height: 8),
-                    Text(
-                      'No active orders for this table.',
-                      style: TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Customers can scan Table QR code to place orders.',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
+            // Active Order Summary for this Table
+            if (activeOrder != null) ...[
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -141,23 +108,22 @@ class TableDetailScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Order #${activeOrder.orderId}',
-                            style: const TextStyle(
-                              fontSize: 16,
+                          const Text(
+                            'ACTIVE ORDER SUMMARY',
+                            style: TextStyle(
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.darkGreen,
-                            ),
-                          ),
-                          Text(
-                            'Customer: ${activeOrder.customer}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
                               color: AppColors.textSecondary,
+                              letterSpacing: 0.5,
                             ),
                           ),
+                          StatusBadgeWidget(status: activeOrder.status),
                         ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Order #${activeOrder.orderId} â€¢ Customer: ${activeOrder.customer}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       const Divider(height: 20),
 
@@ -167,21 +133,36 @@ class TableDetailScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Row(
                             children: [
-                              Text(
-                                '${item.quantity}x ',
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.accentGreen),
+                              Container(
+                                width: 22,
+                                height: 22,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.lightGreen,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${item.quantity}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.accentGreen,
+                                    ),
+                                  ),
+                                ),
                               ),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   item.name,
-                                  style: TextStyle(
-                                    decoration: item.isCancelled ? TextDecoration.lineThrough : null,
-                                    color: item.isCancelled ? AppColors.cancelledText : AppColors.textPrimary,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
                               Text(
-                                '₹${(item.price * item.quantity).toStringAsFixed(0)}',
+                                'â‚¹${(item.price * item.quantity).toStringAsFixed(0)}',
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ],
@@ -195,7 +176,7 @@ class TableDetailScreen extends StatelessWidget {
                         children: [
                           const Text('Total Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                           Text(
-                            '₹${activeOrder.totalAmount.toStringAsFixed(0)}',
+                            'â‚¹${activeOrder.totalAmount.toStringAsFixed(0)}',
                             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.darkGreen),
                           ),
                         ],
@@ -210,6 +191,7 @@ class TableDetailScreen extends StatelessWidget {
                             text: 'Process Payment & Complete Bill',
                             icon: Icons.receipt_long,
                             onPressed: () {
+                              if (GuestGuard.checkGuestRestriction(context, action: 'process payment & complete bill')) return;
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(builder: (_) => BillingPaymentScreen(order: activeOrder)),
@@ -234,6 +216,7 @@ class TableDetailScreen extends StatelessWidget {
                   icon: Icons.cleaning_services,
                   backgroundColor: AppColors.accentGreen,
                   onPressed: () async {
+                    if (GuestGuard.checkGuestRestriction(context, action: 'update table status')) return;
                     await tablesProvider.updateStatus(table.id, 'Available');
                     if (context.mounted) Navigator.pop(context);
                   },
@@ -247,6 +230,7 @@ class TableDetailScreen extends StatelessWidget {
                   icon: Icons.cleaning_services_outlined,
                   backgroundColor: AppColors.warmOrange,
                   onPressed: () async {
+                    if (GuestGuard.checkGuestRestriction(context, action: 'vacate table')) return;
                     await tablesProvider.vacateTable(table.number);
                     if (context.mounted) Navigator.pop(context);
                   },

@@ -13,6 +13,27 @@
 
   <title>Flavora Waiter Portal</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Safeguard DOM node removal against null parent references in Flutter Web engine lifecycle
+    (function() {
+      var origRemoveChild = Node.prototype.removeChild;
+      Node.prototype.removeChild = function(child) {
+        if (!child) return null;
+        if (child.parentNode === this) {
+          return origRemoveChild.call(this, child);
+        }
+        if (child.parentNode && child.parentNode.removeChild) {
+          return origRemoveChild.call(child.parentNode, child);
+        }
+        if (typeof child.remove === 'function') {
+          child.remove();
+          return child;
+        }
+        return null;
+      };
+    })();
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

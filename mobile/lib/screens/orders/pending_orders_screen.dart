@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/orders_provider.dart';
+import '../../core/utils/guest_guard.dart';
 import 'order_detail_screen.dart';
 
 /// Full-screen list of every pending-acceptance order.
@@ -39,6 +40,7 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
     String waiterName,
     OrdersProvider provider,
   ) async {
+    if (GuestGuard.checkGuestRestriction(context, action: 'accept orders')) return;
     if (_isAccepting) return; // prevent double-tap
     setState(() {
       _isAccepting = true;
@@ -260,7 +262,7 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
         ),
         child: Column(
           children: [
-            // ── Card body ──────────────────────────────────────────────
+            // â”€â”€ Card body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -335,7 +337,7 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Table → Kitchen route
+                  // Table â†’ Kitchen route
                   Row(
                     children: [
                       Container(
@@ -397,7 +399,7 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
                         ),
                       ),
                       Text(
-                        '₹${order.totalAmount.toStringAsFixed(0)}',
+                        'â‚¹${order.totalAmount.toStringAsFixed(0)}',
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 15,
@@ -409,7 +411,7 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
               ),
             ),
 
-            // ── Action buttons footer ─────────────────────────────────
+            // â”€â”€ Action buttons footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Container(
               decoration: const BoxDecoration(
                 color: Color(0xFF142F1E),
@@ -436,8 +438,8 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
                           const SizedBox(width: 10),
                           Text(
                             _isAccepting && !isLoading
-                                ? 'Accepted — opening orders…'
-                                : 'Processing…',
+                                ? 'Accepted â€” opening ordersâ€¦'
+                                : 'Processingâ€¦',
                             style: const TextStyle(
                               color: Color(0xFF10B981),
                               fontSize: 13,

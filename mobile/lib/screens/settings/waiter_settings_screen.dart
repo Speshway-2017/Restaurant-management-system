@@ -7,6 +7,7 @@ import '../../core/storage/storage_service.dart';
 import '../../core/utils/sound_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/user_avatar_widget.dart';
+import '../auth/login_screen.dart';
 
 class WaiterSettingsScreen extends StatefulWidget {
   const WaiterSettingsScreen({super.key});
@@ -28,7 +29,7 @@ class _WaiterSettingsScreenState extends State<WaiterSettingsScreen> {
 
   // Diagnostic State
   bool _isTestingPing = false;
-  String _pingResult = 'Connected (HTTP 200 OK • 24ms)';
+  String _pingResult = 'Connected (HTTP 200 OK â€¢ 24ms)';
   bool _pingSuccess = true;
 
   @override
@@ -118,7 +119,7 @@ class _WaiterSettingsScreenState extends State<WaiterSettingsScreen> {
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('🔊 Playing audio preview: $_selectedRingtone'),
+                          content: Text('ðŸ”Š Playing audio preview: $_selectedRingtone'),
                           duration: const Duration(seconds: 2),
                           backgroundColor: AppColors.darkGreen,
                         ),
@@ -252,7 +253,7 @@ class _WaiterSettingsScreenState extends State<WaiterSettingsScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Version 2.4.0 (Build 108) • ${user?.branch.isNotEmpty == true ? user!.branch : "Main Branch"}',
+                  'Version 2.4.0 (Build 108) â€¢ ${user?.branch.isNotEmpty == true ? user!.branch : "Main Branch"}',
                   style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 20),
@@ -303,7 +304,7 @@ class _WaiterSettingsScreenState extends State<WaiterSettingsScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'ROLE: ${(role ?? "WAITER").toUpperCase()} • ${branch != null && branch.isNotEmpty ? branch : "Main Branch"}',
+                  'ROLE: ${(role ?? "WAITER").toUpperCase()} â€¢ ${branch != null && branch.isNotEmpty ? branch : "Main Branch"}',
                   style: const TextStyle(fontSize: 11, color: Color(0xFFA7F3D0), fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
@@ -380,7 +381,7 @@ class _WaiterSettingsScreenState extends State<WaiterSettingsScreen> {
                   ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('🔊 Playing tune preview: $t'),
+                      content: Text('ðŸ”Š Playing tune preview: $t'),
                       duration: const Duration(seconds: 2),
                       backgroundColor: AppColors.darkGreen,
                     ),
@@ -437,7 +438,7 @@ class _WaiterSettingsScreenState extends State<WaiterSettingsScreen> {
         setState(() {
           _isTestingPing = false;
           _pingSuccess = true;
-          _pingResult = 'Connected (HTTP 200 OK • ${stopwatch.elapsedMilliseconds}ms)';
+          _pingResult = 'Connected (HTTP 200 OK â€¢ ${stopwatch.elapsedMilliseconds}ms)';
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -502,7 +503,10 @@ class _WaiterSettingsScreenState extends State<WaiterSettingsScreen> {
                 Navigator.pop(ctx); // Close dialog
                 await authProvider.logout();
                 if (context.mounted) {
-                  Navigator.popUntil(context, (route) => route.isFirst);
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
                 }
               },
               child: const Text('Logout Now', style: TextStyle(fontWeight: FontWeight.bold)),

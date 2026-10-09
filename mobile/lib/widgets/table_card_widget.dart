@@ -82,7 +82,7 @@ class TableCardWidget extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${table.section} • ${table.seats} Seats',
+                      '${table.section} â€¢ ${table.seats} Seats',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,

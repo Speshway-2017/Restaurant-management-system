@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/orders_provider.dart';
+import '../../core/utils/guest_guard.dart';
 
 class AlertsScreen extends StatelessWidget {
   const AlertsScreen({super.key});
@@ -145,6 +146,7 @@ class AlertsScreen extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             ),
                             onPressed: () async {
+                              if (GuestGuard.checkGuestRestriction(context, action: 'resolve assistance calls')) return;
                               await ordersProvider.resolveAssistance(call.id);
                             },
                             child: const Text('Resolve', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -177,7 +179,7 @@ class AlertsScreen extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Table ${call.tableNum} • ${call.reason}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                          Text('Table ${call.tableNum} â€¢ ${call.reason}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                           const Text('Resolved', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
                         ],
                       ),
