@@ -28,6 +28,18 @@ class AuthService {
       throw new Error('Invalid email or password');
     }
 
+    // 3.1 Verify account status (Block & Suspend enforcement)
+    if (user.status === 'Blocked') {
+      const err = new Error('Your staff account has been blocked. Please contact the manager.');
+      err.statusCode = 403;
+      throw err;
+    }
+    if (user.status === 'Suspended') {
+      const err = new Error('Your staff account is currently suspended. Please contact the manager.');
+      err.statusCode = 403;
+      throw err;
+    }
+
     // 4. Role restriction validation for application-specific login requests
     const userRoleNormalized = (user.role || '').trim().toLowerCase();
     if (options.requiredRole) {
@@ -42,11 +54,7 @@ class AuthService {
     // 5. Generate JWT Token with exact user ID
     const token = generateToken(user._id, user.role);
 
-    const resolvedEmpId = user.empId || (user.role && user.role.toLowerCase().includes('waiter')
-      ? 'RMSW-01'
-      : (user.role && user.role.toLowerCase().includes('manager')
-        ? (String(user.email).toLowerCase().includes('manager2') ? 'RMSM-02' : 'RMSM-01')
-        : ''));
+    const resolvedEmpId = user.empId || '';
 
     const userPayload = {
       _id: user._id,
@@ -63,8 +71,8 @@ class AuthService {
       checkInTime: user.checkInTime || '09:00 AM',
       checkOutTime: user.checkOutTime || '06:00 PM',
       scheduledShift: user.scheduledShift || '09:00 AM – 06:00 PM (Morning)',
-      hoursLogged: user.hoursLogged || '8h 30m',
-      attendanceStatus: user.attendanceStatus || 'Present',
+      hoursLogged: user.hoursLogged || '0m',
+      attendanceStatus: user.attendanceStatus || 'Offline',
       avatarUrl: user.avatarUrl || '',
       assignedTables: user.assignedTables || [],
       managerSettings: user.managerSettings || {}
@@ -137,9 +145,15 @@ class AuthService {
         }
       ];
 
+      const { getNextEmpId } = require('../utils/empIdGenerator');
+
       for (const d of defaults) {
         const exists = await User.findOne({ email: d.email });
         if (!exists) {
+          const empIdTaken = await User.findOne({ empId: d.empId });
+          if (empIdTaken) {
+            d.empId = await getNextEmpId(d.role);
+          }
           await User.create(d);
         }
       }

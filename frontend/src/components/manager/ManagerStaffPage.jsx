@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, Search, CheckCircle2, Clock, UserCheck, Edit, Trash2, X, MoreVertical,
   ShieldCheck, Mail, Phone, RefreshCw, Eye, EyeOff, Ban, AlertCircle, Calendar, Filter,
-  Flame, Utensils, Award, ChevronLeft, ChevronRight, Building2, ArrowLeft
+  Flame, Utensils, Award, ChevronLeft, ChevronRight, Building2, ArrowLeft,
+  User, MapPin, Briefcase, Shield, Activity
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { getSocket, joinSocketRooms, onSocketEvent } from '../../services/socket';
@@ -50,6 +51,7 @@ export default function ManagerStaffPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [viewingStaff, setViewingStaff] = useState(null);
+  const [viewingStaffTab, setViewingStaffTab] = useState('details'); // 'details' | 'attendance'
   const [openMenuId, setOpenMenuId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [showStaffPassword, setShowStaffPassword] = useState(false);
@@ -280,16 +282,22 @@ export default function ManagerStaffPage() {
       const data = await api.getStaff();
       if (Array.isArray(data)) {
         const mapped = data.map((stf, idx) => ({
+          ...stf,
           _id: String(stf._id || stf.id || ''),
           staffId: String(stf._id || stf.id || ''),
           id: stf._id || stf.id || idx + 1,
-          empId: stf.empId || `RMSW-0${idx + 1}`,
+          empId: stf.empId || '',
           name: stf.name || 'Staff Member',
           role: stf.role || 'Waiter',
           email: stf.email || '',
           phone: stf.phone || '',
+          branch: stf.branch || 'Jubilee Hills (Main Branch)',
+          department: stf.department || (String(stf.role || '').toLowerCase().includes('chef') ? 'Kitchen & Culinary Operations' : String(stf.role || '').toLowerCase().includes('reception') ? 'Front Desk & Guest Relations' : 'Dining Floor & Table Service'),
           shift: stf.scheduledShift || stf.shift || '09:00 AM – 05:00 PM',
-          status: stf.status || 'On Shift'
+          checkInTime: stf.checkInTime || '09:00 AM',
+          checkOutTime: stf.checkOutTime || '05:00 PM',
+          status: stf.status || 'Active',
+          joinedDate: stf.joinedDate || (stf.createdAt ? new Date(stf.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '12 Oct 2026')
         }));
         setStaffList(mapped);
       }
@@ -513,14 +521,15 @@ export default function ManagerStaffPage() {
 
   const [formData, setFormData] = useState({
     name: '',
-    role: 'Waiter',
+    empId: '',
+    role: 'Chef',
     email: '',
     password: '',
     phone: '',
     shiftStart: '09:00',
     shiftEnd: '17:00',
     shift: '09:00 AM – 05:00 PM',
-    status: 'On Shift'
+    status: 'Active'
   });
 
   const saveStaffList = (newList) => {
@@ -535,20 +544,48 @@ export default function ManagerStaffPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const handleToggleStaffStatus = async (stf, newStatus) => {
+    const targetId = stf._id || stf.id || stf.staffId;
+    const actionVerb = newStatus === 'Blocked' ? 'BLOCK' : newStatus === 'Suspended' ? 'SUSPEND' : 'ACTIVATE';
+    const confirmMsg = newStatus === 'Blocked'
+      ? `Are you sure you want to BLOCK ${stf.name}? They will be prevented from logging in.`
+      : newStatus === 'Suspended'
+      ? `Are you sure you want to SUSPEND ${stf.name}? Their login access will be temporarily put on hold.`
+      : `Are you sure you want to reactivate ${stf.name}'s account to ACTIVE?`;
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      await api.updateStaff(targetId, { status: newStatus });
+      showToast(`✓ Staff member ${stf.name} status updated to ${newStatus}.`);
+      setOpenMenuId(null);
+      if (viewingStaff && String(viewingStaff._id || viewingStaff.id) === String(targetId)) {
+        setViewingStaff(prev => ({ ...prev, status: newStatus }));
+      }
+      fetchBackendStaff();
+      fetchCurrentAvailability();
+    } catch (err) {
+      alert(err.message || `Failed to update status to ${newStatus}.`);
+    }
+  };
+
   const handleOpenAddModal = () => {
     setEditingStaff(null);
     setShowStaffPassword(false);
     setPhoneWarning('');
     setFormData({
       name: '',
-      role: 'Waiter',
+      empId: '',
+      role: 'Chef',
       email: '',
       password: '',
       phone: '',
       shiftStart: '09:00',
       shiftEnd: '17:00',
       shift: '09:00 AM – 05:00 PM',
-      status: 'On Shift'
+      status: 'Active'
     });
     setIsAddModalOpen(true);
   };
@@ -558,16 +595,23 @@ export default function ManagerStaffPage() {
     setShowStaffPassword(false);
     setPhoneWarning('');
     const parsedTimes = parseShiftTo24(stf.shift || '11:00 AM – 10:00 PM');
+    let normalizedRole = 'Waiter';
+    const r = String(stf.role || '').toLowerCase();
+    if (r.includes('chef')) normalizedRole = 'Chef';
+    else if (r.includes('reception') || r.includes('cashier') || r.includes('host')) normalizedRole = 'Receptionist';
+    else normalizedRole = 'Waiter';
+
     setFormData({
       name: stf.name || '',
-      role: stf.role || 'Waiter',
+      empId: stf.empId || '',
+      role: normalizedRole,
       email: stf.email || '',
       password: '',
       phone: stf.phone || '',
       shiftStart: parsedTimes.start,
       shiftEnd: parsedTimes.end,
       shift: stf.shift || `${format24to12(parsedTimes.start)} – ${format24to12(parsedTimes.end)}`,
-      status: stf.status || 'On Shift'
+      status: stf.status || 'Active'
     });
     setOpenMenuId(null);
     setIsAddModalOpen(true);
@@ -647,28 +691,40 @@ export default function ManagerStaffPage() {
 
     const computedShift = `${format24to12(formData.shiftStart)} – ${format24to12(formData.shiftEnd)}`;
     const payload = {
-      name: formData.name,
+      name: formData.name.trim(),
       role: formData.role,
-      email: formData.email || `${formData.name.toLowerCase().replace(/[^a-z]/g, '')}@flavora.in`,
-      phone: formData.phone,
+      email: formData.email.trim() || `${formData.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@flavora.in`,
+      phone: formData.phone.trim(),
       scheduledShift: computedShift,
       shift: computedShift,
       checkInTime: format24to12(formData.shiftStart),
       checkOutTime: format24to12(formData.shiftEnd),
-      status: formData.status,
-      password: formData.password || 'password123'
+      status: formData.status || 'Active'
     };
+
+    if (!editingStaff && formData.empId && formData.empId.trim()) {
+      payload.empId = formData.empId.trim();
+    }
+
+    if (formData.password && formData.password.trim()) {
+      payload.password = formData.password.trim();
+    }
 
     if (editingStaff) {
       try {
-        await api.updateStaff(editingStaff.id, payload);
+        const targetId = editingStaff.id || editingStaff._id || editingStaff.staffId;
+        await api.updateStaff(targetId, payload);
+        if (viewingStaff && String(viewingStaff.id || viewingStaff._id) === String(targetId)) {
+          setViewingStaff(prev => ({ ...prev, ...payload }));
+        }
       } catch (err) {
         alert(err.message || 'Failed to update staff in database.');
         return;
       }
-      showToast('Staff member updated successfully.');
+      showToast('Staff member details updated successfully.');
     } else {
       try {
+        if (!payload.password) payload.password = 'password123';
         await api.createStaff(payload);
       } catch (err) {
         alert(err.message || 'Failed to save staff member.');
@@ -682,7 +738,7 @@ export default function ManagerStaffPage() {
   };
 
   const handleDeleteStaff = async (stfId, stfName) => {
-    if (window.confirm(`Are you sure you want to remove ${stfName} from staff roster?`)) {
+    if (window.confirm(`Are you sure you want to remove ${stfName} from staff details?`)) {
       try {
         await api.deleteStaff(stfId);
       } catch (err) { }
@@ -729,6 +785,12 @@ export default function ManagerStaffPage() {
   });
 
   if (viewingStaff) {
+    const liveStaff = currentAvailabilityList.find(s => 
+      String(s.id || s.staffId || s._id) === String(viewingStaff._id || viewingStaff.staffId || viewingStaff.id)
+    );
+    const isCurrentlyAvailable = liveStaff ? (liveStaff.status === 'available' || liveStaff.activeSession) : false;
+    const hasCheckedInToday = Boolean(liveStaff?.loginTimeFormatted && liveStaff?.loginTimeFormatted !== '—');
+
     return (
       <div className="admin-subpage-container" style={{ paddingBottom: '3rem' }}>
         {/* Toast Notification Banner */}
@@ -755,21 +817,59 @@ export default function ManagerStaffPage() {
           </div>
         )}
 
-        {/* Page Header with Back Button */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+        {/* Page Breadcrumb & Back Navigation */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
           <div>
             <div className="page-breadcrumb-bar">
               <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setViewingStaff(null)}>Staff Management</span>
               <span className="crumb-sep">›</span>
-              <span className="crumb-current">Attendance Details</span>
+              <span className="crumb-current">{viewingStaffTab === 'details' ? 'Staff Details' : 'Attendance Details'}</span>
             </div>
-            <h1 className="admin-page-title" style={{ margin: '0.2rem 0 0 0', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              
-              <span>{viewingStaff.name}</span>
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginTop: '0.35rem' }}>
+              <button
+                type="button"
+                onClick={() => setViewingStaff(null)}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1.5px solid #CBD5E1',
+                  padding: '0.45rem 0.85rem',
+                  borderRadius: '10px',
+                  fontSize: '0.82rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  color: '#1E293B',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#94A3B8'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
+              >
+                <ArrowLeft size={15} />
+                <span>Back to Staff Details</span>
+              </button>
+              <h1 className="admin-page-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span>{viewingStaff.name}</span>
+                <span style={{
+                  fontSize: '0.84rem',
+                  fontWeight: 800,
+                  color: '#E07A3C',
+                  fontFamily: 'monospace',
+                  backgroundColor: '#FFF5ED',
+                  padding: '0.2rem 0.65rem',
+                  borderRadius: '8px',
+                  border: '1px solid #FDBA74'
+                }}>
+                  {viewingStaff.empId || 'RMS-Staff'}
+                </span>
+              </h1>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {/* Quick Action Buttons */}
+          <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => {
@@ -793,57 +893,143 @@ export default function ManagerStaffPage() {
               }}
             >
               <Edit size={16} color="#2563EB" />
-              <span>Edit Staff Shift</span>
+              <span>Edit Details</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleToggleStaffStatus(viewingStaff, viewingStaff.status === 'Suspended' ? 'Active' : 'Suspended')}
+              style={{
+                backgroundColor: viewingStaff.status === 'Suspended' ? '#ECFDF5' : '#FFFBEB',
+                border: '1px solid ' + (viewingStaff.status === 'Suspended' ? '#A7F3D0' : '#FDE68A'),
+                padding: '0.6rem 1.1rem',
+                borderRadius: '12px',
+                fontSize: '0.86rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                color: viewingStaff.status === 'Suspended' ? '#047857' : '#D97706',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <AlertCircle size={16} color={viewingStaff.status === 'Suspended' ? '#047857' : '#D97706'} />
+              <span>{viewingStaff.status === 'Suspended' ? 'Reactivate Staff' : 'Suspend Staff'}</span>
             </button>
           </div>
         </div>
 
-        {/* Staff Profile Information Card */}
+        {/* Staff Profile Overview Card */}
         <div style={{
           backgroundColor: '#FFFFFF',
           borderRadius: '20px',
           padding: '1.5rem',
-          marginBottom: '1.5rem',
-          border: '1px solid #E2E8F0',
+          marginBottom: '1.25rem',
+          border: '1.5px solid #E2E8F0',
           boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
             <div style={{
-              width: '64px',
-              height: '64px',
+              width: '68px',
+              height: '68px',
               borderRadius: '20px',
               backgroundColor: '#0F2A1D',
               color: '#FFFFFF',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.5rem',
-              fontWeight: 900
+              fontSize: '1.55rem',
+              fontWeight: 900,
+              boxShadow: '0 4px 12px rgba(15, 42, 29, 0.25)',
+              position: 'relative'
             }}>
               {viewingStaff.name ? viewingStaff.name.slice(0, 2).toUpperCase() : 'ST'}
+              <span style={{
+                position: 'absolute',
+                bottom: '-2px',
+                right: '-2px',
+                width: '18px',
+                height: '18px',
+                borderRadius: '50%',
+                backgroundColor: isCurrentlyAvailable ? '#22C55E' : (hasCheckedInToday ? '#94A3B8' : '#D97706'),
+                border: '3px solid #FFFFFF'
+              }} title={isCurrentlyAvailable ? 'Currently Available' : (hasCheckedInToday ? 'Offline' : 'Not Checked In')} />
             </div>
+
             <div style={{ flex: 1, minWidth: '240px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: '#0F2A1D' }}>
+                <h2 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 900, color: '#0F2A1D' }}>
                   {viewingStaff.name}
                 </h2>
                 <span style={{ fontWeight: 800, backgroundColor: '#FFF5ED', color: '#92400E', padding: '0.2rem 0.75rem', borderRadius: '8px', border: '1px solid #FDE68A', fontSize: '0.8rem' }}>
                   {viewingStaff.role}
                 </span>
+                {viewingStaff.status === 'Blocked' ? (
+                  <span style={{
+                    fontSize: '0.76rem',
+                    fontWeight: 800,
+                    backgroundColor: '#FEF2F2',
+                    color: '#DC2626',
+                    padding: '0.2rem 0.65rem',
+                    borderRadius: '9999px',
+                    border: '1px solid #FECACA',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
+                  }}>
+                    <Ban size={12} /> Blocked
+                  </span>
+                ) : viewingStaff.status === 'Suspended' ? (
+                  <span style={{
+                    fontSize: '0.76rem',
+                    fontWeight: 800,
+                    backgroundColor: '#FFFBEB',
+                    color: '#D97706',
+                    padding: '0.2rem 0.65rem',
+                    borderRadius: '9999px',
+                    border: '1px solid #FDE68A',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
+                  }}>
+                    <AlertCircle size={12} /> Suspended
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: '0.76rem',
+                    fontWeight: 800,
+                    backgroundColor: '#DCFCE7',
+                    color: '#15803D',
+                    padding: '0.2rem 0.65rem',
+                    borderRadius: '9999px',
+                    border: '1px solid #86EFAC',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
+                  }}>
+                    <CheckCircle2 size={12} /> Active Account
+                  </span>
+                )}
+
                 <span style={{
                   fontSize: '0.76rem',
                   fontWeight: 800,
-                  backgroundColor: viewingStaff.status === 'available' ? '#DCFCE7' : '#F1F5F9',
-                  color: viewingStaff.status === 'available' ? '#15803D' : '#64748B',
+                  backgroundColor: isCurrentlyAvailable ? '#DCFCE7' : (hasCheckedInToday ? '#F1F5F9' : '#FEF3C7'),
+                  color: isCurrentlyAvailable ? '#15803D' : (hasCheckedInToday ? '#475569' : '#92400E'),
                   padding: '0.2rem 0.65rem',
                   borderRadius: '9999px',
-                  border: '1px solid ' + (viewingStaff.status === 'available' ? '#86EFAC' : '#CBD5E1')
+                  border: '1px solid ' + (isCurrentlyAvailable ? '#86EFAC' : (hasCheckedInToday ? '#CBD5E1' : '#FDE68A')),
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem'
                 }}>
-                  {viewingStaff.status === 'available' ? '● Currently Active' : '⚪ Offline'}
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: isCurrentlyAvailable ? '#22C55E' : (hasCheckedInToday ? '#94A3B8' : '#D97706') }} />
+                  {isCurrentlyAvailable ? 'Duty: Available' : (hasCheckedInToday ? 'Duty: Offline (Ended)' : 'Duty: Not Checked In')}
                 </span>
               </div>
-              <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#64748B', fontFamily: 'monospace', marginTop: '0.3rem' }}>
-                EMP ID: {viewingStaff.empId || `RMS-${String(viewingStaff.id).slice(-4)}`} • Shift: {viewingStaff.shift || '09:00 AM – 05:00 PM'}
+
+              <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#64748B', fontFamily: 'monospace', marginTop: '0.35rem' }}>
+                EMP ID: {viewingStaff.empId || '—'} • Shift: {viewingStaff.shift || '09:00 AM – 05:00 PM'} • Branch: {viewingStaff.branch || 'Jubilee Hills (Main Branch)'}
               </div>
             </div>
 
@@ -869,126 +1055,449 @@ export default function ManagerStaffPage() {
           </div>
         </div>
 
-        {/* Monthly Attendance Log Table Section */}
+        {/* View Mode Tab Switcher */}
         <div style={{
+          display: 'flex',
+          gap: '0.75rem',
           backgroundColor: '#FFFFFF',
-          borderRadius: '20px',
-          border: '1px solid #E2E8F0',
-          padding: '1.5rem',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
+          padding: '0.45rem',
+          borderRadius: '16px',
+          border: '1.5px solid #E2E8F0',
+          marginBottom: '1.5rem',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
         }}>
-          {/* Controls Bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Calendar size={22} color="#0F2A1D" />
-              <span>Monthly Attendance Record ({formatMonthYearLabel(selectedMonth)})</span>
-            </div>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', backgroundColor: '#F8FAFC', padding: '0.35rem 0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-              <button
-                type="button"
-                onClick={handlePrevMonth}
-                title="Previous Month"
-                style={{ border: 'none', background: '#FFFFFF', padding: '0.4rem 0.75rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem', fontWeight: 800, color: '#334155', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
-              >
-                <ChevronLeft size={16} />
-                <span>Prev Month</span>
-              </button>
-              <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D', minWidth: '130px', textAlign: 'center' }}>
-                {formatMonthYearLabel(selectedMonth)}
-              </span>
-              <button
-                type="button"
-                onClick={handleNextMonth}
-                disabled={selectedMonth >= getCurrentIstMonthStr()}
-                title={selectedMonth >= getCurrentIstMonthStr() ? "Cannot navigate into future months" : "Next Month"}
-                style={{ border: 'none', background: selectedMonth >= getCurrentIstMonthStr() ? '#E2E8F0' : '#FFFFFF', padding: '0.4rem 0.75rem', borderRadius: '8px', cursor: selectedMonth >= getCurrentIstMonthStr() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem', fontWeight: 800, color: selectedMonth >= getCurrentIstMonthStr() ? '#94A3B8' : '#334155', boxShadow: selectedMonth >= getCurrentIstMonthStr() ? 'none' : '0 1px 3px rgba(0,0,0,0.08)', opacity: selectedMonth >= getCurrentIstMonthStr() ? 0.6 : 1 }}
-              >
-                <span>Next Month</span>
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setViewingStaffTab('details')}
+            style={{
+              flex: 1,
+              padding: '0.75rem 1.25rem',
+              borderRadius: '12px',
+              border: 'none',
+              backgroundColor: viewingStaffTab === 'details' ? '#0F2A1D' : 'transparent',
+              color: viewingStaffTab === 'details' ? '#FFFFFF' : '#475569',
+              fontWeight: 800,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.15s ease',
+              boxShadow: viewingStaffTab === 'details' ? '0 4px 12px rgba(15, 42, 29, 0.15)' : 'none'
+            }}
+          >
+            <User size={17} />
+            <span>Staff Profile & Details</span>
+          </button>
 
-          {/* Full Page Attendance Table */}
-          <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.88rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.76rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '0.9rem 1.25rem', borderTopLeftRadius: '12px' }}>DATE (IST)</th>
-                  <th style={{ padding: '0.9rem 1.25rem' }}>IN → OUT SESSIONS</th>
-                  <th style={{ padding: '0.9rem 1.25rem' }}>LOGGED HOURS</th>
-                  <th style={{ padding: '0.9rem 1.25rem', borderTopRightRadius: '12px' }}>STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoadingMonthly ? (
-                  <tr>
-                    <td colSpan="4" style={{ padding: '3.5rem', textAlign: 'center', color: '#64748B' }}>
-                      <RefreshCw size={26} className="spin" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
-                      <span style={{ fontWeight: 700 }}>Fetching {formatMonthYearLabel(selectedMonth)} attendance log...</span>
-                    </td>
-                  </tr>
-                ) : monthlyHistoryList.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" style={{ padding: '3rem', textAlign: 'center', color: '#94A3B8' }}>
-                      No attendance records found for this month
-                    </td>
-                  </tr>
-                ) : (
-                  monthlyHistoryList.map((item, idx) => {
-                    const isAvailable = item.status === 'available';
-                    const hasSessions = Array.isArray(item.sessions) && item.sessions.length > 0;
-                    return (
-                      <tr key={item.id || idx} style={{ backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FDFBF7', borderBottom: '1px solid #F4EFEA' }}>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#334155', verticalAlign: 'top' }}>
-                          {item.displayDate || item.date}
-                        </td>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#15803D', verticalAlign: 'top' }}>
-                          {hasSessions ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                              {item.sessions.map((s, sIdx) => {
-                                const isAuto = s.autoCheckout || (s.logoutTimeFormatted && String(s.logoutTimeFormatted).includes('Auto Checkout'));
-                                return (
-                                  <div key={sIdx} style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', color: s.isCurrentlyActive ? '#2563EB' : (isAuto ? '#D97706' : '#15803D') }}>
-                                    <span>{s.loginTimeFormatted} – {s.logoutTimeFormatted}</span>
-                                    {isAuto && (
-                                      <span style={{ fontSize: '0.72rem', fontWeight: 800, backgroundColor: '#FEF3C7', color: '#B45309', padding: '0.1rem 0.5rem', borderRadius: '4px', border: '1px solid #FDE68A' }}>
-                                        Auto Checkout
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <span style={{ color: '#94A3B8', fontWeight: 600 }}>—</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace', verticalAlign: 'top' }}>
-                          {item.durationFormatted || '0m'}
-                        </td>
-                        <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top' }}>
-                          <span style={{
-                            fontSize: '0.76rem',
-                            fontWeight: 800,
-                            backgroundColor: isAvailable ? '#DCFCE7' : (hasSessions ? '#F1F5F9' : '#F8FAFC'),
-                            color: isAvailable ? '#15803D' : (hasSessions ? '#475569' : '#94A3B8'),
-                            padding: '0.2rem 0.65rem',
-                            borderRadius: '9999px',
-                            border: '1px solid ' + (isAvailable ? '#86EFAC' : '#CBD5E1')
-                          }}>
-                            {isAvailable ? '● Available' : (hasSessions ? '⚪ Offline' : 'Not Checked In')}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+          <button
+            type="button"
+            onClick={() => setViewingStaffTab('attendance')}
+            style={{
+              flex: 1,
+              padding: '0.75rem 1.25rem',
+              borderRadius: '12px',
+              border: 'none',
+              backgroundColor: viewingStaffTab === 'attendance' ? '#0F2A1D' : 'transparent',
+              color: viewingStaffTab === 'attendance' ? '#FFFFFF' : '#475569',
+              fontWeight: 800,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.15s ease',
+              boxShadow: viewingStaffTab === 'attendance' ? '0 4px 12px rgba(15, 42, 29, 0.15)' : 'none'
+            }}
+          >
+            <Calendar size={17} />
+            <span>Monthly Attendance Record ({formatMonthYearLabel(selectedMonth)})</span>
+          </button>
         </div>
+
+        {/* ================= TAB 1: STAFF DETAILS & PROFILE VIEW ================= */}
+        {viewingStaffTab === 'details' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.25rem' }}>
+            
+            {/* Card 1: Personal & Identity Information */}
+            <div style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '18px',
+              padding: '1.5rem',
+              border: '1.5px solid #E2E8F0',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.2rem', paddingBottom: '0.75rem', borderBottom: '1px solid #F1F5F9' }}>
+                <User size={20} color="#0F2A1D" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0F2A1D' }}>
+                  Personal & Identity Details
+                </h3>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.88rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Full Name:</span>
+                  <span style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.95rem' }}>{viewingStaff.name}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Employee ID:</span>
+                  <span style={{
+                    fontWeight: 900,
+                    color: '#E07A3C',
+                    fontFamily: 'monospace',
+                    backgroundColor: '#FFF5ED',
+                    padding: '0.2rem 0.6rem',
+                    borderRadius: '6px',
+                    border: '1px solid #FDBA74',
+                    fontSize: '0.9rem'
+                  }}>
+                    {viewingStaff.empId || '—'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Designation / Role:</span>
+                  <span style={{
+                    fontWeight: 800,
+                    backgroundColor: '#F8FAFC',
+                    color: '#1E293B',
+                    padding: '0.2rem 0.6rem',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1'
+                  }}>
+                    {viewingStaff.role}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Account Status:</span>
+                  <span style={{ fontWeight: 800, color: viewingStaff.status === 'Active' ? '#16A34A' : '#DC2626' }}>
+                    {viewingStaff.status || 'Active'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Database Record ID:</span>
+                  <span style={{ fontWeight: 700, color: '#94A3B8', fontFamily: 'monospace', fontSize: '0.78rem' }}>
+                    {String(viewingStaff._id || viewingStaff.id || '—')}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Identity Verification:</span>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    color: '#166534',
+                    backgroundColor: '#DCFCE7',
+                    padding: '0.2rem 0.6rem',
+                    borderRadius: '9999px',
+                    border: '1px solid #86EFAC'
+                  }}>
+                    <CheckCircle2 size={13} /> Verified Staff Member
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Contact & Communication */}
+            <div style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '18px',
+              padding: '1.5rem',
+              border: '1.5px solid #E2E8F0',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.2rem', paddingBottom: '0.75rem', borderBottom: '1px solid #F1F5F9' }}>
+                <Mail size={20} color="#0F2A1D" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0F2A1D' }}>
+                  Contact & Communication
+                </h3>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.88rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Email Address:</span>
+                  <span style={{ fontWeight: 800, color: '#0F2A1D' }}>{viewingStaff.email || '—'}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Mobile Phone:</span>
+                  <span style={{ fontWeight: 800, color: '#0F2A1D' }}>{viewingStaff.phone ? `+91 ${viewingStaff.phone}` : '—'}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Branch / Location:</span>
+                  <span style={{ fontWeight: 800, color: '#0F2A1D' }}>{viewingStaff.branch || 'Jubilee Hills (Main Branch)'}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Department:</span>
+                  <span style={{ fontWeight: 800, color: '#0F2A1D' }}>
+                    {viewingStaff.department || (String(viewingStaff.role || '').toLowerCase().includes('chef') ? 'Kitchen & Culinary' : String(viewingStaff.role || '').toLowerCase().includes('reception') ? 'Front Desk & Guest Relations' : 'Dining Floor & Table Service')}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Staff Pass Type:</span>
+                  <span style={{ fontWeight: 800, color: '#475569' }}>Registered Kitchen/Dining Pass</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Shift Schedule & Working Hours */}
+            <div style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '18px',
+              padding: '1.5rem',
+              border: '1.5px solid #E2E8F0',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.2rem', paddingBottom: '0.75rem', borderBottom: '1px solid #F1F5F9' }}>
+                <Clock size={20} color="#0F2A1D" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0F2A1D' }}>
+                  Shift Schedule & Work Hours
+                </h3>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.88rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Assigned Shift:</span>
+                  <span style={{ fontWeight: 800, color: '#0F2A1D' }}>{viewingStaff.shift || '09:00 AM – 05:00 PM'}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Scheduled Check IN:</span>
+                  <span style={{ fontWeight: 800, color: '#166534' }}>{viewingStaff.checkInTime || '09:00 AM'}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Scheduled Check OUT:</span>
+                  <span style={{ fontWeight: 800, color: '#B45309' }}>{viewingStaff.checkOutTime || '05:00 PM'}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Shift Duration:</span>
+                  <span style={{ fontWeight: 800, color: '#0F2A1D' }}>Full Time (Standard Shift)</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Date Onboarded:</span>
+                  <span style={{ fontWeight: 700, color: '#64748B' }}>{viewingStaff.joinedDate || '12 Oct 2026'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 4: Real-Time Duty & Today's Attendance Overview */}
+            <div style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '18px',
+              padding: '1.5rem',
+              border: '1.5px solid ' + (isCurrentlyAvailable ? '#BBF7D0' : '#E2E8F0'),
+              boxShadow: isCurrentlyAvailable ? '0 4px 16px rgba(34, 197, 94, 0.06)' : '0 4px 16px rgba(0,0,0,0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', paddingBottom: '0.75rem', borderBottom: '1px solid #F1F5F9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <Activity size={20} color={isCurrentlyAvailable ? '#15803D' : '#0F2A1D'} />
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0F2A1D' }}>
+                    Today's Live Attendance
+                  </h3>
+                </div>
+                <span style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 800,
+                  backgroundColor: isCurrentlyAvailable ? '#DCFCE7' : (hasCheckedInToday ? '#F1F5F9' : '#FEF3C7'),
+                  color: isCurrentlyAvailable ? '#15803D' : (hasCheckedInToday ? '#475569' : '#92400E'),
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '9999px',
+                  border: '1px solid ' + (isCurrentlyAvailable ? '#86EFAC' : (hasCheckedInToday ? '#CBD5E1' : '#FDE68A'))
+                }}>
+                  {isCurrentlyAvailable ? '● Available' : (hasCheckedInToday ? '⚪ Offline (Ended)' : 'Not Checked In')}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.88rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Today's Check IN:</span>
+                  <span style={{ fontWeight: 800, color: isCurrentlyAvailable ? '#15803D' : '#334155' }}>
+                    {liveStaff?.loginTimeFormatted || '—'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Today's Check OUT:</span>
+                  <span style={{ fontWeight: 800, color: isCurrentlyAvailable ? '#15803D' : '#475569' }}>
+                    {isCurrentlyAvailable ? 'Currently Active' : (liveStaff?.logoutTimeFormatted || '—')}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Logged Today:</span>
+                  <span style={{ fontWeight: 900, color: '#0F2A1D', fontFamily: 'monospace' }}>
+                    {liveStaff?.totalWorkingHoursToday || '0m'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setViewingStaffTab('attendance')}
+                  style={{
+                    marginTop: '0.5rem',
+                    backgroundColor: '#F8FAFC',
+                    border: '1.5px solid #CBD5E1',
+                    padding: '0.65rem 1rem',
+                    borderRadius: '10px',
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
+                    color: '#0F2A1D',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                    width: '100%',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#0F2A1D'; e.currentTarget.style.color = '#FFFFFF'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#0F2A1D'; }}
+                >
+                  <Calendar size={15} color="#E07A3C" />
+                  <span>View Complete Monthly Attendance Log →</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ================= TAB 2: MONTHLY ATTENDANCE RECORD ================= */}
+        {viewingStaffTab === 'attendance' && (
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '20px',
+            border: '1px solid #E2E8F0',
+            padding: '1.5rem',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
+          }}>
+            {/* Controls Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F2A1D', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Calendar size={22} color="#0F2A1D" />
+                <span>Monthly Attendance Record ({formatMonthYearLabel(selectedMonth)})</span>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', backgroundColor: '#F8FAFC', padding: '0.35rem 0.75rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  title="Previous Month"
+                  style={{ border: 'none', background: '#FFFFFF', padding: '0.4rem 0.75rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem', fontWeight: 800, color: '#334155', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
+                >
+                  <ChevronLeft size={16} />
+                  <span>Prev Month</span>
+                </button>
+                <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F2A1D', minWidth: '130px', textAlign: 'center' }}>
+                  {formatMonthYearLabel(selectedMonth)}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  disabled={selectedMonth >= getCurrentIstMonthStr()}
+                  title={selectedMonth >= getCurrentIstMonthStr() ? "Cannot navigate into future months" : "Next Month"}
+                  style={{ border: 'none', background: selectedMonth >= getCurrentIstMonthStr() ? '#E2E8F0' : '#FFFFFF', padding: '0.4rem 0.75rem', borderRadius: '8px', cursor: selectedMonth >= getCurrentIstMonthStr() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem', fontWeight: 800, color: selectedMonth >= getCurrentIstMonthStr() ? '#94A3B8' : '#334155', boxShadow: selectedMonth >= getCurrentIstMonthStr() ? 'none' : '0 1px 3px rgba(0,0,0,0.08)', opacity: selectedMonth >= getCurrentIstMonthStr() ? 0.6 : 1 }}
+                >
+                  <span>Next Month</span>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Full Page Attendance Table */}
+            <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#1C130E', color: '#FAF6EE', fontSize: '0.76rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '0.9rem 1.25rem', borderTopLeftRadius: '12px' }}>DATE (IST)</th>
+                    <th style={{ padding: '0.9rem 1.25rem' }}>IN → OUT SESSIONS</th>
+                    <th style={{ padding: '0.9rem 1.25rem' }}>LOGGED HOURS</th>
+                    <th style={{ padding: '0.9rem 1.25rem', borderTopRightRadius: '12px' }}>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingMonthly ? (
+                    <tr>
+                      <td colSpan="4" style={{ padding: '3.5rem', textAlign: 'center', color: '#64748B' }}>
+                        <RefreshCw size={26} className="spin" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
+                        <span style={{ fontWeight: 700 }}>Fetching {formatMonthYearLabel(selectedMonth)} attendance log...</span>
+                      </td>
+                    </tr>
+                  ) : monthlyHistoryList.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" style={{ padding: '3rem', textAlign: 'center', color: '#94A3B8' }}>
+                        No attendance records found for this month
+                      </td>
+                    </tr>
+                  ) : (
+                    monthlyHistoryList.map((item, idx) => {
+                      const isAvailable = item.status === 'available';
+                      const hasSessions = Array.isArray(item.sessions) && item.sessions.length > 0;
+                      return (
+                        <tr key={item.id || idx} style={{ backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FDFBF7', borderBottom: '1px solid #F4EFEA' }}>
+                          <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#334155', verticalAlign: 'top' }}>
+                            {item.displayDate || item.date}
+                          </td>
+                          <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#15803D', verticalAlign: 'top' }}>
+                            {hasSessions ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                {item.sessions.map((s, sIdx) => {
+                                  const isAuto = s.autoCheckout || (s.logoutTimeFormatted && String(s.logoutTimeFormatted).includes('Auto Checkout'));
+                                  return (
+                                    <div key={sIdx} style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', color: s.isCurrentlyActive ? '#2563EB' : (isAuto ? '#D97706' : '#15803D') }}>
+                                      <span>{s.loginTimeFormatted} – {s.logoutTimeFormatted}</span>
+                                      {isAuto && (
+                                        <span style={{ fontSize: '0.72rem', fontWeight: 800, backgroundColor: '#FEF3C7', color: '#B45309', padding: '0.1rem 0.5rem', borderRadius: '4px', border: '1px solid #FDE68A' }}>
+                                          Auto Checkout
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#94A3B8', fontWeight: 600 }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '0.85rem 1.25rem', fontWeight: 800, color: '#0F2A1D', fontFamily: 'monospace', verticalAlign: 'top' }}>
+                            {item.durationFormatted || '0m'}
+                          </td>
+                          <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'top' }}>
+                            <span style={{
+                              fontSize: '0.76rem',
+                              fontWeight: 800,
+                              backgroundColor: isAvailable ? '#DCFCE7' : (hasSessions ? '#F1F5F9' : '#F8FAFC'),
+                              color: isAvailable ? '#15803D' : (hasSessions ? '#475569' : '#94A3B8'),
+                              padding: '0.2rem 0.65rem',
+                              borderRadius: '9999px',
+                              border: '1px solid ' + (isAvailable ? '#86EFAC' : '#CBD5E1')
+                            }}>
+                              {isAvailable ? '● Available' : (hasSessions ? '⚪ Offline' : 'Not Checked In')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1216,7 +1725,7 @@ export default function ManagerStaffPage() {
           }}
         >
           <Users size={18} />
-          <span>Staff Roster</span>
+          <span>Staff Details</span>
         </button>
       </div>
 
@@ -1281,7 +1790,8 @@ export default function ManagerStaffPage() {
               </div>
             ) : (
               filteredAvailabilityList.map(st => {
-                const isAvailable = st.status === 'available';
+                const isAvailable = st.status === 'available' || st.activeSession;
+                const hasCheckedInToday = Boolean(st.loginTimeFormatted && st.loginTimeFormatted !== '—');
                 return (
                   <div
                     key={st.id}
@@ -1300,22 +1810,22 @@ export default function ManagerStaffPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                       <div>
                         <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0F2A1D', textDecoration: 'underline decoration-dotted' }}>{st.name}</div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', fontFamily: 'monospace' }}>{st.empId || 'RMS-01'}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', fontFamily: 'monospace' }}>{st.empId || '—'}</div>
                       </div>
                       <span style={{
                         fontSize: '0.74rem',
                         fontWeight: 800,
-                        backgroundColor: isAvailable ? '#DCFCE7' : '#F1F5F9',
-                        color: isAvailable ? '#15803D' : '#64748B',
+                        backgroundColor: isAvailable ? '#DCFCE7' : (hasCheckedInToday ? '#F1F5F9' : '#FEF3C7'),
+                        color: isAvailable ? '#15803D' : (hasCheckedInToday ? '#64748B' : '#92400E'),
                         padding: '0.25rem 0.65rem',
                         borderRadius: '9999px',
-                        border: '1px solid ' + (isAvailable ? '#86EFAC' : '#CBD5E1'),
+                        border: '1px solid ' + (isAvailable ? '#86EFAC' : (hasCheckedInToday ? '#CBD5E1' : '#FDE68A')),
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '0.3rem'
                       }}>
-                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: isAvailable ? '#22C55E' : '#94A3B8' }} />
-                        {isAvailable ? 'Available' : 'Offline'}
+                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: isAvailable ? '#22C55E' : (hasCheckedInToday ? '#94A3B8' : '#D97706') }} />
+                        {isAvailable ? 'Available' : (hasCheckedInToday ? 'Offline (Ended)' : 'Not Checked In')}
                       </span>
                     </div>
 
@@ -1332,7 +1842,7 @@ export default function ManagerStaffPage() {
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ color: '#64748B', fontWeight: 600 }}>Check OUT:</span>
-                        <span style={{ fontWeight: 800, color: '#475569' }}>
+                        <span style={{ fontWeight: 800, color: isAvailable ? '#15803D' : '#475569' }}>
                           {isAvailable ? 'Currently Active' : (st.logoutTimeFormatted || '—')}
                         </span>
                       </div>
@@ -1648,13 +2158,14 @@ export default function ManagerStaffPage() {
                   <th style={{ padding: '0.85rem 1.25rem' }}>ROLE</th>
                   <th style={{ padding: '0.85rem 1.25rem' }}>CONTACT INFO</th>
                   <th style={{ padding: '0.85rem 1.25rem' }}>ASSIGNED SHIFT</th>
+                  <th style={{ padding: '0.85rem 1.25rem' }}>ACCOUNT STATUS</th>
                   <th style={{ padding: '0.85rem 1.25rem', textAlign: 'center', borderTopRightRadius: '16px' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredStaffRoster.length === 0 ? (
                   <tr>
-                    <td colSpan="5" style={{ padding: '3rem 1.5rem', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan="6" style={{ padding: '3rem 1.5rem', textAlign: 'center', color: '#94A3B8' }}>
                       <Users size={36} color="#CBD5E1" style={{ display: 'block', margin: '0 auto 0.5rem auto' }} />
                       <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#475569' }}>No staff members found</div>
                     </td>
@@ -1671,12 +2182,15 @@ export default function ManagerStaffPage() {
                       }}
                     >
                       <td 
-                        onClick={() => setViewingStaff(st)}
+                        onClick={() => {
+                          setViewingStaff(st);
+                          setViewingStaffTab('details');
+                        }}
                         style={{ padding: '0.85rem 1.25rem', verticalAlign: 'middle', cursor: 'pointer' }}
-                        title="Click to view full monthly attendance log"
+                        title="Click to view staff profile & details"
                       >
                         <div style={{ fontWeight: 800, color: '#0F2A1D', fontSize: '0.9rem', textDecoration: 'underline decoration-dotted' }}>{st.name}</div>
-                        <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, fontFamily: 'monospace' }}>{st.empId || `RMSW-0${st.id}`}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, fontFamily: 'monospace' }}>{st.empId || '—'}</div>
                       </td>
 
                       <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'middle' }}>
@@ -1700,6 +2214,55 @@ export default function ManagerStaffPage() {
 
                       <td style={{ padding: '0.85rem 1.25rem', color: '#334155', fontWeight: 600, verticalAlign: 'middle' }}>
                         {st.shift}
+                      </td>
+
+                      <td style={{ padding: '0.85rem 1.25rem', verticalAlign: 'middle' }}>
+                        {st.status === 'Blocked' ? (
+                          <span style={{
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            backgroundColor: '#FEF2F2',
+                            color: '#DC2626',
+                            border: '1px solid #FECACA',
+                            padding: '0.2rem 0.55rem',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
+                          }}>
+                            <Ban size={12} /> Blocked
+                          </span>
+                        ) : st.status === 'Suspended' ? (
+                          <span style={{
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            backgroundColor: '#FFFBEB',
+                            color: '#D97706',
+                            border: '1px solid #FDE68A',
+                            padding: '0.2rem 0.55rem',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
+                          }}>
+                            <AlertCircle size={12} /> Suspended
+                          </span>
+                        ) : (
+                          <span style={{
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            backgroundColor: '#F0FDF4',
+                            color: '#16A34A',
+                            border: '1px solid #BBF7D0',
+                            padding: '0.2rem 0.55rem',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
+                          }}>
+                            <CheckCircle2 size={12} /> Active
+                          </span>
+                        )}
                       </td>
 
                       <td style={{ padding: '0.85rem 1.25rem', textAlign: 'center', verticalAlign: 'middle', position: 'relative' }}>
@@ -1737,12 +2300,38 @@ export default function ManagerStaffPage() {
                               borderRadius: '12px',
                               boxShadow: '0 10px 30px rgba(15, 42, 29, 0.18)',
                               border: '1px solid #E2E8F0',
-                              minWidth: '180px',
+                              minWidth: '190px',
                               zIndex: 9999,
                               overflow: 'hidden',
                               padding: '0.4rem 0',
                               textAlign: 'left'
                             }}>
+                              <button
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  setViewingStaff(st);
+                                  setViewingStaffTab('details');
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.9rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.6rem',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 700,
+                                  color: '#0F2A1D',
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F0FDF4'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Eye size={14} color="#059669" />
+                                <span>View Details</span>
+                              </button>
+
                               <button
                                 onClick={() => {
                                   setOpenMenuId(null);
@@ -1765,13 +2354,13 @@ export default function ManagerStaffPage() {
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                               >
                                 <Edit size={14} color="#2563EB" />
-                                <span>Edit Shift Hours</span>
+                                <span>Edit Details</span>
                               </button>
 
                               <button
                                 onClick={() => {
                                   setOpenMenuId(null);
-                                  setViewingStaff(st);
+                                  handleToggleStaffStatus(st, st.status === 'Suspended' ? 'Active' : 'Suspended');
                                 }}
                                 style={{
                                   width: '100%',
@@ -1781,16 +2370,16 @@ export default function ManagerStaffPage() {
                                   gap: '0.6rem',
                                   fontSize: '0.82rem',
                                   fontWeight: 700,
-                                  color: '#1E293B',
+                                  color: st.status === 'Suspended' ? '#059669' : '#D97706',
                                   backgroundColor: 'transparent',
                                   border: 'none',
                                   cursor: 'pointer'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = st.status === 'Suspended' ? '#ECFDF5' : '#FFFBEB'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                               >
-                                <Eye size={14} color="#059669" />
-                                <span>View All Details</span>
+                                {st.status === 'Suspended' ? <UserCheck size={14} color="#059669" /> : <AlertCircle size={14} color="#D97706" />}
+                                <span>{st.status === 'Suspended' ? 'Reactivate Staff' : 'Suspend Staff'}</span>
                               </button>
 
                               <div style={{ borderTop: '1px solid #F1F5F9', margin: '0.3rem 0' }} />
@@ -1808,15 +2397,15 @@ export default function ManagerStaffPage() {
                                   gap: '0.6rem',
                                   fontSize: '0.82rem',
                                   fontWeight: 700,
-                                  color: '#DC2626',
+                                  color: '#64748B',
                                   backgroundColor: 'transparent',
                                   border: 'none',
                                   cursor: 'pointer'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                               >
-                                <Trash2 size={14} color="#DC2626" />
+                                <Trash2 size={14} color="#64748B" />
                                 <span>Remove Staff</span>
                               </button>
                             </div>
@@ -1848,8 +2437,10 @@ export default function ManagerStaffPage() {
           <div style={{
             backgroundColor: '#FFFFFF',
             borderRadius: '20px',
-            maxWidth: '520px',
+            maxWidth: '560px',
             width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
             padding: '1.75rem',
             boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
             border: '1px solid #EAE3D2',
@@ -1863,26 +2454,61 @@ export default function ManagerStaffPage() {
             </button>
 
             <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.2rem', fontWeight: 900, color: '#0F2A1D' }}>
-              {editingStaff ? 'Edit Staff Shift & Role' : 'Add New Staff Member'}
+              {editingStaff ? 'Edit Staff Member Details' : 'Add New Staff Member'}
             </h3>
             <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.8rem', color: '#64748B' }}>
-              Configure account login details and assigned work shift hours.
+              {editingStaff ? 'Update employee identity, assigned role, contact info, shift timing, and account status.' : 'Configure account login details, assigned role, and work shift hours.'}
             </p>
 
-            <form onSubmit={handleSubmitStaff}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.3rem' }}>
-                    FULL NAME *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g. Ramesh Kumar"
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none' }}
-                  />
+            <form onSubmit={handleSubmitStaff} autoComplete="off">
+              {/* Chrome & Edge autofill deterrents: Prevents browser from pre-filling manager credentials */}
+              <input type="text" name="decoy_username" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+              <input type="password" name="decoy_password" style={{ display: 'none' }} tabIndex={-1} autoComplete="new-password" />
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '0.85rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.3rem' }}>
+                      FULL NAME *
+                    </label>
+                    <input
+                      type="text"
+                      name="staff_registration_name"
+                      autoComplete="off"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g. Ramesh Kumar"
+                      style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.3rem' }}>
+                      EMPLOYEE ID {editingStaff ? <span style={{ fontWeight: 600, color: '#64748B' }}>(Permanent)</span> : <span style={{ fontWeight: 600, color: '#64748B' }}>(Auto-generated)</span>}
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      readOnly
+                      value={formData.empId || (editingStaff ? '—' : 'Auto-generated on save')}
+                      placeholder="Auto-generated on save"
+                      style={{
+                        width: '100%',
+                        padding: '0.6rem 0.85rem',
+                        borderRadius: '10px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '0.88rem',
+                        outline: 'none',
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        backgroundColor: '#F1F5F9',
+                        color: '#64748B',
+                        cursor: 'not-allowed'
+                      }}
+                      title="Employee ID is uniquely generated by database and cannot be modified"
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
@@ -1893,21 +2519,54 @@ export default function ManagerStaffPage() {
                     <select
                       value={formData.role}
                       onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
-                      style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none', backgroundColor: '#FFFFFF' }}
+                      style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none', backgroundColor: '#FFFFFF', fontWeight: 700 }}
                     >
-                      <option value="Waiter">Waiter / Steward</option>
-                      <option value="Chef">Chef / Line Cook</option>
-                      <option value="Head Chef">Head Chef</option>
-                      <option value="Receptionist">Receptionist / Cashier</option>
+                      <option value="Chef">Chef</option>
+                      <option value="Waiter">Waiter</option>
+                      <option value="Receptionist">Receptionist</option>
                     </select>
                   </div>
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.3rem' }}>
-                      MOBILE NUMBER (10 Digits)
+                      ACCOUNT STATUS *
+                    </label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                      style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none', backgroundColor: '#FFFFFF', fontWeight: 700 }}
+                    >
+                      <option value="Active">Active (Eligible to Sign In)</option>
+                      <option value="Suspended">Suspended (Access on Hold)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '0.85rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.3rem' }}>
+                      EMAIL ADDRESS
                     </label>
                     <input
                       type="text"
+                      inputMode="email"
+                      name="staff_registration_email"
+                      autoComplete="off"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="e.g. staff@rms.com"
+                      style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.3rem' }}>
+                      MOBILE (10 Digits)
+                    </label>
+                    <input
+                      type="tel"
+                      name="staff_registration_phone"
+                      autoComplete="off"
                       maxLength={10}
                       value={formData.phone}
                       onChange={(e) => handlePhoneChange(e.target.value)}
@@ -1917,22 +2576,6 @@ export default function ManagerStaffPage() {
                     {phoneWarning && <div style={{ fontSize: '0.72rem', color: '#DC2626', fontWeight: 700, marginTop: '0.25rem' }}>{phoneWarning}</div>}
                   </div>
                 </div>
-
-                {!editingStaff && (
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.3rem' }}>
-                      ACCOUNT PASSWORD *
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={formData.password}
-                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Enter login password..."
-                      style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none' }}
-                    />
-                  </div>
-                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
                   <div>
@@ -1957,6 +2600,36 @@ export default function ManagerStaffPage() {
                       onChange={(e) => setFormData(prev => ({ ...prev, shiftEnd: e.target.value }))}
                       style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none' }}
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.3rem' }}>
+                    {editingStaff ? (
+                      <>NEW PASSWORD <span style={{ fontWeight: 500, color: '#94A3B8' }}>(Leave blank to keep unchanged)</span></>
+                    ) : (
+                      'ACCOUNT PASSWORD *'
+                    )}
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showStaffPassword ? "text" : "password"}
+                      name="staff_registration_password"
+                      autoComplete="new-password"
+                      required={!editingStaff}
+                      value={formData.password}
+                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                      placeholder={editingStaff ? "Enter new password to reset..." : "Enter login password..."}
+                      style={{ width: '100%', padding: '0.6rem 2.4rem 0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem', outline: 'none' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStaffPassword(!showStaffPassword)}
+                      style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+                      title={showStaffPassword ? "Hide password" : "Show password"}
+                    >
+                      {showStaffPassword ? <EyeOff size={16} color="#64748B" /> : <Eye size={16} color="#64748B" />}
+                    </button>
                   </div>
                 </div>
               </div>

@@ -139,14 +139,14 @@ export default function ChefLayout({ setActivePage }) {
         name: current.name,
         email: current.email || '',
         role: current.role || 'Chef',
-        empId: current.empId || `RMSC-${String(current._id || current.id || '01').slice(-4).toUpperCase()}`
+        empId: current.empId || ''
       };
     }
     return {
       name: 'Chef',
       email: '',
       role: 'Chef',
-      empId: 'RMSC-01'
+      empId: ''
     };
   });
 
@@ -164,7 +164,7 @@ export default function ChefLayout({ setActivePage }) {
               name: me.name,
               email: me.email || prev.email,
               role: me.role || prev.role,
-              empId: me.empId || prev.empId || `RMSC-${String(me._id || me.id).slice(-4).toUpperCase()}`
+              empId: me.empId || prev.empId || ''
             }));
             return;
           }
@@ -182,7 +182,7 @@ export default function ChefLayout({ setActivePage }) {
               name: match.name,
               email: match.email || current.email,
               role: match.role || current.role || 'Chef',
-              empId: match.empId || current.empId || `RMSC-${String(match._id || match.id).slice(-4).toUpperCase()}`
+              empId: match.empId || current.empId || ''
             });
           }
         }

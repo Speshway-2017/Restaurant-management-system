@@ -31,32 +31,10 @@ const getStaff = async (req, res) => {
 
     const staff = await User.find(query).select('-password').sort({ createdAt: 1 });
 
-    const roleCounters = {};
     const formattedStaff = staff.map((member) => {
-      const uRole = member.role || 'Waiter';
-      let prefix = 'RMSW';
-
-      if (uRole.toLowerCase().includes('manager')) {
-        prefix = 'RMSM';
-      } else if (uRole.toLowerCase().includes('waiter')) {
-        prefix = 'RMSW';
-      } else if (uRole.toLowerCase().includes('chef')) {
-        prefix = 'RMSC';
-      } else if (uRole.toLowerCase().includes('receptionist') || uRole.toLowerCase().includes('cashier')) {
-        prefix = 'RMSR';
-      } else if (uRole.toLowerCase().includes('admin')) {
-        prefix = 'RMSA';
-      }
-
-      roleCounters[prefix] = (roleCounters[prefix] || 0) + 1;
-      const numStr = String(roleCounters[prefix]).padStart(2, '0');
-      const expectedEmpId = `${prefix}-${numStr}`;
-
       const obj = member.toObject();
       obj.id = obj._id;
-      if (!obj.empId || !obj.empId.startsWith(prefix)) {
-        obj.empId = expectedEmpId;
-      }
+      obj.empId = obj.empId || '';
       obj.shift = obj.scheduledShift || obj.shift || 'Morning (09:00 AM - 05:00 PM)';
       return obj;
     });
@@ -147,21 +125,17 @@ const createStaff = async (req, res) => {
       }
     }
 
-    // Auto-generate Formatted Employee ID (e.g. RMSM-01 for Manager, RMSW-01 for Waiter, RMSC-01 for Chef, RMSR-01 for Receptionist)
-    const prefix = role.toLowerCase().includes('chef') ? 'RMSC' : 
-                   role.toLowerCase().includes('receptionist') ? 'RMSR' :
-                   role.toLowerCase().includes('waiter') ? 'RMSW' :
-                   role.toLowerCase().includes('manager') ? 'RMSM' : 'RMSA';
-
-    if (!data.empId || !data.empId.startsWith(prefix)) {
-      const count = await User.countDocuments({ 
-        $or: [
-          { role: { $regex: role, $options: 'i' } },
-          { empId: { $regex: `^${prefix}`, $options: 'i' } }
-        ]
-      });
-      const nextNum = String(count + 1).padStart(2, '0');
-      data.empId = `${prefix}-${nextNum}`;
+    const { getNextEmpId } = require('../utils/empIdGenerator');
+    if (data.empId && String(data.empId).trim()) {
+      data.empId = String(data.empId).trim().toUpperCase();
+      const existingWithEmpId = await User.findOne({ empId: data.empId });
+      if (existingWithEmpId) {
+        return res.status(400).json({
+          message: `Employee ID "${data.empId}" is already assigned to ${existingWithEmpId.name} (${existingWithEmpId.role}).`
+        });
+      }
+    } else {
+      data.empId = await getNextEmpId(role);
     }
 
     data.email = data.email.toLowerCase();
@@ -200,11 +174,27 @@ const updateStaff = async (req, res) => {
       }
     }
 
+    // Check if new Employee ID already exists for another user
+    if (req.body.empId && String(req.body.empId).trim()) {
+      const targetEmpId = String(req.body.empId).trim().toUpperCase();
+      const duplicateEmpId = await User.findOne({ _id: { $ne: req.params.id }, empId: targetEmpId });
+      if (duplicateEmpId) {
+        return res.status(400).json({
+          message: `Employee ID "${targetEmpId}" is already assigned to ${duplicateEmpId.name} (${duplicateEmpId.role}).`
+        });
+      }
+      req.body.empId = targetEmpId;
+    }
+
     if (req.body.scheduledShift || req.body.shift) {
       member.scheduledShift = req.body.scheduledShift || req.body.shift;
     }
     if (req.body.checkInTime) member.checkInTime = req.body.checkInTime;
     if (req.body.checkOutTime) member.checkOutTime = req.body.checkOutTime;
+
+    if (!req.body.password || !String(req.body.password).trim()) {
+      delete req.body.password;
+    }
 
     Object.assign(member, req.body);
     await member.save();

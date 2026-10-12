@@ -30,15 +30,15 @@ const getMe = async (req, res) => {
         role: u.role,
         phone: u.phone || '',
         branch: u.branch || 'Jubilee Hills (Main Branch)',
-        empId: u.empId || (u.role && u.role.toLowerCase().includes('waiter') ? 'RMSW-01' : 'RMSM-01'),
+        empId: u.empId || '',
         status: u.status || 'Active',
         department: u.department || 'Operations & Floor Management',
         joinedDate: u.joinedDate || '',
         checkInTime: u.checkInTime || '09:00 AM',
         checkOutTime: u.checkOutTime || '06:00 PM',
         scheduledShift: u.scheduledShift || '09:00 AM – 06:00 PM (Morning)',
-        hoursLogged: u.hoursLogged || '8h 30m',
-        attendanceStatus: u.attendanceStatus || 'Present',
+        hoursLogged: u.hoursLogged || '0m',
+        attendanceStatus: u.attendanceStatus || 'Offline',
         avatarUrl: u.avatarUrl || '',
         assignedTables: u.assignedTables || [],
         managerSettings: u.managerSettings || {}
@@ -55,6 +55,10 @@ const updateMe = async (req, res) => {
     if (!req.user) {
       return errorResponse(res, 'Not authorized', 401);
     }
+    // Employee ID is strictly immutable during normal profile edits
+    if (req.body && req.body.empId !== undefined) {
+      delete req.body.empId;
+    }
     const user = await authService.updateUser(req.user._id, req.body);
     const updatedPayload = {
       _id: user._id,
@@ -64,15 +68,15 @@ const updateMe = async (req, res) => {
       role: user.role,
       phone: user.phone || '',
       branch: user.branch || 'Jubilee Hills (Main Branch)',
-      empId: user.empId || (user.role && user.role.toLowerCase().includes('waiter') ? 'RMSW-01' : 'RMSM-01'),
+      empId: user.empId || '',
       status: user.status || 'Active',
       department: user.department || 'Operations & Floor Management',
       joinedDate: user.joinedDate || '',
       checkInTime: user.checkInTime || '09:00 AM',
       checkOutTime: user.checkOutTime || '06:00 PM',
       scheduledShift: user.scheduledShift || '09:00 AM – 06:00 PM (Morning)',
-      hoursLogged: user.hoursLogged || '8h 30m',
-      attendanceStatus: user.attendanceStatus || 'Present',
+      hoursLogged: user.hoursLogged || '0m',
+      attendanceStatus: user.attendanceStatus || 'Offline',
       avatarUrl: user.avatarUrl || '',
       assignedTables: user.assignedTables || [],
       managerSettings: user.managerSettings || {}

@@ -1382,7 +1382,7 @@ export default function ManagerDashboardHome({ setActiveTab }) {
               gap: '0.4rem'
             }}
           >
-            <span>Manage Staff Roster</span>
+            <span>Manage Staff Details</span>
             <ChevronRight size={15} color="#F2C14E" />
           </button>
         </div>

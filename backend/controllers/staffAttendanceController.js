@@ -297,28 +297,22 @@ exports.getCurrentAvailability = async (req, res) => {
     const resultList = await Promise.all(staffUsers.map(async (u) => {
       const uRole = normalizeRole(u.role);
       
-      // Find latest attendance session for this staff member
-      const latestSession = await StaffAttendance.findOne({ staffId: u._id }).sort({ createdAt: -1 }).lean();
-
-      // Active status means latest session exists, has status 'available', and logoutAt is null, OR user status is Active / Present
-      const isAvailable = Boolean(
-        (latestSession && latestSession.status === 'available' && !latestSession.logoutAt) ||
-        (u.attendanceStatus === 'Present' && u.status === 'Active')
-      );
-
-      // Check if latest session belongs to TODAY in IST
-      const isTodaySession = Boolean(latestSession && normalizeToIstDateStr(latestSession.date, latestSession.loginAt) === todayStr);
-
-      // Find all sessions recorded TODAY for calculating total duration logged today
-      const allStaffSessions = await StaffAttendance.find({ staffId: u._id }).lean();
+      // Find all attendance sessions for this staff member
+      const allStaffSessions = await StaffAttendance.find({ staffId: u._id }).sort({ loginAt: 1 }).lean();
+      
+      // Filter sessions belonging strictly to TODAY in Asia/Kolkata (IST)
       const todaySessions = allStaffSessions.filter(s => normalizeToIstDateStr(s.date, s.loginAt) === todayStr);
+
+      // A staff member is currently available ONLY if they have a valid, unfinished session today (loginAt set and logoutAt null)
+      const activeTodaySession = todaySessions.find(s => s.status === 'available' && !s.logoutAt && s.loginAt);
+      const isAvailable = Boolean(activeTodaySession);
 
       let totalMinsToday = 0;
       todaySessions.forEach(s => {
-        if (s.logoutAt) {
+        if (s.logoutAt && s.loginAt) {
           const diff = Math.max(0, new Date(s.logoutAt).getTime() - new Date(s.loginAt).getTime());
           totalMinsToday += (s.durationMinutes && s.durationMinutes > 0) ? s.durationMinutes : Math.floor(diff / 60000);
-        } else if (s.loginAt) {
+        } else if (s.loginAt && !s.logoutAt && s.status === 'available') {
           const diff = Math.max(0, now.getTime() - new Date(s.loginAt).getTime());
           totalMinsToday += Math.floor(diff / 60000);
         }
@@ -335,20 +329,31 @@ exports.getCurrentAvailability = async (req, res) => {
         hoursLoggedFormatted = `${minsToday}m`;
       }
 
-      // Format Check IN and Check OUT times using actual attendance timestamps ONLY
+      // Check IN and Check OUT times strictly from today's attendance sessions
       let loginTimeFormatted = '—';
       let logoutTimeFormatted = '—';
+      let loginAt = null;
+      let logoutAt = null;
 
-      if (isTodaySession && latestSession) {
-        loginTimeFormatted = latestSession.loginTimeFormatted || (latestSession.loginAt ? getIstDetails(new Date(latestSession.loginAt)).formattedTime : '—');
-        logoutTimeFormatted = isAvailable ? 'Currently Active' : (latestSession.logoutTimeFormatted || (latestSession.logoutAt ? getIstDetails(new Date(latestSession.logoutAt)).formattedTime : '—'));
+      if (isAvailable && activeTodaySession) {
+        loginTimeFormatted = activeTodaySession.loginTimeFormatted || (activeTodaySession.loginAt ? getIstDetails(new Date(activeTodaySession.loginAt)).formattedTime : '—');
+        logoutTimeFormatted = 'Currently Active';
+        loginAt = activeTodaySession.loginAt;
+        logoutAt = null;
+      } else if (todaySessions.length > 0) {
+        const firstSession = todaySessions[0];
+        const latestSession = todaySessions[todaySessions.length - 1];
+        loginTimeFormatted = firstSession.loginTimeFormatted || (firstSession.loginAt ? getIstDetails(new Date(firstSession.loginAt)).formattedTime : '—');
+        logoutTimeFormatted = latestSession.logoutTimeFormatted || (latestSession.logoutAt ? getIstDetails(new Date(latestSession.logoutAt)).formattedTime : '—');
+        loginAt = firstSession.loginAt;
+        logoutAt = latestSession.logoutAt;
       }
 
       return {
         id: String(u._id),
         staffId: String(u._id),
         name: u.name,
-        empId: u.empId || `RMS-${String(u._id).slice(-4).toUpperCase()}`,
+        empId: u.empId || '',
         role: u.role,
         normRole: uRole,
         email: u.email,
@@ -356,12 +361,12 @@ exports.getCurrentAvailability = async (req, res) => {
         status: isAvailable ? 'available' : 'offline',
         loginTimeFormatted,
         logoutTimeFormatted,
-        loginAt: (isTodaySession && latestSession) ? latestSession.loginAt : null,
-        logoutAt: (isTodaySession && latestSession) ? latestSession.logoutAt : null,
+        loginAt,
+        logoutAt,
         totalWorkingHoursToday: hoursLoggedFormatted,
         loggedTodayMinutes: totalMinsToday,
         activeSession: isAvailable,
-        lastSession: latestSession || null
+        lastSession: todaySessions.length > 0 ? todaySessions[todaySessions.length - 1] : null
       };
     }));
 
@@ -447,15 +452,6 @@ exports.getAttendanceHistory = async (req, res) => {
       ];
       if (mongoose.Types.ObjectId.isValid(targetStaffId)) {
         staffConditions.push({ staffId: new mongoose.Types.ObjectId(targetStaffId) });
-      }
-      if (targetUserObj) {
-        if (targetUserObj.empId) {
-          staffConditions.push({ empId: targetUserObj.empId });
-        }
-        if (targetUserObj.name) {
-          const escapedName = targetUserObj.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          staffConditions.push({ staffName: { $regex: new RegExp('^' + escapedName + '$', 'i') } });
-        }
       }
       andConditions.push({ $or: staffConditions });
     }

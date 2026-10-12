@@ -771,7 +771,7 @@ export default function ManagerProfilePage() {
               {[
                 'Floor Order Flow',
                 'Table QR Management',
-                'Staff Roster & Shifts',
+                'Staff Details & Shifts',
                 'Menu Catalog & Pricing',
                 'Coupons & Promotions',
                 'Analytics & Settlement'
