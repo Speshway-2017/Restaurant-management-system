@@ -10,6 +10,16 @@
   scrollbar-width: none;
 }
 
+/* Prevent browser autofill background tinting */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+  -webkit-text-fill-color: #0F2A1D !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 :root {
   /* Core Brand Colors */
   --color-primary: #1E4636;

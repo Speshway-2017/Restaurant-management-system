@@ -232,7 +232,7 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
                 if (success) {
                   messenger.showSnackBar(
                     SnackBar(
-                      content: Text('âœ“ Bill Generated for Table ${ord.table}! Waiting for customer payment.'),
+                      content: Text('\u2713 Bill Generated for Table ${ord.table}! Waiting for customer payment.'),
                       backgroundColor: AppColors.accentGreen,
                     ),
                   );
@@ -300,7 +300,7 @@ class _WaiterOrdersScreenState extends State<WaiterOrdersScreen> with SingleTick
       if (success) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('âœ“ Payment confirmed & Order #${ord.orderId} completed!'),
+            content: Text('\u2713 Payment confirmed & Order #${ord.orderId} completed!'),
             backgroundColor: const Color(0xFF166534),
           ),
         );

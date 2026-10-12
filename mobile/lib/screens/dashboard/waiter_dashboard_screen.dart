@@ -186,7 +186,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${_getGreeting()}, $firstName ðŸ‘‹',
+                                  '${_getGreeting()}, $firstName \u{1F44B}',
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
                                   style: const TextStyle(
@@ -198,7 +198,7 @@ class _WaiterDashboardScreenState extends State<WaiterDashboardScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '${user?.role ?? "Waiter"} â€¢ ID: $empIdDisplay',
+                                  '${user?.role ?? "Waiter"} \u2022 ID: $empIdDisplay',
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
                                   style: TextStyle(
@@ -1583,7 +1583,7 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                           messenger.showSnackBar(
                             const SnackBar(
                               content:
-                                  Text('âœ“ Checked Out of Shift successfully'),
+                                  Text('\u2713 Checked Out of Shift successfully'),
                               backgroundColor: Color(0xFFD97706),
                             ),
                           );
@@ -1594,7 +1594,7 @@ class _ProfilePopupModalState extends State<_ProfilePopupModal> {
                           messenger.showSnackBar(
                             const SnackBar(
                               content:
-                                  Text('âœ“ Checked In for Shift successfully'),
+                                  Text('\u2713 Checked In for Shift successfully'),
                               backgroundColor: Color(0xFF0F2A1D),
                             ),
                           );

@@ -98,7 +98,7 @@ class OrderCardWidget extends StatelessWidget {
                     ],
                   ),
                   Text(
-                    '${order.items.length} Items â€¢ â‚¹${(order.totalAmount > 0 ? order.totalAmount : order.netTotal).toStringAsFixed(0)}',
+                    '${order.items.length} Items \u2022 \u20B9${(order.totalAmount > 0 ? order.totalAmount : order.netTotal).toStringAsFixed(0)}',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -159,9 +159,9 @@ class OrderCardWidget extends StatelessWidget {
                                 if (item.isCancelled)
                                   const Text(' (Cancelled)', style: TextStyle(fontSize: 10, color: AppColors.cancelledText))
                                 else if (isServed)
-                                  const Text(' â€¢ âœ… Served', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold))
+                                  const Text(' \u2022 \u2705 Served', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold))
                                 else if (isReady)
-                                  const Text(' â€¢ ðŸŸ¢ READY TO SERVE', style: TextStyle(fontSize: 10, color: Color(0xFF166534), fontWeight: FontWeight.bold))
+                                  const Text(' \u2022 \u{1F7E2} READY TO SERVE', style: TextStyle(fontSize: 10, color: Color(0xFF166534), fontWeight: FontWeight.bold))
                                 else
                                   const Text(' â€¢ â³ Cooking', style: TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
                               ],
@@ -195,7 +195,7 @@ class OrderCardWidget extends StatelessWidget {
                       border: Border.all(color: const Color(0xFF86EFAC)),
                     ),
                     child: const Text(
-                      'âœ“ ORDER COMPLETED',
+                      '\u2713 ORDER COMPLETED',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
@@ -279,7 +279,7 @@ class OrderCardWidget extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'âœ“ PAYMENT RECEIVED',
+                              '\u2713 PAYMENT RECEIVED',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF166534)),
                             ),
                             Text(
@@ -333,11 +333,11 @@ class OrderCardWidget extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'âœ“ PAYMENT RECEIVED',
+                              '\u2713 PAYMENT RECEIVED',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF166534)),
                             ),
                             Text(
-                              '${order.paymentMethod.isNotEmpty ? order.paymentMethod : "UPI"} â€¢ â‚¹${order.totalAmount.toStringAsFixed(0)}',
+                              '${order.paymentMethod.isNotEmpty ? order.paymentMethod : "UPI"} \u2022 \u20B9${order.totalAmount.toStringAsFixed(0)}',
                               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
                             ),
                           ],
